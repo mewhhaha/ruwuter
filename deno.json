@@ -1,0 +1,45 @@
+{
+  "name": "@mewhhaha/ruwuter",
+  "version": "0.1.0",
+  "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
+  "exports": {
+    ".": "./src/router.mts",
+    "./components": "./src/components/index.mts",
+    "./fs-routes": "./src/fs-routes/js.mts",
+    "./types": "./src/types.mts",
+    "./jsx-runtime": "./src/runtime/jsx-runtime.mts",
+    "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts"
+  },
+  "bin": {
+    "fs-routes": "./src/fs-routes/routes.mts"
+  },
+  "tasks": {
+    "test": "deno run -A npm:vitest",
+    "test:dom": "deno run -A npm:vitest -c vitest.dom.config.ts",
+    "lint": "deno run -A npm:oxlint --max-warnings=0",
+    "format": "deno run -A npm:prettier . --check",
+    "typecheck": "deno check -A src/ test/ test-dom/",
+    "cf-typegen": "wrangler typegen"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@mewhhaha/ruwuter",
+    "lib": ["ESNext", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
+    "target": "ESNext",
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true
+  },
+  "license": "MIT",
+  "nodeModulesDir": "auto",
+  "lint": {
+    "rules": { "include": ["recommended"] }
+  },
+  "fmt": {
+    "lineWidth": 100
+  },
+  "imports": {
+    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20251011.0",
+    "@mewhhaha/ruwuter/jsx-runtime": "./src/runtime/jsx-runtime.mts",
+    "@mewhhaha/ruwuter/jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts"
+  }
+}
