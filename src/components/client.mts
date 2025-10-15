@@ -11,8 +11,9 @@
 import { into, type Html } from "../runtime/node.mts";
 import { useHook } from "../runtime/hooks.mts";
 import cr from "./client.runtime.js";
+import { sanitizeDynamicImportSource } from "../utils/serialize.mts";
 
-const clientRuntime = `(${cr.toString()})()`;
+const clientRuntime = `(${sanitizeDynamicImportSource(cr.toString())})()`;
 
 /** Client handler signature for on‑module functions. */
 export type Handler<This = any> = (
@@ -29,11 +30,9 @@ export function on<F extends ((event: Event, signal: AbortSignal) => unknown) & 
   fn[CLIENT_FN] = true;
   // Friendly fix for Vite SSR dynamic import placeholders in serialized handlers
   try {
-    const original = Function.prototype.toString.call(fn);
-    if (original.includes("__vite_ssr_dynamic_import__")) {
-      const fixed = original
-        .replaceAll("globalThis.__vite_ssr_dynamic_import__", "import")
-        .replaceAll("__vite_ssr_dynamic_import__", "import");
+    const original = Function.prototype.toString.call(fn) as string;
+    const fixed = sanitizeDynamicImportSource(original);
+    if (fixed !== original) {
       Object.defineProperty(fn, "toString", { value: () => fixed });
     }
   } catch {
