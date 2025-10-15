@@ -20,7 +20,7 @@
  * ```
  */
 
-import { into, isHtml, type Html } from "./node.mts";
+import { type Html, into, isHtml } from "./node.mts";
 import { withComponentFrame } from "./hooks.mts";
 import "./typed.mts";
 import type { JSX } from "./typed.mts";
@@ -32,12 +32,10 @@ export { type JSX } from "./jsx.mts";
  */
 export { into };
 
-
-
 /**
  * Fragment component for grouping multiple elements without a wrapper.
  */
-export const Fragment = (props: Record<string, unknown>): Html => jsx("", props);
+export const Fragment = (props: { children?: unknown }): Html => jsx("", props);
 
 // Void elements are self-closing and shouldn't have a closing tag
 const voidElements = new Set([
@@ -66,7 +64,9 @@ type HydrationPayload = { bind?: unknown; on?: ModuleEntry[]; attrs?: AttrItem[]
 
 const escapeJsonForScript = (json: string): string => json.replaceAll("</script>", "<\\/script>");
 
-const deriveEventName = (fn: ((event: Event, signal: AbortSignal) => unknown) & { event?: string }): string =>
+const deriveEventName = (
+  fn: ((event: Event, signal: AbortSignal) => unknown) & { event?: string },
+): string =>
   (typeof fn?.event === "string" && fn.event) ||
   fn?.name?.replace(/^on/i, "").toLowerCase() ||
   "click";
@@ -79,7 +79,8 @@ const deriveEventName = (fn: ((event: Event, signal: AbortSignal) => unknown) & 
  * @returns Html instance for streaming
  */
 export function jsx(
-  tag: string | ((props: Record<string, unknown>) => Html),
+  // deno-lint-ignore no-explicit-any
+  tag: string | ((props: any) => JSX.Element),
   { children, ...props }: { children?: unknown } & Record<string, unknown>,
 ): Html {
   if (typeof tag === "function") {
@@ -99,7 +100,6 @@ export function jsx(
   };
 
   for (const [key, value] of Object.entries(props)) {
-
     // Explicit state binding for event handlers via `bind` prop
     if (key === "bind") {
       ensureHydration().bind = value;
@@ -129,7 +129,6 @@ export function jsx(
     // Attribute binding: function-valued props (e.g., class={fn})
     // Collect into a hydration payload array so the client can compute + update on ref changes
     if (typeof value === "function") {
-
       // @ts-expect-error Adding the href illegally
       const href = value.href as unknown;
       if (typeof href === "string" && href) {
@@ -180,37 +179,39 @@ export function jsx(
   }
 
   const generator = async function* (): AsyncGenerator<string> {
+    async function* processChild(child: unknown): AsyncGenerator<string> {
+      if (child === undefined || child === null || child === false) {
+        return;
+      }
+      if (child instanceof Promise) {
+        const resolved = await child;
+        yield* processChild(resolved);
+        return;
+      }
+      if (isHtml(child)) {
+        yield* child.text;
+        return;
+      }
+      if (Array.isArray(child)) {
+        for (const c of child as unknown[]) {
+          yield* processChild(c);
+        }
+        return;
+      }
 
-      async function* processChild(child: unknown): AsyncGenerator<string> {
-        if (child === undefined || child === null || child === false) {
-          return;
-        }
-        if (child instanceof Promise) {
-          const resolved = await child;
-          yield* processChild(resolved);
-          return;
-        }
-        if (isHtml(child)) {
-          yield* child.text;
-          return;
-        }
-        if (Array.isArray(child)) {
-          for (const c of child as unknown[]) {
-            yield* processChild(c);
-          }
-          return;
-        }
-
-        if (typeof child === "function") {
-          // Treat function children as mini-components for hook scoping
-          yield* into(withComponentFrame(() => child())).text;
-          return;
-        }
+      if (typeof child === "function") {
+        // Treat function children as mini-components for hook scoping
+        yield* into(withComponentFrame(() => child())).text;
+        return;
+      }
 
       // Render ref() values (via toJSON marker) as their initial value
-      if (typeof child === "object" && child !== null && "toJSON" in child && typeof child.toJSON === "function") {
+      if (
+        typeof child === "object" && child !== null && "toJSON" in child &&
+        typeof child.toJSON === "function"
+      ) {
         try {
-          const marker = (child).toJSON?.();
+          const marker = child.toJSON?.();
           if (marker && marker.__ref === true) {
             yield escapeHtml(String(marker.v));
             return;
@@ -220,8 +221,8 @@ export function jsx(
         }
       }
 
-        yield escapeHtml(child.toString());
-      }
+      yield escapeHtml(child.toString());
+    }
     // Pre-comment hydration boundary
     if (hydrationId) {
       yield `<!--hydration-boundary:${hydrationId}-->`;
@@ -234,7 +235,6 @@ export function jsx(
     if (dangerousHtml !== undefined) {
       yield dangerousHtml;
     } else {
-
       yield* processChild(children);
     }
     if (tag && !voidElements.has(tag)) {
@@ -291,7 +291,8 @@ const sanitize = (value: unknown): string | undefined => {
  * @returns JSX element
  */
 export function jsxs(
-  tag: string | ((props: Record<string, unknown>) => Html),
+  // deno-lint-ignore no-explicit-any
+  tag: string | ((props: any) => JSX.Element),
   props: { children?: unknown } & Record<string, unknown>,
 ): JSX.Element {
   return jsx(tag, props);

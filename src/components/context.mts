@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { into, type JSX } from "../runtime/jsx-runtime.mts";
+import { into, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
+import type { Html } from "@mewhhaha/ruwuter";
 
 type Store = Map<symbol, unknown[]>;
 

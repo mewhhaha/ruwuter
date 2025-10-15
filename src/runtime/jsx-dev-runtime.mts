@@ -11,4 +11,4 @@
  * ```
  */
 
-export { jsx as jsxDEV, jsxs as jsxsDEV } from "./jsx-runtime.mts";
+export { jsx as jsxDEV, jsxs as jsxsDEV } from "@mewhhaha/ruwuter/jsx-runtime";

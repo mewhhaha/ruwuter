@@ -5,7 +5,7 @@
  */
 
 import { createContext } from "./context.mts";
-import { type JSX, jsx, Fragment, into } from "@mewhhaha/ruwuter/jsx-runtime";
+import { Fragment, into, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
 
 type SuspenseRegistry = Map<string, Promise<[id: string, html: string]>>;
 
@@ -39,12 +39,14 @@ export const Suspense = ({
 
   let promise: Promise<[id: string, html: string]> | undefined;
   if (typeof children === "function") {
-    promise = children().then(async (el) => [id, await (await el).toPromise()]);
+    promise = children().then(async (el: JSX.Element) => [id, await (await el).toPromise()]);
   } else {
     promise = (async () => [id, await (await children).toPromise()])();
   }
 
-  registry.set(id, promise);
+  if (promise) {
+    registry.set(id, promise);
+  }
 
   return jsx(As, { id, ...props, children: fallback });
 };
@@ -78,41 +80,42 @@ export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
       const nonceAttribute = nonce ? ` nonce="${nonce}"` : "";
       // Define the custom element once with a nonce-bearing script so later chunks don't need inline scripts.
       yield* html`
-<script type="application/javascript"${nonceAttribute}>
-if (!customElements.get('resolved-data')) {
-  class ResolvedData extends HTMLElement {
-    connectedCallback() {
-      const templateId = this.getAttribute('from');
-      const targetId = this.getAttribute('to');
-      const template = document.getElementById(templateId || '');
-      const target = document.getElementById(targetId || '');
-      try {
-        if (template instanceof HTMLTemplateElement && target instanceof HTMLElement) {
-          target.replaceWith(template.content.cloneNode(true));
+        <script type="application/javascript" ${nonceAttribute}>
+        if (!customElements.get('resolved-data')) {
+          class ResolvedData extends HTMLElement {
+            connectedCallback() {
+              const templateId = this.getAttribute('from');
+              const targetId = this.getAttribute('to');
+              const template = document.getElementById(templateId || '');
+              const target = document.getElementById(targetId || '');
+              try {
+                if (template instanceof HTMLTemplateElement && target instanceof HTMLElement) {
+                  target.replaceWith(template.content.cloneNode(true));
+                }
+              } finally {
+                this.remove();
+                template?.remove();
+              }            
+            }
+          }
+          customElements.define('resolved-data', ResolvedData);
         }
-      } finally {
-        this.remove();
-        template?.remove();
-      }            
-    }
-  }
-  customElements.define('resolved-data', ResolvedData);
-}
-</script>`;
+        </script>
+      `;
 
       while (registry.size > 0) {
         const templateId = crypto.randomUUID();
         const [id, element] = await Promise.race(registry.values());
         registry.delete(id);
         yield* html`
-<template id="${templateId}">${element}</template>
-<resolved-data to="${id}" from="${templateId}"></resolved-data>`;
+          <template id="${templateId}">${element}</template>
+          <resolved-data to="${id}" from="${templateId}"></resolved-data>
+        `;
       }
     })(),
   );
 };
 
-function html(strings:TemplateStringsArray, ...values: string[]): string{
-  return String.raw({raw: strings}, ...values)
-  
+function html(strings: TemplateStringsArray, ...values: string[]): string {
+  return String.raw({ raw: strings }, ...values);
 }
