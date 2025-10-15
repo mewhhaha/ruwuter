@@ -171,9 +171,9 @@ export function jsx(
   }
 
   const generator = async function* (): AsyncGenerator<string> {
-    // Pre-comment boundary
+    // Pre-comment hydration boundary
     if (hydrationId) {
-      yield `<!--rw:h:${hydrationId}-->`;
+      yield `<!--hydration-boundary:${hydrationId}-->`;
     }
     if (tag) {
       yield `<${tag}${attrs}>`;
@@ -231,9 +231,9 @@ export function jsx(
       yield `</${tag}>`;
     }
     if (hydrationId && hydrationPayload) {
-      yield `<!--/rw:h:${hydrationId}-->`;
+      yield `<!--/hydration-boundary:${hydrationId}-->`;
       const json = escapeJsonForScript(JSON.stringify(hydrationPayload));
-      yield `<script type="application/json" data-rw-h="${hydrationId}">${json}</script>`;
+      yield `<script type="application/json" data-hydrate="${hydrationId}">${json}</script>`;
     }
   };
 

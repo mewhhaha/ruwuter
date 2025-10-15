@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
 import { Router, type Env, type fragment } from "../src/router.mts";
 import { Client, ref } from "../src/components/client.mts";
 
@@ -49,7 +49,7 @@ describe("Ref sharing", () => {
     );
     const html = await res.text();
 
-    // Should inject span with data-client-t and data-client-v
-    expect(html).toMatch(/<script type="application\/json" data-rw-h="h/);
+    // Should inject hydration script payload
+    expect(html).toMatch(/<script type="application\/json" data-hydrate="h/);
   });
 });

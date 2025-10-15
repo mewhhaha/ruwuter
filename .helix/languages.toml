@@ -6,10 +6,10 @@ required-root-patterns = ["deno.json", "deno.jsonc"]
 
 [[language]]
 name = "typescript"
-file-types = ["ts", "tsx"]
+file-types = ["ts", "mts", "tsx"]
 language-servers = ["deno-language-server"]
 
 [[language]]
 name = "javascript"
-file-types = ["js", "jsx"]
+file-types = ["js", "mjs", "jsx"]
 language-servers = ["deno-language-server"]

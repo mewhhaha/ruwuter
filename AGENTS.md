@@ -68,8 +68,9 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 - Lint: `deno task lint`
 - Format: `deno task format`
 - Tests:
-  - Node/Vitest: `deno task test`
-  - DOM tests: `deno task test:dom` (see `test-dom/setup.ts` for URLPattern polyfill)
+  - DOM tests (default): `deno task test`
+  - Explicit DOM: `deno task test:dom`
+  - Workers pool (requires Node features): `deno task test:workers`
 
 ## Coding Conventions
 

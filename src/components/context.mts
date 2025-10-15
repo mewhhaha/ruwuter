@@ -39,6 +39,10 @@ const isPromise = (value: unknown): value is Promise<unknown> => {
   );
 };
 
+/**
+ * Runs a function with a fresh context storage Map.
+ * Use this to isolate a request or render pass.
+ */
 export function runWithContextStore<T>(fn: () => T): T {
   let result!: T;
   storage.run(new Map(), () => {
@@ -47,15 +51,24 @@ export function runWithContextStore<T>(fn: () => T): T {
   return result;
 }
 
+/**
+ * Context API returned by {@link createContext}.
+ */
 export type CreatedContext<T> = {
   Provider: (props: { value: T; children: JSX.Element }) => JSX.Element;
   use: () => T;
   withValue: <R>(value: T, fn: () => R) => R;
 };
 
+/**
+ * Creates a new Context with the given default value.
+ */
 export function createContext<T>(defaultValue: T): CreatedContext<T> {
   const key = Symbol("ruwuter.context");
 
+  /**
+   * Context Provider component. Pushes a value for the duration of its children.
+   */
   const Provider = ({
     value,
     children,
@@ -82,6 +95,9 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
     );
   };
 
+  /**
+   * Reads the nearest provided context value, or the default value when unset.
+   */
   const use = (): T => {
     const store = getStore();
     if (!store) {
@@ -96,6 +112,9 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
     return stack[stack.length - 1];
   };
 
+  /**
+   * Runs a function with the provided value, restoring the previous value afterwards.
+   */
   function withValue<R>(value: T, fn: () => R): R {
     const release = pushValue(key, value);
     try {
@@ -114,4 +133,9 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
   const api: CreatedContext<T> = { Provider, use, withValue };
   return api;
 }
-
+/**
+ * @module
+ *
+ * AsyncLocalStorage‑based context utilities for composing JSX trees.
+ * Provides a small Provider/use API that mirrors React's ergonomics.
+ */

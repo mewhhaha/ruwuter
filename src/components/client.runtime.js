@@ -1,17 +1,10 @@
+/** @returns {void} */
 export default function () {
   // @ts-check
-  /**
-   * Ruwuter client runtime (injected as a module script)
-   * Minimal ESNext DOM implementation.
-   */
+  // Ruwuter client runtime (injected as a module script). Minimal ESNext DOM implementation.
 
-  /** @typedef {{t:'m', s:string, x?:string, ev?:string}} Entry */
-  /** @typedef {{el: Element, attr: string, entry: Entry, args: Record<string, any>, key: string}} Watch */
-
-  /** @type {Map<string, Promise<any>>} */
   const loaded = new Map();
-  /** @param {string} spec */
-  async function load(spec) {
+  function load(spec) {
     let p = loaded.get(spec);
     if (!p) {
       p = import(spec);
@@ -20,43 +13,39 @@ export default function () {
     return p;
   }
 
-  /** @type {Map<string, any>} */
   const state = new Map();
-  /** @type {Map<string, Set<Watch>>} */
-  const watchers = new Map(); // id -> Set<Watch>
+  // refId -> Map<bindingKey, { el, attr, entry, args, key }>
+  const watchers = new Map();
+  // stable ids for elements (to dedupe watcher entries per element)
+  const elIds = new WeakMap();
+  let elSeq = 0;
+  const getElId = (el) => {
+    let id = elIds.get(el);
+    if (!id) {
+      id = `e${++elSeq}`;
+      elIds.set(el, id);
+    }
+    return id;
+  };
 
   // Per-element state via WeakMaps (bind, ctx, controllers, unmount entries)
-  /** @type {WeakMap<Element, any>} */
   const wmBind = new WeakMap();
-  /** @type {WeakMap<Element, Record<string, any>>} */
   const wmCtx = new WeakMap();
-  /** @type {WeakMap<Element, Entry[]>} */
   const wmUnmount = new WeakMap();
-  /** @type {WeakMap<Element, Map<string, AbortController>>} */
   const wmCtrl = new WeakMap();
 
-  /**
-   * @param {string} id
-   * @param {any|((prev:any)=>any)} next
-   */
   function set(id, next) {
     const prev = state.get(id);
     const val = typeof next === "function" ? next(prev) : next;
     state.set(id, val);
-    const setFor = watchers.get(id);
-    if (setFor)
-      setFor.forEach((b) => {
-        try {
-          applyAttr(b.el, b.attr, b.entry, b.args, b.key);
-        } catch {}
-      });
+    const map = watchers.get(id);
+    if (!map) return;
+    for (const b of map.values()) computeAttr(b.el, b.attr, b.entry, b.args, b.key);
   }
-  /** @param {string} id */
   function get(id) {
     return state.get(id);
   }
 
-  /** @param {string} _key @param {any} value */
   function revive(_key, value) {
     if (
       value &&
@@ -71,14 +60,13 @@ export default function () {
         get() {
           return get(id);
         },
-        set(/** @type {any | ((prev:any)=>any)} */ next) {
+        set(next) {
           return set(id, next);
         },
       };
     }
     return value;
   }
-  /** @param {string} text */
   function parseJson(text) {
     try {
       return JSON.parse(text, revive);
@@ -87,24 +75,14 @@ export default function () {
     }
   }
 
-  /**
-   * @template T
-   * @param {any} el
-   * @param {string} key
-   * @param {T} init
-   * @returns {T}
-   */
   function getCtx(el, key, init) {
-    /** @type {Record<string, any>} */
-    let bag =
-      wmCtx.get(el) || /** @type {Record<string, any>} */ (Object.create(null));
+    const bag = wmCtx.get(el) || Object.create(null);
     if (!wmCtx.has(el)) wmCtx.set(el, bag);
     if (key in bag) return bag[key];
     bag[key] = init;
     return init;
   }
 
-  /** @param {Record<string, any>} ctx */
   function collectRefIds(ctx) {
     const ids = new Set();
     for (const k in ctx) {
@@ -114,40 +92,23 @@ export default function () {
     return ids;
   }
 
-  /**
-   * @param {any} entry
-   * @param {Element} el
-   * @param {Event} ev
-   * @param {string} type
-   */
   async function runEntry(entry, el, ev, type) {
     if (!entry || entry.t !== "m") return;
     const mod = await load(entry.s);
-    const fn = entry.x && mod[entry.x] ? mod[entry.x] : (mod.default ?? mod);
-    /** @type {Map<string, AbortController>} */
+    const fn = entry.x && mod[entry.x] ? mod[entry.x] : mod.default ?? mod;
     const controllers = wmCtrl.get(el) || new Map();
     if (!wmCtrl.has(el)) wmCtrl.set(el, controllers);
-    const prev = controllers.get(type);
-    try {
-      prev?.abort?.();
-    } catch {}
+    controllers.get(type)?.abort?.();
     const ac = new AbortController();
     controllers.set(type, ac);
     const thisArg = wmBind.get(el) ?? el;
     await fn.call(thisArg, ev, ac.signal);
   }
 
-  /**
-   * @param {Element} el
-   * @param {string} attr
-   * @param {Entry} entry
-   * @param {Record<string, any>} args
-   * @param {string} key
-   */
-  async function applyAttr(el, attr, entry, args, key) {
+  async function computeAttr(el, attr, entry, args, key) {
     if (!entry || entry.t !== "m") return;
     const mod = await load(entry.s);
-    const fn = entry.x && mod[entry.x] ? mod[entry.x] : (mod.default ?? mod);
+    const fn = entry.x && mod[entry.x] ? mod[entry.x] : mod.default ?? mod;
     const ctx = getCtx(
       el,
       key,
@@ -155,159 +116,148 @@ export default function () {
     );
     let result;
     try {
-      result = await fn.call(
-        ctx,
-        new Event("update"),
-        new AbortController().signal,
-      );
+      result = await fn.call(ctx, new Event("update"), new AbortController().signal);
     } catch {
-      return;
+      return; // ignore user fn errors for attr computations
     }
-    if (attr === "class") {
-      el.setAttribute("class", result == null ? "" : String(result));
-    } else if (attr === "hidden" || attr === "disabled" || attr === "inert") {
-      if (result) el.setAttribute(attr, "");
-      else el.removeAttribute(attr);
-    } else {
-      if (result == null) el.removeAttribute(attr);
-      else el.setAttribute(attr, String(result));
-    }
+    setComputedAttr(el, attr, result);
     const ids = collectRefIds(ctx);
+    const bindingKey = `${getElId(el)}|${key}`;
     ids.forEach((id) => {
-      let watcher = watchers.get(id);
-      watcher ??= new Set();
-      watchers.set(id, watcher);
-      watcher.add({ el, attr, entry, args, key });
+      let map = watchers.get(id);
+      if (!map) {
+        map = new Map();
+        watchers.set(id, map);
+      }
+      map.set(bindingKey, { el, attr, entry, args, key });
     });
   }
 
-  function hydrate() {
-    const walker = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
-    const seen = new Set();
-    let node = walker.nextNode();
-    while (node instanceof Comment) {
-      const id = extractBoundaryId(node);
-      if (!id || seen.has(id)) {
-        node = walker.nextNode();
-        continue;
-      }
-      const el = findBoundaryElement(node);
-      if (!el) {
-        seen.add(id);
-        node = walker.nextNode();
-        continue;
-      }
-      const payload = readBoundaryPayload(el, id);
-      if (!payload) {
-        seen.add(id);
-        node = walker.nextNode();
-        continue;
-      }
-      if (payload.bind !== undefined) wmBind.set(el, payload.bind);
-      if (Array.isArray(payload.on)) {
-        for (const entry of payload.on) {
-          const ev =
-            entry && typeof entry.ev === "string" && entry.ev
-              ? entry.ev
-              : "click";
-          if (ev === "mount")
-            setTimeout(() => {
-              runEntry(entry, el, new Event("mount"), "mount");
-            }, 0);
-          else if (ev === "unmount") {
-            const list = wmUnmount.get(el) || [];
-            list.push(entry);
-            wmUnmount.set(el, list);
-          } else
-            el.addEventListener(ev, (e) => {
-              runEntry(entry, el, e, ev);
-            });
-        }
-      }
-      if (Array.isArray(payload.attrs)) {
-        for (const item of payload.attrs) {
-          if (!item || typeof item.n !== "string" || !item.e) continue;
-          const key = `attr:${item.n}:${item.e.s}:${item.e.x || ""}`;
-          applyAttr(el, item.n, item.e, item.a || {}, key);
-        }
-      }
-      seen.add(id);
-      node = walker.nextNode();
+  function setComputedAttr(el, name, value) {
+    if (name === "class") {
+      el.setAttribute("class", value == null ? "" : String(value));
+      return;
     }
-  }
-
-  /** @param {Comment} node */
-  function extractBoundaryId(node) {
-    const m = /^rw:h:([A-Za-z0-9_-]+)/.exec(node.data || "");
-    return m ? m[1] : "";
-  }
-
-  /** @param {Comment} node */
-  function findBoundaryElement(node) {
-    let el = node.nextSibling;
-    while (el && el.nodeType !== 1) el = el.nextSibling;
-    return el && el.nodeType === 1 ? /** @type {Element} */ (el) : null;
-  }
-
-  /**
-   * @param {Element} el
-   * @param {string} id
-   */
-  function readBoundaryPayload(el, id) {
-    let sc = el.nextSibling;
-    while (sc) {
-      if (
-        sc.nodeType === 1 &&
-        /** @type {Element} */ (sc).tagName === "SCRIPT" &&
-        /** @type {Element} */ (sc).getAttribute("data-rw-h") === id
-      )
-        break;
-      sc = sc.nextSibling;
+    if (name === "hidden" || name === "disabled" || name === "inert") {
+      if (value) el.setAttribute(name, "");
+      else el.removeAttribute(name);
+      return;
     }
-    if (!(sc && sc.nodeType === 1)) return null;
-    return parseJson(/** @type {Element} */ (sc).textContent || "{}") || {};
+    if (value == null) el.removeAttribute(name);
+    else el.setAttribute(name, String(value));
   }
 
-  // attribute binding moved to hydration payload; no DOM-wide scan needed
+  // Hydration via script[type="application/json"][data-rw-h]
+  const hydrated = new Set();
 
-  function observeRemovals() {
+  function hydrateBoundary(id, el, payload) {
+    if (!id || hydrated.has(id)) return;
+    if (payload && payload.bind !== undefined) wmBind.set(el, payload.bind);
+    if (Array.isArray(payload.on)) {
+      for (const entry of payload.on) {
+        const ev = entry && typeof entry.ev === "string" && entry.ev ? entry.ev : "click";
+        if (ev === "mount")
+          setTimeout(() => {
+            runEntry(entry, el, new Event("mount"), "mount");
+          }, 0);
+        else if (ev === "unmount") {
+          const list = wmUnmount.get(el) || [];
+          list.push(entry);
+          wmUnmount.set(el, list);
+        } else
+          el.addEventListener(ev, (e) => {
+            runEntry(entry, el, e, ev);
+          });
+      }
+    }
+    if (Array.isArray(payload.attrs)) {
+      for (const item of payload.attrs) {
+        if (!item || typeof item.n !== "string" || !item.e) continue;
+        const key = `attr:${item.n}:${item.e.s}:${item.e.x || ""}`;
+        computeAttr(el, item.n, item.e, item.a || {}, key);
+      }
+    }
+    hydrated.add(id);
+  }
+
+  function elementForEndComment(endComment) {
+    // Structure: <element></element><!--/hydration-boundary:id--><script ...>
+    const prev = endComment.previousSibling;
+    return prev && prev.nodeType === Node.ELEMENT_NODE ? /** @type {Element} */ (prev) : null;
+  }
+
+  function hydrateFromScript(sc) {
+    if (!sc || sc.tagName !== "SCRIPT") return;
+    const id = sc.getAttribute("data-hydrate") || "";
+    if (!id || hydrated.has(id)) return;
+    const end = sc.previousSibling;
+    if (!(end instanceof Comment)) return;
+    if (end.data !== `/hydration-boundary:${id}`) return;
+    const el = elementForEndComment(end);
+    if (!el) return;
+    const payload = parseJson(sc.textContent || "{}") || {};
+    hydrateBoundary(id, el, payload);
+  }
+
+  function seedHydration() {
+    // Initial pass: process any hydration scripts already in the DOM
+    const nodes = document.querySelectorAll('script[type="application/json"][data-hydrate]');
+    nodes.forEach((n) => hydrateFromScript(n));
+  }
+
+  function watchHydration() {
     const mo = new MutationObserver((mutations) => {
       for (const m of mutations) {
-        if (m.removedNodes)
-          m.removedNodes.forEach((n) => {
-            if (!(n instanceof Element)) return;
-            const map = wmCtrl.get(n);
-            if (map && map.forEach) {
-              try {
-                map.forEach((c) => {
-                  try {
-                    c.abort?.();
-                  } catch {}
-                });
-              } catch {}
-            }
-            const list = wmUnmount.get(n);
-            if (Array.isArray(list))
-              list.forEach((entry) => {
-                runEntry(entry, n, new Event("unmount"), "unmount");
-              });
-          });
+        m.addedNodes?.forEach((n) => {
+          if (!(n instanceof Element)) return;
+          const isHydrationScript =
+            n.tagName === "SCRIPT" &&
+            (n.getAttribute("type") || "").toLowerCase() === "application/json" &&
+            n.hasAttribute("data-hydrate");
+          if (isHydrationScript) {
+            hydrateFromScript(n);
+            return;
+          }
+          n
+            .querySelectorAll('script[type="application/json"][data-hydrate]')
+            .forEach((s) => hydrateFromScript(s));
+        });
       }
     });
     mo.observe(document, { childList: true, subtree: true });
   }
 
-  if (document.readyState === "loading")
-    document.addEventListener("DOMContentLoaded", () => {
-      hydrate();
+  // attribute binding moved to hydration payload; no DOM-wide scan needed
+
+  function watchRemovals() {
+    const mo = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        m.removedNodes?.forEach((n) => {
+          if (!(n instanceof Element)) return;
+          const map = wmCtrl.get(n);
+          if (map) for (const c of map.values()) c.abort?.();
+          // cleanup watcher entries for this element
+          const id = elIds.get(n);
+          if (id) {
+            for (const w of watchers.values()) {
+              for (const k of Array.from(w.keys())) if (k.startsWith(id + "|")) w.delete(k);
+            }
+          }
+          const list = wmUnmount.get(n);
+          if (Array.isArray(list)) list.forEach((e) => runEntry(e, n, new Event("unmount"), "unmount"));
+        });
+      }
     });
-  else {
-    hydrate();
+    mo.observe(document, { childList: true, subtree: true });
   }
-  observeRemovals();
+
+  // Start hydrating immediately and observe as content streams in.
+  // No need to wait for DOMContentLoaded; MutationObserver captures later chunks.
+  seedHydration();
+  watchHydration();
+  watchRemovals();
 
   // expose minimal API
-  // @ts-ignore
   window.__client = Object.assign(window.__client || {}, {
     load,
     set,

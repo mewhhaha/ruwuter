@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
 import { Router, type Env } from "../src/router.mts";
 import type { fragment } from "../src/router.mts";
 import { into } from "../src/runtime/node.mts";

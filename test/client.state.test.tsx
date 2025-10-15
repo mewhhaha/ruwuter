@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
 import { Router, type Env, type fragment } from "../src/router.mts";
 import { Client, ref } from "../src/components/client.mts";
 
@@ -46,6 +46,6 @@ describe("Ref hydration and on boundary", () => {
     const html = await res.text();
 
     // Has a hydration script with payload
-    expect(html).toContain('data-rw-h="h_');
+    expect(html).toContain('data-hydrate="h_');
   });
 });

@@ -34,5 +34,8 @@
     "src",
     "test",
     "test-dom"
+  ],
+  "files": [
+    "src/global.workers.d.ts"
   ]
 }

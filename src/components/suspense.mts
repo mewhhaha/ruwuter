@@ -5,20 +5,16 @@
  */
 
 import { createContext } from "./context.mts";
-import { type JSX, jsx, Fragment, into } from "../runtime/jsx-runtime.mts";
+import { type JSX, jsx, Fragment, into } from "@mewhhaha/ruwuter/jsx-runtime";
 
 type SuspenseRegistry = Map<string, Promise<[id: string, html: string]>>;
 
-const SuspenseRegistryContext = createContext<SuspenseRegistry | undefined>(
+const context = createContext<SuspenseRegistry | undefined>(
   undefined,
 );
 
-export function withSuspenseContext<T>(fn: () => T): T {
-  return SuspenseRegistryContext.withValue(new Map(), fn);
-}
-
 const getRegistry = (): SuspenseRegistry | undefined => {
-  return SuspenseRegistryContext.use();
+  return context.use();
 };
 
 type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
@@ -60,12 +56,17 @@ export const SuspenseProvider = ({
 }: {
   children: JSX.Element;
 }): JSX.Element => {
-  return jsx(SuspenseRegistryContext.Provider, {
+  // Provide an empty registry for any Suspense boundaries within.
+  return jsx(context.Provider, {
     value: new Map<string, Promise<[id: string, html: string]>>(),
     children,
   });
 };
 
+/**
+ * Streams resolved Suspense content. Define once near the end of <body>.
+ * If a strict CSP is used, supply a nonce so the defining script can run.
+ */
 export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
   const registry = getRegistry();
   if (!registry || registry.size === 0) {
@@ -76,36 +77,42 @@ export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
     (async function* () {
       const nonceAttribute = nonce ? ` nonce="${nonce}"` : "";
       // Define the custom element once with a nonce-bearing script so later chunks don't need inline scripts.
-      yield* `
+      yield* html`
 <script type="application/javascript"${nonceAttribute}>
-  (function(){
-    if (!customElements.get('resolved-data')) {
-      class ResolvedData extends HTMLElement {
-        connectedCallback() {
-          const templateId = this.getAttribute('from');
-          const targetId = this.getAttribute('to');
-          const template = document.getElementById(templateId || '');
-          const target = document.getElementById(targetId || '');
-          if (template instanceof HTMLTemplateElement && target instanceof HTMLElement) {
-            try { target.replaceWith(template.content.cloneNode(true)); } catch(_) {}
-          }
-          try { this.remove(); } catch(_) {}
-          try { template && template.remove && template.remove(); } catch(_) {}
+if (!customElements.get('resolved-data')) {
+  class ResolvedData extends HTMLElement {
+    connectedCallback() {
+      const templateId = this.getAttribute('from');
+      const targetId = this.getAttribute('to');
+      const template = document.getElementById(templateId || '');
+      const target = document.getElementById(targetId || '');
+      try {
+        if (template instanceof HTMLTemplateElement && target instanceof HTMLElement) {
+          target.replaceWith(template.content.cloneNode(true));
         }
-      }
-      try { customElements.define('resolved-data', ResolvedData); } catch(_) {}
+      } finally {
+        this.remove();
+        template?.remove();
+      }            
     }
-  })();
+  }
+  customElements.define('resolved-data', ResolvedData);
+}
 </script>`;
 
       while (registry.size > 0) {
         const templateId = crypto.randomUUID();
         const [id, element] = await Promise.race(registry.values());
         registry.delete(id);
-        yield* `
+        yield* html`
 <template id="${templateId}">${element}</template>
 <resolved-data to="${id}" from="${templateId}"></resolved-data>`;
       }
     })(),
   );
 };
+
+function html(strings:TemplateStringsArray, ...values: string[]): string{
+  return String.raw({raw: strings}, ...values)
+  
+}
