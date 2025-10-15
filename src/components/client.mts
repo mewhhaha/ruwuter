@@ -27,7 +27,19 @@ const CLIENT_FN = Symbol.for("@mewhhaha/ruwuter.clientfn");
 /** Marks a route‑exported handler or component so the routes generator can attach an href. */
 export function on<F extends ((event: Event, signal: AbortSignal) => unknown) & { [CLIENT_FN]: true}>(fn: F): F & { href?: string } {
   fn[CLIENT_FN] = true;
-  return fn;
+  // Friendly fix for Vite SSR dynamic import placeholders in serialized handlers
+  try {
+    const original = Function.prototype.toString.call(fn);
+    if (original.includes("__vite_ssr_dynamic_import__")) {
+      const fixed = original
+        .replaceAll("globalThis.__vite_ssr_dynamic_import__", "import")
+        .replaceAll("__vite_ssr_dynamic_import__", "import");
+      Object.defineProperty(fn, "toString", { value: () => fixed });
+    }
+  } catch {
+    // non-fatal: keep original function as-is
+  }
+  return fn as any;
 }
 
 
