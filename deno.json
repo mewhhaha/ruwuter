@@ -1,6 +1,6 @@
 {
   "name": "@mewhhaha/ruwuter",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
   "exports": {
     ".": "./src/router.mts",
