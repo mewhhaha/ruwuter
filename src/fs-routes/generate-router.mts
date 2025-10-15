@@ -74,20 +74,32 @@ export const generateRouter = async (appFolder: string): Promise<void> => {
     })
     .join("\n");
 
-  const annotate = files
+  // Map route id -> source module spec (used by dev servers to serve virtual client modules)
+  const routeSpecs = files
+    .map((file) => {
+      const isDirectory = !file.endsWith(".tsx");
+      const routeId = file.replace(tsRegex, "");
+      const spec = isDirectory
+        ? `./routes/${routeId}/route.tsx`
+        : `./routes/${routeId}.tsx`;
+      return `ROUTE_SPECS[${JSON.stringify(routeId)}] = ${JSON.stringify(spec)};`;
+    })
+    .join("\n");
+
+  // Per-route base path and annotations
+  const routeBases = files
+    .map((file) => {
+      const routeId = file.replace(tsRegex, "");
+      const enc = encodeURIComponent(routeId);
+      return `CLIENT_BASES[${JSON.stringify(routeId)}] = "/_client/r/${enc}/";`;
+    })
+    .join("\n");
+
+  const annotateCalls = files
     .map((file) => {
       const name = varName(file);
       const routeId = file.replace(tsRegex, "");
-      const enc = encodeURIComponent(routeId);
-      return [
-        `// annotate on()-wrapped exports with hrefs` ,
-        `for (const k in ${name}) { const v = ((${name} as any)[k] as any); if (typeof v === "function" && (v as any)[Symbol.for("@mewhhaha/ruwuter.clientfn")] === true) { (v as any).href = "/_client/r/${enc}/" + k + ".js"; } }`,
-        `for (const k in ${name}) { const v = ((${name} as any)[k] as any); if (typeof v === "function" && /^[A-Z]/.test(k) && (v as any)[Symbol.for("@mewhhaha/ruwuter.clientfn")] === true) { (v as any).hrefHtml = "/_client/r/${enc}/" + k + ".html"; } }`,
-        `// build manifest entries for this route`,
-        `(MANIFEST["${routeId}"] ||= { js: Object.create(null), html: Object.create(null) });`,
-        `for (const k in ${name}) { const v = ((${name} as any)[k] as any); if (typeof v === "function" && (v as any)[Symbol.for("@mewhhaha/ruwuter.clientfn")] === true) { MANIFEST["${routeId}"].js[k] = "/_client/r/${enc}/" + k + ".js"; } }`,
-        `for (const k in ${name}) { const v = ((${name} as any)[k] as any); if (typeof v === "function" && /^[A-Z]/.test(k) && (v as any)[Symbol.for("@mewhhaha/ruwuter.clientfn")] === true) { MANIFEST["${routeId}"].html[k] = "/_client/r/${enc}/" + k + ".html"; } }`,
-      ].join("\n");
+      return `__annotate(${name} as any, ${JSON.stringify(routeId)});`;
     })
     .join("\n");
 
@@ -154,12 +166,35 @@ import * as document from "./document.tsx";
 import { type route } from "@mewhhaha/ruwuter";
 ${routeImports}
 const MANIFEST: Record<string, { js: Record<string,string>, html: Record<string,string> }> = Object.create(null);
-${annotate}
+const CLIENT_BASES: Record<string, string> = Object.create(null);
+const ROUTE_SPECS: Record<string, string> = Object.create(null);
+function __annotate(mod: Record<string, any>, routeId: string) {
+  const base = CLIENT_BASES[routeId] || "/_client/r/" + encodeURIComponent(routeId) + "/";
+  const entry = (MANIFEST[routeId] ||= { js: Object.create(null), html: Object.create(null) });
+  for (const k in mod) {
+    const v = (mod as any)[k];
+    if (typeof v === "function" && (v as any)[Symbol.for("@mewhhaha/ruwuter.clientfn")] === true) {
+      const href = base + k + ".js";
+      (v as any).href = href;
+      entry.js[k] = href;
+      if (/^[A-Z]/.test(k)) {
+        const hrefHtml = base + k + ".html";
+        (v as any).hrefHtml = hrefHtml;
+        entry.html[k] = hrefHtml;
+      }
+    }
+  }
+}
+${routeBases}
+${annotateCalls}
+${routeSpecs}
 ${routeVars}
 const $document = { id: "", mod: document };
 
 export const routes: route[] = [${routeItems}];
 export const clientManifest = MANIFEST;
+export const clientUrlBases = CLIENT_BASES;
+export const clientModuleSpecs = ROUTE_SPECS;
 `;
 
   await writeFile(path.join(appFolder, "routes.mts"), file);
