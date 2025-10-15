@@ -147,7 +147,7 @@ export default function () {
     else el.setAttribute(name, String(value));
   }
 
-  // Hydration via script[type="application/json"][data-rw-h]
+  // Hydration via script[type="application/json"][data-hydrate]
   const hydrated = new Set();
 
   function hydrateBoundary(id, el, payload) {

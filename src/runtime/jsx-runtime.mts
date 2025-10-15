@@ -32,10 +32,12 @@ export { type JSX } from "./jsx.mts";
  */
 export { into };
 
+
+
 /**
  * Fragment component for grouping multiple elements without a wrapper.
  */
-export const Fragment = (props: any): any => jsx("", props);
+export const Fragment = (props: Record<string, unknown>): Html => jsx("", props);
 
 // Void elements are self-closing and shouldn't have a closing tag
 const voidElements = new Set([
@@ -56,24 +58,18 @@ const voidElements = new Set([
 ]);
 
 // Sequence for JSON hydration boundaries for `on` handlers
-let __ON_SEQ = 0;
+let HYDRATE_SEQ = 0;
 
-const escapeJsonForScript = (json: string): string => {
-  // Prevent closing script tag from breaking out
-  return json.replaceAll("</script>", "<\\/script>");
-};
+type ModuleEntry = { t: "m"; s: string; x?: string; ev?: string };
+type AttrItem = { n: string; e: ModuleEntry; a: Record<string, unknown> };
+type HydrationPayload = { bind?: unknown; on?: ModuleEntry[]; attrs?: AttrItem[] };
 
-const deriveEventName = (fn: any): string => {
-  try {
-    const hinted: unknown = (fn && (fn as any).event) || undefined;
-    let name = typeof hinted === "string" && hinted ? hinted : fn?.name || "";
-    if (name.startsWith("on")) name = name.slice(2);
-    name = name.toLowerCase();
-    return name || "click";
-  } catch {
-    return "click";
-  }
-};
+const escapeJsonForScript = (json: string): string => json.replaceAll("</script>", "<\\/script>");
+
+const deriveEventName = (fn: ((event: Event, signal: AbortSignal) => unknown) & { event?: string }): string =>
+  (typeof fn?.event === "string" && fn.event) ||
+  fn?.name?.replace(/^on/i, "").toLowerCase() ||
+  "click";
 
 /**
  * Core JSX factory function that creates HTML elements or calls component functions.
@@ -83,8 +79,8 @@ const deriveEventName = (fn: any): string => {
  * @returns Html instance for streaming
  */
 export function jsx(
-  tag: string | Function,
-  { children, ...props }: { children?: unknown } & Record<string, any>,
+  tag: string | ((props: Record<string, unknown>) => Html),
+  { children, ...props }: { children?: unknown } & Record<string, unknown>,
 ): Html {
   if (typeof tag === "function") {
     return withComponentFrame(() => tag({ children, ...props }));
@@ -94,35 +90,36 @@ export function jsx(
   let dangerousHtml: string | undefined;
   // Optional combined hydration boundary + payload
   let hydrationId: string | undefined;
-  let hydrationPayload: any | undefined;
+  let hydrationPayload: HydrationPayload | undefined;
 
-  for (const key in props) {
-    let value = props[key];
+  const ensureHydration = (): HydrationPayload => {
+    hydrationPayload ||= {} as HydrationPayload;
+    hydrationId ||= `h_${HYDRATE_SEQ++}`;
+    return hydrationPayload;
+  };
+
+  for (const [key, value] of Object.entries(props)) {
 
     // Explicit state binding for event handlers via `bind` prop
     if (key === "bind") {
-      if (!hydrationId) hydrationId = `h_${__ON_SEQ++}`;
-      try {
-        (hydrationPayload ||= {} as any).bind = value;
-      } catch {}
+      ensureHydration().bind = value;
       continue;
     }
 
     // New unified `on` handlers: accept one or several functions, infer event by function name
     if (key === "on" && (typeof value === "function" || Array.isArray(value))) {
       const fns = Array.isArray(value) ? value : [value];
-      const items: any[] = [];
+      const items: ModuleEntry[] = [];
       for (const fn of fns) {
         if (typeof fn !== "function") continue;
         const ev = deriveEventName(fn);
-        const href = (fn as any).href;
+        const href = fn.href as unknown;
         if (typeof href === "string" && href) {
           items.push({ t: "m", s: href, x: "default", ev });
         }
       }
       if (items.length) {
-        if (!hydrationId) hydrationId = `h_${__ON_SEQ++}`;
-        (hydrationPayload ||= {} as any).on = items;
+        ensureHydration().on = items;
       }
       continue;
     }
@@ -132,12 +129,19 @@ export function jsx(
     // Attribute binding: function-valued props (e.g., class={fn})
     // Collect into a hydration payload array so the client can compute + update on ref changes
     if (typeof value === "function") {
-      const href = (value as any).href;
+
+      // @ts-expect-error Adding the href illegally
+      const href = value.href as unknown;
       if (typeof href === "string" && href) {
-        const entry = { t: "m", s: href, x: "default" } as const;
-        const args = Object.fromEntries(Object.entries(value as any));
-        if (!hydrationId) hydrationId = `h_${__ON_SEQ++}`;
-        ((hydrationPayload ||= {} as any).attrs ||= []).push({ n: key, e: entry, a: args });
+        const entry: ModuleEntry = { t: "m", s: href, x: "default" };
+        // Pick only string keys and exclude reserved ones like href/event
+        const args: Record<string, unknown> = Object.create(null);
+        for (const k of Object.keys(value)) {
+          if (k === "href" || k === "event") continue;
+          // @ts-expect-error We can't validate this
+          args[k] = value[k];
+        }
+        (ensureHydration().attrs ||= []).push({ n: key, e: entry, a: args });
       }
       continue;
     }
@@ -147,16 +151,21 @@ export function jsx(
       key === "dangerouslySetInnerHTML" &&
       typeof value === "object" &&
       value !== null &&
-      "__html" in value
+      "__html" in value && typeof value.__html === "string"
     ) {
       dangerousHtml = value.__html;
       continue;
     }
 
-    let sanitized = sanitize(value);
-    if (sanitized === undefined) {
+    // Boolean/static attributes — render presence for true, skip false/null/undefined
+    if (value === true) {
+      attrs += ` ${key}="" `;
       continue;
     }
+    if (value === false || value == null) continue;
+
+    let sanitized = sanitize(value);
+    if (sanitized === undefined) continue;
 
     // Special case for class to make the class names more readable
 
@@ -171,18 +180,7 @@ export function jsx(
   }
 
   const generator = async function* (): AsyncGenerator<string> {
-    // Pre-comment hydration boundary
-    if (hydrationId) {
-      yield `<!--hydration-boundary:${hydrationId}-->`;
-    }
-    if (tag) {
-      yield `<${tag}${attrs}>`;
-    }
 
-    // If dangerouslySetInnerHTML is provided, use it instead of children
-    if (dangerousHtml !== undefined) {
-      yield dangerousHtml;
-    } else {
       async function* processChild(child: unknown): AsyncGenerator<string> {
         if (child === undefined || child === null || child === false) {
           return;
@@ -197,8 +195,7 @@ export function jsx(
           return;
         }
         if (Array.isArray(child)) {
-          for (let i = 0; i < child.length; i++) {
-            const c = child[i];
+          for (const c of child as unknown[]) {
             yield* processChild(c);
           }
           return;
@@ -211,22 +208,35 @@ export function jsx(
         }
 
       // Render ref() values (via toJSON marker) as their initial value
-      if (typeof child === "object" && child !== null) {
+      if (typeof child === "object" && child !== null && "toJSON" in child && typeof child.toJSON === "function") {
         try {
-          const marker = (child as any).toJSON?.();
+          const marker = (child).toJSON?.();
           if (marker && marker.__ref === true) {
             yield escapeHtml(String(marker.v));
             return;
           }
-        } catch {}
+        } catch {
+          // Do nothing
+        }
       }
 
         yield escapeHtml(child.toString());
       }
+    // Pre-comment hydration boundary
+    if (hydrationId) {
+      yield `<!--hydration-boundary:${hydrationId}-->`;
+    }
+    if (tag) {
+      yield `<${tag}${attrs}>`;
+    }
+
+    // If dangerouslySetInnerHTML is provided, use it instead of children
+    if (dangerousHtml !== undefined) {
+      yield dangerousHtml;
+    } else {
 
       yield* processChild(children);
     }
-
     if (tag && !voidElements.has(tag)) {
       yield `</${tag}>`;
     }
@@ -265,21 +275,12 @@ export function escapeHtml(input: string): string {
   });
 }
 
-const sanitize = (value: any) => {
-  if (typeof value === "string") {
-    return value.replaceAll(/"/g, "&quot;");
-  }
-  if (value === null || value === undefined || value === false) {
-    return undefined;
-  }
-
-  if (value === true) {
-    return "true";
-  }
-
-  if (typeof value === "number") {
-    return value.toString();
-  }
+const sanitize = (value: unknown): string | undefined => {
+  if (typeof value === "string") return value.replaceAll(/"/g, "&quot;");
+  if (value === null || value === undefined || value === false) return undefined;
+  if (value === true) return "true";
+  if (typeof value === "number") return value.toString();
+  return undefined;
 };
 
 /**
@@ -289,6 +290,9 @@ const sanitize = (value: any) => {
  * @param props - Element properties and children
  * @returns JSX element
  */
-export function jsxs(tag: any, props: any): JSX.Element {
+export function jsxs(
+  tag: string | ((props: Record<string, unknown>) => Html),
+  props: { children?: unknown } & Record<string, unknown>,
+): JSX.Element {
   return jsx(tag, props);
 }

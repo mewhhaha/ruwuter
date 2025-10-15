@@ -42,7 +42,7 @@ describe("Unified on-prop", () => {
       ctx,
     );
     const html = await res.text();
-    expect(html).toContain('data-rw-h="h_');
+    expect(html).toContain('data-hydrate="h_');
     // boundary-only check
   });
 });

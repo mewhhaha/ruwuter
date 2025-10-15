@@ -50,7 +50,7 @@ describe("mount/unmount via unified on", () => {
     );
     const html = await res.text();
     // Both elements should have on-boundaries
-    const cnt = (html.match(/data-rw-h="h_/g) || []).length;
+    const cnt = (html.match(/data-hydrate="h_/g) || []).length;
     expect(cnt).toBeGreaterThanOrEqual(2);
   });
 });
