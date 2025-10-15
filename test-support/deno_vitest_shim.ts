@@ -69,21 +69,13 @@ export function expect<T>(val: T): ExpectObj<T> {
     },
     not: {
       toContain(needle: string) {
-        try {
-          assertStringIncludes(String(val), needle);
+        if (String(val).includes(needle)) {
           throw new Error("Expected string not to contain needle");
-        } catch (e: unknown) {
-          const msg = (e as any)?.message ?? "";
-          if (!String(msg).includes("to include")) throw e;
         }
       },
       toMatch(re: RegExp) {
-        try {
-          assertMatch(String(val), re);
+        if (re.test(String(val))) {
           throw new Error("Expected string not to match regex");
-        } catch (e: unknown) {
-          const msg = (e as any)?.message ?? "";
-          if (!String(msg).includes("to match")) throw e;
         }
       },
     },

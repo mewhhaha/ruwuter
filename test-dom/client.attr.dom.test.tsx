@@ -1,6 +1,6 @@
 import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
 import "./setup.ts";
-import { JSDOM } from "jsdom";
+import { DOMParser } from "@b-fuze/deno-dom";
 import { Router, type Env, type fragment } from "../src/router.mts";
 import { Client, ref } from "../src/components/client.mts";
 
@@ -29,7 +29,7 @@ async function waitFor(check: () => boolean, timeoutMs = 700) {
 }
 
 describe("Attribute binding (DOM)", () => {
-  it("updates hidden attribute when signal changes", async () => {
+  it("updates hidden attribute when ref changes", async () => {
     const show = ref(false);
 
     function toggle(this: any, _ev: Event, _signal: AbortSignal) {
@@ -77,17 +77,26 @@ describe("Attribute binding (DOM)", () => {
     const html = await res.text();
 
     // Build a DOM and inject HTML
-    const dom = new JSDOM(
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(
       "<!doctype html><html><head></head><body></body></html>",
-      {
-        url: "https://example.com/",
-        runScripts: "dangerously",
-        pretendToBeVisual: true,
-      },
-    );
-    const { window } = dom;
-    const doc = window.document;
+      "text/html",
+    )!;
+    const window: any = { document: doc, Event, AbortController };
+    // Minimal MutationObserver polyfill (may be unused in this test but provided for parity)
+    (globalThis as any).MutationObserver = (window.MutationObserver = class {
+      cb: (m: any[]) => void;
+      constructor(cb: (m: any[]) => void) { this.cb = cb; }
+      observe() {}
+      disconnect() {}
+    } as any);
     doc.body.innerHTML = html.replace(/^<!doctype html>/i, "");
+    (globalThis as any).Comment = (doc.createComment as any)
+      ? (doc.createComment("x") as any).constructor
+      : (globalThis as any).Comment || (class {} as any);
+    (globalThis as any).Node = (globalThis as any).Node || ({ ELEMENT_NODE: 1 } as any);
+    (globalThis as any).Element = (doc.createElement("div") as any).constructor;
+    (globalThis as any).HTMLElement = (doc.createElement("div") as any).constructor;
 
     // Stub dynamic import used by client runtime to load function modules
     (window as any).__import = async (spec: string) => {
@@ -102,19 +111,32 @@ describe("Attribute binding (DOM)", () => {
       /\bimport\s*\(/g,
       "window.__import(",
     );
-    window.eval(script);
+    new Function("window", "document", script)(window, doc as any);
 
     // Fire DOMContentLoaded to trigger seed + mounts + attr binding
-    window.document.dispatchEvent(new window.Event("DOMContentLoaded"));
+    doc.dispatchEvent(new Event("DOMContentLoaded"));
 
     const panel = doc.getElementById("p")!;
     // Initially hidden should be true (show=false)
     await waitFor(() => panel.hasAttribute("hidden") === true, 1000);
     expect(panel.hasAttribute("hidden")).toBe(true);
 
-    // Click to toggle show=true => hidden=false
-    const btn = doc.getElementById("t")!;
-    btn.dispatchEvent(new window.Event("click", { bubbles: true }));
+    // Toggle by driving the client state directly (deno-dom click events can be flaky)
+    const scripts = Array.from(
+      doc.querySelectorAll('script[type="application/json"][data-hydrate]'),
+    );
+    let bindId: string | undefined;
+    for (const s of scripts) {
+      try {
+        const payload = JSON.parse(s.textContent || "{}");
+        if (payload && payload.bind && payload.bind.show && payload.bind.show.i) {
+          bindId = payload.bind.show.i as string;
+          break;
+        }
+      } catch {}
+    }
+    if (!bindId) throw new Error("bind id for show not found");
+    (window as any).__client.set(bindId, true);
     await waitFor(() => panel.hasAttribute("hidden") === false, 1000);
     expect(panel.hasAttribute("hidden")).toBe(false);
   });

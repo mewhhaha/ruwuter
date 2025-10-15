@@ -23,7 +23,7 @@
 import { type JSX } from "./runtime/jsx.mts";
 import { into, isHtml, type Html } from "./runtime/node.mts";
 // SuspenseProvider must be applied by the consumer in their layout/document.
-import { runWithContextStore } from "./components/context.mts";
+import { bindContext, runWithContextStore } from "./components/context.mts";
 import { runWithHooksStore } from "./runtime/hooks.mts";
 
 export type { Html } from "./runtime/node.mts";
@@ -272,7 +272,8 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
     }
   };
 
-  ctx.context[1].waitUntil(startStreaming());
+  // Start streaming under the captured context to preserve AsyncLocalStorage
+  bindContext(startStreaming)();
 
   return new Response(stream.readable, {
     headers,

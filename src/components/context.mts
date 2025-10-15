@@ -1,13 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { into, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
-import type { Html } from "@mewhhaha/ruwuter";
+
 
 type Store = Map<symbol, unknown[]>;
 
 const storage = new AsyncLocalStorage<Store>();
+let fallbackStore: Store | undefined;
 
 const getStore = (): Store | undefined => {
-  return storage.getStore();
+  return storage.getStore() || fallbackStore;
 };
 
 function pushValue<T>(key: symbol, value: T): () => void {
@@ -46,10 +47,38 @@ const isPromise = (value: unknown): value is Promise<unknown> => {
  */
 export function runWithContextStore<T>(fn: () => T): T {
   let result!: T;
-  storage.run(new Map(), () => {
-    result = fn();
+  const local = new Map() as Store;
+  // Use AsyncLocalStorage if available; also set a fallback for non-ALS environments
+  storage.run(local, () => {
+    const prev = fallbackStore;
+    fallbackStore = local;
+    try {
+      result = fn();
+    } finally {
+      fallbackStore = prev;
+    }
   });
   return result;
+}
+
+/**
+ * Captures the current store and returns a function that runs under it.
+ * Useful when scheduling async work that must see the same context.
+ */
+export function bindContext<F extends (...args: any[]) => any>(fn: F): F {
+  const store = getStore();
+  if (!store) return fn as F;
+  return ((...args: any[]) =>
+    // Prefer ALS; also set fallback for the duration
+    storage.run(store, () => {
+      const prev = fallbackStore;
+      fallbackStore = store;
+      try {
+        return fn(...args);
+      } finally {
+        fallbackStore = prev;
+      }
+    })) as F;
 }
 
 /**

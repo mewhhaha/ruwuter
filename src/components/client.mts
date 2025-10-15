@@ -12,7 +12,7 @@ import { into, type Html } from "../runtime/node.mts";
 import { useHook } from "../runtime/hooks.mts";
 import cr from "./client.runtime.js";
 
-const clientRuntime = `${cr.toString()}()`;
+const clientRuntime = `(${cr.toString()})()`;
 
 /** Client handler signature for on‑module functions. */
 export type Handler<This = any> = (
@@ -25,10 +25,13 @@ export type Handler<This = any> = (
 const CLIENT_FN = Symbol.for("@mewhhaha/ruwuter.clientfn");
 
 /** Marks a route‑exported handler or component so the routes generator can attach an href. */
-export function on<F extends Function>(fn: F): F & { href?: string } {
-  (fn as any)[CLIENT_FN] = true;
-  return fn as any;
+export function on<F extends ((event: Event, signal: AbortSignal) => unknown) & { [CLIENT_FN]: true}>(fn: F): F & { href?: string } {
+  fn[CLIENT_FN] = true;
+  return fn;
 }
+
+
+const registry = new Map()
 
 /** A small shared ref container used across hydration boundaries. */
 export type Ref<T> = {
@@ -47,18 +50,15 @@ export function ref<T>(initial: T): Ref<T> {
       id,
       get(): T {
         try {
-          return (window as any).__client?.state?.get(id) ?? initial;
+          return registry.get(id) ?? initial;
         } catch {
           return initial;
         }
       },
-      set(next: any): void {
-        try {
-          const api = (window as any).__client;
-          const prev = api?.state?.get(id) ?? initial;
-          const val = typeof next === "function" ? next(prev) : next;
-          api?.set?.(id, val);
-        } catch {}
+      set(next: T): void {
+        const prev = registry.get(id) ?? initial;
+        const val = typeof next === "function" ? next(prev) : next;
+        registry.set(id, val)
       },
       toJSON() {
         return marker;

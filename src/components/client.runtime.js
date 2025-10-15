@@ -135,7 +135,9 @@ export default function () {
 
   function setComputedAttr(el, name, value) {
     if (name === "class") {
-      el.setAttribute("class", value == null ? "" : String(value));
+      const v = value == null ? "" : String(value);
+      el.setAttribute("class", v);
+      try { if ("className" in el) (el).className = v; } catch {}
       return;
     }
     if (name === "hidden" || name === "disabled" || name === "inert") {
@@ -183,17 +185,49 @@ export default function () {
   function elementForEndComment(endComment) {
     // Structure: <element></element><!--/hydration-boundary:id--><script ...>
     const prev = endComment.previousSibling;
-    return prev && prev.nodeType === Node.ELEMENT_NODE ? /** @type {Element} */ (prev) : null;
+    return prev && prev.nodeType === 1 ? /** @type {Element} */ (prev) : null;
   }
 
   function hydrateFromScript(sc) {
-    if (!sc || sc.tagName !== "SCRIPT") return;
+    if (!sc || (sc.tagName || "").toUpperCase() !== "SCRIPT") return;
     const id = sc.getAttribute("data-hydrate") || "";
     if (!id || hydrated.has(id)) return;
-    const end = sc.previousSibling;
-    if (!(end instanceof Comment)) return;
-    if (end.data !== `/hydration-boundary:${id}`) return;
-    const el = elementForEndComment(end);
+    // Walk backwards from the script to find a matching boundary comment
+    let cur = sc.previousSibling;
+    /** @type {Element|null} */
+    let el = null;
+    let steps = 0;
+    while (cur && steps++ < 100) {
+      // Skip pure-whitespace text nodes
+      if (cur.nodeType === 3 && !/\S/.test(cur.textContent || "")) {
+        cur = cur.previousSibling;
+        continue;
+      }
+      // Stop if we hit another script tag
+      if (cur.nodeType === 1 && (/** @type {Element} */(cur)).tagName?.toUpperCase() === "SCRIPT") {
+        break;
+      }
+      // Closing boundary: <!--/hydration-boundary:id-->
+      if (cur.nodeType === 8 && (/** @type {Comment} */(cur)).data === `/hydration-boundary:${id}`) {
+        el = elementForEndComment(/** @type {Comment} */(cur));
+        break;
+      }
+      // Opening boundary: <!--hydration-boundary:id-->
+      if (cur.nodeType === 8 && (/** @type {Comment} */(cur)).data === `hydration-boundary:${id}`) {
+        // Target element is the next element sibling
+        let ne = cur.nextSibling;
+        while (ne && ne.nodeType !== 1) ne = ne.nextSibling;
+        if (ne && ne.nodeType === 1) el = /** @type {Element} */(ne);
+        break;
+      }
+      cur = cur.previousSibling;
+    }
+    if (!el) {
+      // Fallback: bind to the nearest previous element sibling
+      let n = sc.previousSibling;
+      while (n && n.nodeType !== 1) n = n.previousSibling;
+      if (n && n.nodeType === 1) el = /** @type {Element} */ (n);
+    }
     if (!el) return;
     const payload = parseJson(sc.textContent || "{}") || {};
     hydrateBoundary(id, el, payload);
@@ -209,9 +243,9 @@ export default function () {
     const mo = new MutationObserver((mutations) => {
       for (const m of mutations) {
         m.addedNodes?.forEach((n) => {
-          if (!(n instanceof Element)) return;
+          if (!(n && n.nodeType === 1)) return;
           const isHydrationScript =
-            n.tagName === "SCRIPT" &&
+            (n.tagName || "").toUpperCase() === "SCRIPT" &&
             (n.getAttribute("type") || "").toLowerCase() === "application/json" &&
             n.hasAttribute("data-hydrate");
           if (isHydrationScript) {

@@ -49,7 +49,7 @@ describe("Ref sharing", () => {
     );
     const html = await res.text();
 
-    // Should inject hydration script payload
+    // Should inject hydration script payload (ref-based)
     expect(html).toMatch(/<script type="application\/json" data-hydrate="h/);
   });
 });

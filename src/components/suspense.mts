@@ -23,32 +23,31 @@ type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
   children: JSX.Element | (() => Promise<JSX.Element>);
 } & Omit<JSX.IntrinsicElements[AS], "children">;
 
-export const Suspense = ({
-  fallback,
-  as: As = "div",
-  children,
-  ...props
-}: SuspenseProps): JSX.Element => {
-  const registry = getRegistry();
-  if (!registry) {
-    const content = typeof children === "function" ? children() : children;
-    return jsx(As, { ...props, children: content });
-  }
-
+export const Suspense = ({ fallback, as: As = "div", children, ...props }: SuspenseProps): JSX.Element => {
   const id = `suspense-${crypto.randomUUID()}`;
+  return into(
+    (async function* () {
+      const registry = getRegistry();
+      if (!registry) {
+        // No registry -> render children directly (no fallback streaming)
+        const content = typeof children === "function" ? await children() : children;
+        yield await (await content).toPromise();
+        return;
+      }
 
-  let promise: Promise<[id: string, html: string]> | undefined;
-  if (typeof children === "function") {
-    promise = children().then(async (el: JSX.Element) => [id, await (await el).toPromise()]);
-  } else {
-    promise = (async () => [id, await (await children).toPromise()])();
-  }
+      // With registry -> register resolver promise and stream fallback now
+      let promise: Promise<[id: string, html: string]>;
+      if (typeof children === "function") {
+        promise = children().then(async (el: JSX.Element) => [id, await (await el).toPromise()]);
+      } else {
+        promise = (async () => [id, await (await children).toPromise()])();
+      }
+      registry.set(id, promise);
 
-  if (promise) {
-    registry.set(id, promise);
-  }
-
-  return jsx(As, { id, ...props, children: fallback });
+      // Emit fallback wrapper immediately
+      yield* into(jsx(As, { id, ...props, children: fallback })).text;
+    })(),
+  );
 };
 
 type ResolveProps = { nonce?: string };
@@ -70,47 +69,47 @@ export const SuspenseProvider = ({
  * If a strict CSP is used, supply a nonce so the defining script can run.
  */
 export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
-  const registry = getRegistry();
-  if (!registry || registry.size === 0) {
-    return jsx(Fragment, {});
-  }
-
   return into(
     (async function* () {
+      const registry = getRegistry();
+      if (!registry) return;
       const nonceAttribute = nonce ? ` nonce="${nonce}"` : "";
       // Define the custom element once with a nonce-bearing script so later chunks don't need inline scripts.
       yield* html`
-        <script type="application/javascript" ${nonceAttribute}>
-        if (!customElements.get('resolved-data')) {
-          class ResolvedData extends HTMLElement {
-            connectedCallback() {
-              const templateId = this.getAttribute('from');
-              const targetId = this.getAttribute('to');
-              const template = document.getElementById(templateId || '');
-              const target = document.getElementById(targetId || '');
-              try {
-                if (template instanceof HTMLTemplateElement && target instanceof HTMLElement) {
-                  target.replaceWith(template.content.cloneNode(true));
-                }
-              } finally {
-                this.remove();
-                template?.remove();
-              }            
-            }
-          }
-          customElements.define('resolved-data', ResolvedData);
+<script type="application/javascript" ${nonceAttribute}>
+if (!customElements.get('resolved-data')) {
+  class ResolvedData extends HTMLElement {
+    connectedCallback() {
+      const templateId = this.getAttribute('from');
+      const targetId = this.getAttribute('to');
+      const template = document.getElementById(templateId || '');
+      const target = document.getElementById(targetId || '');
+      try {
+        if (template instanceof HTMLTemplateElement && target instanceof HTMLElement) {
+          target.replaceWith(template.content.cloneNode(true));
         }
-        </script>
-      `;
+      } finally {
+        this.remove();
+        template?.remove();
+      }
+    }
+  }
+  customElements.define('resolved-data', ResolvedData);
+}
+</script>`;
+
+      // If we arrived before any Suspense registered, allow one tick for registration
+      if (registry.size === 0) {
+        await Promise.resolve();
+      }
 
       while (registry.size > 0) {
         const templateId = crypto.randomUUID();
         const [id, element] = await Promise.race(registry.values());
         registry.delete(id);
         yield* html`
-          <template id="${templateId}">${element}</template>
-          <resolved-data to="${id}" from="${templateId}"></resolved-data>
-        `;
+<template id="${templateId}">${element}</template>
+<resolved-data to="${id}" from="${templateId}"></resolved-data>`;
       }
     })(),
   );
