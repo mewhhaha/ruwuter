@@ -1,56 +1,116 @@
 // @ts-check
+
 let started = false;
 
 /**
- * Bootstraps the client-side runtime used for on/ref hydration.
+ * Bootstraps the browser runtime that wires up client handlers, refs, and
+ * function-valued attributes emitted by the server.
  */
 export function startClientRuntime() {
   if (typeof window === "undefined") return;
   if (started) return;
   started = true;
 
-  const globalClient = (window.__client = Object.assign(window.__client || {}, {}));
+  /**
+   * Lazily imports ESM modules with in-memory caching so repeated handlers
+   * do not trigger additional network requests.
+   */
+  const loadModule = (() => {
+    const cache = new Map();
+    return (spec) => {
+      if (!cache.has(spec)) cache.set(spec, import(spec));
+      return /** @type {Promise<Record<string, unknown>>} */ (cache.get(spec));
+    };
+  })();
 
-  const loaded = new Map();
-  function load(spec) {
-    let p = loaded.get(spec);
-    if (!p) {
-      p = import(spec);
-      loaded.set(spec, p);
-    }
-    return p;
-  }
+  /**
+   * Ref store that tracks values and dependency listeners so attribute
+   * computations can re-run when refs change.
+   */
+  const store = (() => {
+    /** @type {Map<string, unknown>} */
+    const values = new Map();
+    /** @type {Map<string, Set<() => void>>} */
+    const listeners = new Map();
+    /** @type {Map<string, RefObject>} */
+    const refs = new Map();
 
-  const state = new Map();
-  const watchers = new Map();
-  const elIds = new WeakMap();
-  let elSeq = 0;
-  const getElId = (el) => {
-    let id = elIds.get(el);
-    if (!id) {
-      id = `e${++elSeq}`;
-      elIds.set(el, id);
-    }
-    return id;
-  };
+    const ensure = (id, initial) => {
+      if (!values.has(id)) values.set(id, initial);
+      return values.get(id);
+    };
 
-  const wmBind = new WeakMap();
-  const wmCtx = new WeakMap();
-  const wmUnmount = new WeakMap();
-  const wmCtrl = new WeakMap();
+    const set = (id, next) => {
+      const current = values.get(id);
+      const value = typeof next === "function" ? next(current) : next;
+      values.set(id, value);
+      const subs = listeners.get(id);
+      if (subs) {
+        const snapshot = Array.from(subs);
+        snapshot.forEach((fn) => {
+          try {
+            fn();
+          } catch {
+            // Swallow subscriber errors to keep refs functional.
+          }
+        });
+      }
+    };
 
-  function set(id, next) {
-    const prev = state.get(id);
-    const val = typeof next === "function" ? next(prev) : next;
-    state.set(id, val);
-    const map = watchers.get(id);
-    if (!map) return;
-    for (const b of map.values()) computeAttr(b.el, b.attr, b.entry, b.args, b.key);
-  }
-  function get(id) {
-    return state.get(id);
-  }
+    const watch = (id, fn) => {
+      let subs = listeners.get(id);
+      if (!subs) {
+        subs = new Set();
+        listeners.set(id, subs);
+      }
+      subs.add(fn);
+      return () => {
+        const set = listeners.get(id);
+        if (!set) return;
+        set.delete(fn);
+        if (set.size === 0) listeners.delete(id);
+      };
+    };
 
+    const createRef = (id, initial) => {
+      ensure(id, initial);
+      if (!refs.has(id)) {
+        const ref = /** @type {RefObject} */ ({
+          id,
+          get: () => values.get(id),
+          set: (next) => set(id, next),
+          toJSON: () => ({ __ref: true, i: id, v: values.get(id) }),
+        });
+        refs.set(id, ref);
+      }
+      return /** @type {RefObject} */ (refs.get(id));
+    };
+
+    return {
+      set,
+      get: (id) => values.get(id),
+      watch,
+      ref: createRef,
+    };
+  })();
+
+  /**
+   * Element-local context storage.
+   * @type {WeakMap<Element, ElementContext>}
+   */
+  const contexts = new WeakMap();
+
+  /**
+   * Tracks hydrated boundary ids so we do not double-initialize elements.
+   * @type {Set<string>}
+   */
+  const hydrated = new Set();
+
+  /**
+   * Revives refs embedded in the hydration payload.
+   * @param {string} _key
+   * @param {unknown} value
+   */
   function revive(_key, value) {
     if (
       value &&
@@ -59,231 +119,392 @@ export function startClientRuntime() {
       typeof value.i === "string"
     ) {
       const id = value.i;
-      if (!state.has(id) && "v" in value) state.set(id, value.v);
-      return {
-        id,
-        get() {
-          return get(id);
-        },
-        set(next) {
-          return set(id, next);
-        },
-      };
+      const initial = "v" in value ? value.v : undefined;
+      return store.ref(id, initial);
     }
     return value;
   }
-  function parseJson(text) {
+
+  /**
+   * Parses the JSON payload guarding against malformed data.
+   * @param {string} text
+   * @returns {HydrationPayload}
+   */
+  function parsePayload(text) {
     try {
-      return JSON.parse(text, revive);
+      return JSON.parse(text, revive) ?? {};
     } catch {
-      return null;
+      return {};
     }
   }
 
-  function getCtx(el, key, init) {
-    const bag = wmCtx.get(el) || Object.create(null);
-    if (!wmCtx.has(el)) wmCtx.set(el, bag);
-    if (key in bag) return bag[key];
-    bag[key] = init;
-    return init;
+  /**
+   * Resolves (and caches) the function backing a module entry.
+   * @param {ModuleEntry} entry
+   */
+  async function resolveEntry(entry) {
+    if (!entry || entry.t !== "m") return undefined;
+    const mod = await loadModule(entry.s);
+    const candidate =
+      entry.x && typeof mod[entry.x] === "function"
+        ? mod[entry.x]
+        : typeof mod.default === "function"
+          ? mod.default
+          : typeof mod === "function"
+            ? mod
+            : undefined;
+    return /** @type {ClientFn | undefined} */ (candidate);
   }
 
-  function collectRefIds(ctx) {
-    const ids = new Set();
-    for (const k in ctx) {
-      const v = ctx[k];
-      if (v && typeof v === "object" && typeof v.id === "string") ids.add(v.id);
+  /**
+   * Returns or creates the context record for an element.
+   * @param {Element} el
+   * @returns {ElementContext}
+   */
+  function getContext(el) {
+    let ctx = contexts.get(el);
+    if (!ctx) {
+      ctx = {
+        bind: undefined,
+        controllers: new Map(),
+        unmount: [],
+        attrCleanups: new Map(),
+        attrScopes: new Map(),
+      };
+      contexts.set(el, ctx);
     }
-    return ids;
+    return ctx;
   }
 
-  async function runEntry(entry, el, ev, type) {
-    if (!entry || entry.t !== "m") return;
-    const mod = await load(entry.s);
-    const fn = entry.x && mod[entry.x] ? mod[entry.x] : mod.default ?? mod;
-    const controllers = wmCtrl.get(el) || new Map();
-    if (!wmCtrl.has(el)) wmCtrl.set(el, controllers);
-    controllers.get(type)?.abort?.();
-    const ac = new AbortController();
-    controllers.set(type, ac);
-    const thisArg = wmBind.get(el) ?? el;
-    await fn.call(thisArg, ev, ac.signal);
-  }
+  /**
+   * Calls a handler entry with the correct `this`, event, and abort signal.
+   * @param {Element} el
+   * @param {ModuleEntry} entry
+   * @param {string} type
+   * @param {Event} ev
+   */
+  async function invokeEntry(el, entry, type, ev) {
+    const fn = await resolveEntry(entry);
+    if (!fn) return;
+    const ctx = getContext(el);
+    const controllers = ctx.controllers;
 
-  async function computeAttr(el, attr, entry, args, key) {
-    if (!entry || entry.t !== "m") return;
-    const mod = await load(entry.s);
-    const fn = entry.x && mod[entry.x] ? mod[entry.x] : mod.default ?? mod;
-    const ctx = getCtx(
-      el,
-      key,
-      (args && typeof args === "object" && args) || {},
-    );
-    let result;
+    if (type === "unmount") {
+      controllers.forEach((ctrl) => ctrl.abort());
+      controllers.clear();
+    }
+
+    const controller = new AbortController();
+    if (type) {
+      controllers.get(type)?.abort();
+      controllers.set(type, controller);
+    }
+
     try {
-      result = await fn.call(ctx, new Event("update"), new AbortController().signal);
-    } catch {
+      await fn.call(ctx.bind ?? el, ev, controller.signal);
+    } catch (err) {
+      if (
+        controller.signal.aborted ||
+        (err && typeof err === "object" && "name" in err && err.name === "AbortError")
+      ) {
+        return;
+      }
+      console.error(err);
+    } finally {
+      if (type && controllers.get(type) === controller) {
+        controllers.delete(type);
+      }
+    }
+  }
+
+  /**
+   * Wires up an individual handler entry.
+   * @param {Element} el
+   * @param {ModuleEntry} entry
+   */
+  function attachHandler(el, entry) {
+    if (!entry || entry.t !== "m") return;
+    const type =
+      entry.ev && typeof entry.ev === "string" && entry.ev.length > 0
+        ? entry.ev
+        : "click";
+
+    if (type === "mount") {
+      queueMicrotask(() => invokeEntry(el, entry, "mount", new Event("mount")));
       return;
     }
-    setComputedAttr(el, attr, result);
-    const ids = collectRefIds(ctx);
-    const bindingKey = `${getElId(el)}|${key}`;
-    ids.forEach((id) => {
-      let map = watchers.get(id);
-      if (!map) {
-        map = new Map();
-        watchers.set(id, map);
-      }
-      map.set(bindingKey, { el, attr, entry, args, key });
+
+    const ctx = getContext(el);
+    if (type === "unmount") {
+      ctx.unmount.push(entry);
+      return;
+    }
+
+    el.addEventListener(type, (event) => {
+      invokeEntry(el, entry, type, event);
     });
   }
 
+  /**
+   * Applies class/boolean/default attribute updates.
+   * @param {Element} el
+   * @param {string} name
+   * @param {unknown} value
+   */
   function setComputedAttr(el, name, value) {
     if (name === "class") {
-      const v = value == null ? "" : String(value);
-      el.setAttribute("class", v);
-      try { if ("className" in el) el.className = v; } catch { /* ignore */ }
+      const text = value == null ? "" : String(value);
+      el.setAttribute("class", text);
+      try {
+        if ("className" in el) el.className = text;
+      } catch {
+        // ignore DOM exceptions when className is read-only
+      }
       return;
     }
+
     if (name === "hidden" || name === "disabled" || name === "inert") {
       if (value) el.setAttribute(name, "");
       else el.removeAttribute(name);
       return;
     }
-    if (value == null) el.removeAttribute(name);
-    else el.setAttribute(name, String(value));
+
+    if (value == null) {
+      el.removeAttribute(name);
+    } else {
+      el.setAttribute(name, String(value));
+    }
   }
 
-  const hydrated = new Set();
+  /**
+   * Recursively collects ref objects from an arbitrary structure.
+   * @param {unknown} value
+   * @param {(ref: RefObject) => void} visit
+   * @param {Set<unknown>} [seen]
+   */
+  function collectRefs(value, visit, seen = new Set()) {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (
+      typeof (/** @type {Record<string, unknown>} */ (value)).id === "string" &&
+      typeof (/** @type {Record<string, unknown>} */ (value)).get === "function" &&
+      typeof (/** @type {Record<string, unknown>} */ (value)).set === "function"
+    ) {
+      visit(/** @type {RefObject} */ (value));
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item) => collectRefs(item, visit, seen));
+      return;
+    }
+    for (const key in value) {
+      collectRefs(
+        /** @type {Record<string, unknown>} */ (value)[key],
+        visit,
+        seen,
+      );
+    }
+  }
 
-  function hydrateBoundary(id, el, payload) {
-    if (!id || hydrated.has(id)) return;
-    if (payload && payload.bind !== undefined) wmBind.set(el, payload.bind);
+  /**
+   * Sets up a function-valued attribute so it recomputes whenever any
+   * referenced ref changes.
+   * @param {Element} el
+   * @param {AttrEntry} spec
+   */
+  function bindComputedAttr(el, spec) {
+    if (!spec || typeof spec.n !== "string" || !spec.e || spec.e.t !== "m") return;
+
+    const ctx = getContext(el);
+    const key = `${spec.n}:${spec.e.s}:${spec.e.x ?? ""}`;
+
+    ctx.attrCleanups.get(key)?.();
+
+    const scopeMap = ctx.attrScopes;
+    if (!scopeMap.has(key)) {
+      const args = spec.a && typeof spec.a === "object" ? spec.a : {};
+      scopeMap.set(key, args);
+    }
+    const scope = scopeMap.get(key);
+
+    /** @type {Set<() => void>} */
+    const unsubs = new Set();
+    let token = 0;
+
+    const run = async () => {
+      const current = ++token;
+      unsubs.forEach((dispose) => dispose());
+      unsubs.clear();
+
+      const fn = await resolveEntry(spec.e);
+      if (token !== current || !fn) return;
+
+      let result;
+      try {
+        result = await fn.call(scope, new Event("update"), new AbortController().signal);
+      } catch {
+        return;
+      }
+
+      if (token !== current) return;
+      setComputedAttr(el, spec.n, result);
+
+      collectRefs(scope, (ref) => {
+        unsubs.add(store.watch(ref.id, run));
+      });
+    };
+
+    run();
+
+    ctx.attrCleanups.set(key, () => {
+      unsubs.forEach((dispose) => dispose());
+      unsubs.clear();
+    });
+  }
+
+  /**
+   * Applies the hydration payload to an element.
+   * @param {Element} el
+   * @param {HydrationPayload} payload
+   */
+  function hydratePayload(el, payload) {
+    if (!payload || typeof payload !== "object") return;
+    const ctx = getContext(el);
+
+    if (payload.bind !== undefined) {
+      ctx.bind = payload.bind;
+    }
+
     if (Array.isArray(payload.on)) {
-      for (const entry of payload.on) {
-        const ev = entry && typeof entry.ev === "string" && entry.ev ? entry.ev : "click";
-        if (ev === "mount")
-          setTimeout(() => {
-            runEntry(entry, el, new Event("mount"), "mount");
-          }, 0);
-        else if (ev === "unmount") {
-          const list = wmUnmount.get(el) || [];
-          list.push(entry);
-          wmUnmount.set(el, list);
-        } else
-          el.addEventListener(ev, (e) => {
-            runEntry(entry, el, e, ev);
-          });
-      }
+      payload.on.forEach((entry) => attachHandler(el, entry));
     }
+
     if (Array.isArray(payload.attrs)) {
-      for (const item of payload.attrs) {
-        if (!item || typeof item.n !== "string" || !item.e) continue;
-        const key = `attr:${item.n}:${item.e.s}:${item.e.x || ""}`;
-        computeAttr(el, item.n, item.e, item.a || {}, key);
-      }
+      payload.attrs.forEach((attr) => bindComputedAttr(el, attr));
     }
+  }
+
+  /**
+   * Attempts to find the element associated with a hydration script.
+   * @param {HTMLScriptElement} script
+   */
+  function findHydrationElement(script) {
+    const id = script.getAttribute("data-hydrate") || "";
+    if (!id) return null;
+
+    let node = script.previousSibling;
+    while (node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        return /** @type {Element} */ (node);
+      }
+      if (
+        node.nodeType === Node.COMMENT_NODE &&
+        (node.data === `/rw:h:${id}` || node.data === `/hydration-boundary:${id}`)
+      ) {
+        let prev = node.previousSibling;
+        while (prev && prev.nodeType !== Node.ELEMENT_NODE) prev = prev.previousSibling;
+        if (prev && prev.nodeType === Node.ELEMENT_NODE) {
+          return /** @type {Element} */ (prev);
+        }
+      }
+      node = node.previousSibling;
+    }
+    return null;
+  }
+
+  /**
+   * Hydrates an individual script boundary.
+   * @param {HTMLScriptElement} script
+   */
+  function hydrateScript(script) {
+    const id = script.getAttribute("data-hydrate") || "";
+    if (!id || hydrated.has(id)) return;
+
+    const el = findHydrationElement(script);
+    if (!el) return;
+
+    const payload = parsePayload(script.textContent || "{}");
+    hydratePayload(el, payload);
     hydrated.add(id);
   }
 
-  function elementForEndComment(endComment) {
-    const prev = endComment.previousSibling;
-    return prev && prev.nodeType === 1 ? prev : null;
-  }
+  /**
+   * Cleans up controllers, watchers, and unmount handlers for a detached node.
+   * @param {Element} el
+   */
+  function teardownElement(el) {
+    const ctx = contexts.get(el);
+    if (!ctx) return;
 
-  function hydrateFromScript(sc) {
-    if (!sc || (sc.tagName || "").toUpperCase() !== "SCRIPT") return;
-    const id = sc.getAttribute("data-hydrate") || "";
-    if (!id || hydrated.has(id)) return;
-    let cur = sc.previousSibling;
-    let el = null;
-    let steps = 0;
-    while (cur && steps++ < 100) {
-      if (cur.nodeType === 3 && !/\S/.test(cur.textContent || "")) {
-        cur = cur.previousSibling;
-        continue;
-      }
-      if (cur.nodeType === 1 && cur.tagName?.toUpperCase() === "SCRIPT") {
-        break;
-      }
-      if (cur.nodeType === 8 && cur.data === `/hydration-boundary:${id}`) {
-        el = elementForEndComment(cur);
-        break;
-      }
-      if (cur.nodeType === 8 && cur.data === `hydration-boundary:${id}`) {
-        let ne = cur.nextSibling;
-        while (ne && ne.nodeType !== 1) ne = ne.nextSibling;
-        if (ne && ne.nodeType === 1) el = ne;
-        break;
-      }
-      cur = cur.previousSibling;
+    ctx.controllers.forEach((ctrl) => ctrl.abort());
+    ctx.controllers.clear();
+
+    if (ctx.unmount.length) {
+      ctx.unmount.forEach((entry) => {
+        invokeEntry(el, entry, "unmount", new Event("unmount"));
+      });
+      ctx.unmount.length = 0;
     }
-    if (!el) {
-      let n = sc.previousSibling;
-      while (n && n.nodeType !== 1) n = n.previousSibling;
-      if (n && n.nodeType === 1) el = n;
+
+    ctx.attrCleanups.forEach((dispose) => dispose());
+    ctx.attrCleanups.clear();
+
+    contexts.delete(el);
+  }
+
+  const isHydrationScript = (node) =>
+    node instanceof HTMLScriptElement &&
+    (node.getAttribute("type") || "").toLowerCase() === "application/json" &&
+    node.hasAttribute("data-hydrate");
+
+  /**
+   * Seeds existing hydration scripts on initial load.
+   */
+  function seed() {
+    document
+      .querySelectorAll('script[type="application/json"][data-hydrate]')
+      .forEach((node) => hydrateScript(/** @type {HTMLScriptElement} */ (node)));
+  }
+
+  /**
+   * Processes addition/removal mutations to hydrate or tear down nodes.
+   */
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes?.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (isHydrationScript(node)) {
+          hydrateScript(/** @type {HTMLScriptElement} */ (node));
+          return;
+        }
+        node
+          .querySelectorAll('script[type="application/json"][data-hydrate]')
+          .forEach((script) => hydrateScript(/** @type {HTMLScriptElement} */ (script)));
+      });
+
+      mutation.removedNodes?.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        teardownElement(node);
+        node.querySelectorAll("*").forEach((child) => {
+          teardownElement(/** @type {Element} */ (child));
+        });
+      });
     }
-    if (!el) return;
-    const payload = parseJson(sc.textContent || "{}") || {};
-    hydrateBoundary(id, el, payload);
-  }
+  });
 
-  function seedHydration() {
-    const nodes = document.querySelectorAll('script[type="application/json"][data-hydrate]');
-    nodes.forEach((n) => hydrateFromScript(n));
-  }
+  seed();
+  observer.observe(document, { childList: true, subtree: true });
 
-  function watchHydration() {
-    const mo = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        m.addedNodes?.forEach((n) => {
-          if (!(n && n.nodeType === 1)) return;
-          const isHydrationScript =
-            (n.tagName || "").toUpperCase() === "SCRIPT" &&
-            (n.getAttribute("type") || "").toLowerCase() === "application/json" &&
-            n.hasAttribute("data-hydrate");
-          if (isHydrationScript) {
-            hydrateFromScript(n);
-            return;
-          }
-          n
-            .querySelectorAll('script[type="application/json"][data-hydrate]')
-            .forEach((s) => hydrateFromScript(s));
-        });
-      }
-    });
-    mo.observe(document, { childList: true, subtree: true });
-  }
-
-  function watchRemovals() {
-    const mo = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        m.removedNodes?.forEach((n) => {
-          if (!(n instanceof Element)) return;
-          const map = wmCtrl.get(n);
-          if (map) for (const c of map.values()) c.abort?.();
-          const id = elIds.get(n);
-          if (id) {
-            for (const w of watchers.values()) {
-              for (const k of Array.from(w.keys())) if (k.startsWith(id + "|")) w.delete(k);
-            }
-          }
-          const list = wmUnmount.get(n);
-          if (Array.isArray(list)) list.forEach((e) => runEntry(e, n, new Event("unmount"), "unmount"));
-        });
-      }
-    });
-    mo.observe(document, { childList: true, subtree: true });
-  }
-
-  seedHydration();
-  watchHydration();
-  watchRemovals();
-
-  Object.assign(globalClient, {
-    load,
-    set,
-    get,
-    state,
+  window.__ruwuter = Object.assign(window.__ruwuter || {}, {
+    store,
   });
 }
+
+/**
+ * @typedef {{ id: string; get(): unknown; set(next: unknown): void; toJSON(): { __ref: true; i: string; v: unknown } }} RefObject
+ * @typedef {{ bind: any; controllers: Map<string, AbortController>; unmount: ModuleEntry[]; attrCleanups: Map<string, () => void>; attrScopes: Map<string, Record<string, unknown>> }} ElementContext
+ * @typedef {{ t: "m"; s: string; x?: string; ev?: string }} ModuleEntry
+ * @typedef {(this: any, ev: Event, signal: AbortSignal) => unknown} ClientFn
+ * @typedef {{ n: string; e: ModuleEntry; a?: Record<string, unknown> }} AttrEntry
+ * @typedef {{ bind?: any; on?: ModuleEntry[]; attrs?: AttrEntry[] }} HydrationPayload
+ */
