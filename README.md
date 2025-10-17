@@ -84,8 +84,10 @@ app/
 
 ```tsx
 // app/_index.tsx
-import { Client, on, ref } from "@mewhhaha/ruwuter/components";
-import { SuspenseProvider, Resolve } from "@mewhhaha/ruwuter/components";
+import { on, ref } from "@mewhhaha/ruwuter/components";
+import { SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
+import clientUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
 
 // Wrap client functions with on() so the routes generator annotates them.
 export const click = on(function click(ev: Event, signal: AbortSignal) {
@@ -94,7 +96,6 @@ export const click = on(function click(ev: Event, signal: AbortSignal) {
 
 export default function HomePage() {
   return (
-    <SuspenseProvider>
       <html>
         <head>
           <title>Welcome to @mewhhaha/ruwuter</title>
@@ -104,26 +105,27 @@ export default function HomePage() {
             crossorigin="anonymous"
             integrity="sha256-0957yKwrGW4niRASx0/UxJxBY/xBhYK63vDCnTF7hH4="
           ></script>
+          <script type="module" src={clientUrl}></script> 
+          <script type="module" src={resolveUrl}></script> 
         </head>
         <body>
-          <div class="container">
-            <h1>Hello, World!</h1>
-            <p>Welcome to your new @mewhhaha/ruwuter app.</p>
-            {/* Fixi example (server-driven) */}
-            <button fx-action="/api/click" fx-method="post" fx-target="#result">
-              Click me (fixi)
-            </button>
-            <div id="result"></div>
-            {/* Client example (new on + bind). Handlers must be wrapped in on(). */}
-            <button bind={{ msg: "hai~" }} on={click}>
-              Click me (client)
-            </button>
-          </div>
-          <Client />
-          <Resolve />
+          <SuspenseProvider>
+            <div class="container">
+              <h1>Hello, World!</h1>
+              <p>Welcome to your new @mewhhaha/ruwuter app.</p>
+              {/* Fixi example (server-driven) */}
+              <button fx-action="/api/click" fx-method="post" fx-target="#result">
+                Click me (fixi)
+              </button>
+              <div id="result"></div>
+              {/* Client example (new on + bind). Handlers must be wrapped in on(). */}
+              <button bind={{ msg: "hai~" }} on={click}>
+                Click me (client)
+              </button>
+            </div>
+          </SuspenseProvider>
         </body>
       </html>
-    </SuspenseProvider>
   );
 }
 ```

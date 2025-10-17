@@ -349,21 +349,22 @@ const serveAsset = async (
 };
 
 const assignClientHrefs = (fragments: fragment[]): void => {
-  for (let index = 0; index < fragments.length; index++) {
-    const { mod } = fragments[index];
-    const prefix = `f${index}-`;
+  for (const fragment of fragments) {
+    const { mod } = fragment;
     for (const key in mod) {
       const value = mod[key];
       if (!isClientFunction(value)) continue;
       if (value.href == null) {
-        value.href = `./${prefix}${key}.js`;
+        value.href = `./${key}.js`;
       }
       if (/^[A-Z]/.test(key) && value.hrefHtml == null) {
-        value.hrefHtml = `./${prefix}${key}.html`;
+        value.hrefHtml = `./${key}.html`;
       }
     }
   }
 };
+
+
 
 export const Router = (routes: route[]): router => {
   const handle = (

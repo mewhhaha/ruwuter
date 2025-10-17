@@ -50,19 +50,16 @@ export const Suspense = ({ fallback, as: As = "div", children, ...props }: Suspe
   );
 };
 
-type ResolveProps = { nonce?: string };
 
 /**
  * Streams resolved Suspense content. Define once near the end of <body>.
  * If a strict CSP is used, supply a nonce so the defining script can run.
  */
-export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
+export const Resolve = (): JSX.Element => {
   return into(
     (async function* () {
       const registry = getRegistry();
       if (!registry) return;
-      const nonceAttribute = nonce ? ` nonce="${nonce}"` : "";
-      yield `<script type="module"${nonceAttribute}>import "@mewhhaha/ruwuter/resolve";</script>`;
 
       // If we arrived before any Suspense registered, allow one tick for registration
       if (registry.size === 0) {
@@ -79,21 +76,15 @@ export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
 };
 type SuspenseProviderProps = {
   children: JSX.Element;
-  resolve?: boolean;
-  resolveNonce?: string;
 };
 
 export const SuspenseProvider = ({
   children,
-  resolve = true,
-  resolveNonce,
 }: SuspenseProviderProps): JSX.Element => {
   const registry = new Map<string, Promise<[id: string, html: string]>>();
-  const provided = resolve
-    ? jsx(Fragment, {
-        children: [children, jsx(Resolve, { nonce: resolveNonce })],
-      })
-    : children;
+  const provided = jsx(Fragment, {
+        children: [children, jsx(Resolve, {})],
+      });
 
   return jsx(context.Provider, {
     value: registry,
