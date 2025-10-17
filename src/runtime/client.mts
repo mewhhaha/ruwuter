@@ -47,11 +47,12 @@ interface GlobalClientWindow extends Window {
   __ruwuter?: { store: RefStore };
 }
 
-let started = false;
+const hasWindow = typeof window !== "undefined";
 
-export function startClientRuntime(): void {
-  if (typeof window === "undefined" || started) return;
-  started = true;
+function initializeClientRuntime(): void {
+  if (!hasWindow) return;
+  const globalWindow = window as GlobalClientWindow;
+  if (globalWindow.__ruwuter?.store) return;
 
   const loadModule = (() => {
     const cache = new Map<string, Promise<Record<string, unknown>>>();
@@ -451,8 +452,13 @@ export function startClientRuntime(): void {
   seed();
   observer.observe(document, { childList: true, subtree: true });
 
-  const globalWindow = window as GlobalClientWindow;
   globalWindow.__ruwuter = Object.assign(globalWindow.__ruwuter ?? {}, {
     store,
   });
 }
+
+if (hasWindow) {
+  initializeClientRuntime();
+}
+
+export {};

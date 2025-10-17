@@ -74,7 +74,7 @@ export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
       const registry = getRegistry();
       if (!registry) return;
       const nonceAttribute = nonce ? ` nonce="${nonce}"` : "";
-      yield `<script type="module"${nonceAttribute}>import { startResolveRuntime } from "@mewhhaha/ruwuter/resolve-runtime"; startResolveRuntime();</script>`;
+      yield `<script type="module"${nonceAttribute}>import "@mewhhaha/ruwuter/resolve";</script>`;
 
       // If we arrived before any Suspense registered, allow one tick for registration
       if (registry.size === 0) {

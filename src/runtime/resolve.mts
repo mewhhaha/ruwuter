@@ -1,8 +1,7 @@
-let started = false;
+const hasWindow = typeof window !== "undefined";
 
-export function startResolveRuntime(): void {
-  if (typeof window === "undefined" || started) return;
-  started = true;
+function initializeResolveRuntime(): void {
+  if (!hasWindow) return;
 
   const processed = new WeakSet<HTMLTemplateElement>();
 
@@ -47,3 +46,9 @@ export function startResolveRuntime(): void {
 
   observer.observe(document, { childList: true, subtree: true });
 }
+
+if (hasWindow) {
+  initializeResolveRuntime();
+}
+
+export {};

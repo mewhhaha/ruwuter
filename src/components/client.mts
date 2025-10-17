@@ -12,7 +12,7 @@ import { into, type Html } from "../runtime/node.mts";
 import { useHook } from "../runtime/hooks.mts";
 import { sanitizeDynamicImportSource } from "../utils/serialize.mts";
 
-const CLIENT_RUNTIME_MODULE = "@mewhhaha/ruwuter/client-runtime";
+const CLIENT_RUNTIME_MODULE = "@mewhhaha/ruwuter/client";
 
 /** Client handler signature for on‑module functions. */
 export type Handler<This = any> = (
@@ -81,6 +81,6 @@ export function ref<T>(initial: T): Ref<T> {
 export const Client = ({ nonce }: { nonce?: string }): Html => {
   const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
   return into(
-    `<script type="module"${nonceAttr}>import { startClientRuntime } from "${CLIENT_RUNTIME_MODULE}"; startClientRuntime();</script>`,
+    `<script type="module"${nonceAttr}>import "${CLIENT_RUNTIME_MODULE}";</script>`,
   );
 };

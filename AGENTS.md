@@ -26,7 +26,7 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 
 ### Suspense client behavior
 
-- A small runtime (imported from `@mewhhaha/ruwuter/resolve-runtime`) is responsible for resolving streamed `<template data-rw-target="...">` elements.
+- A small runtime (imported from `@mewhhaha/ruwuter/resolve`) is responsible for resolving streamed `<template data-rw-target="...">` elements.
 - Streamed chunks only emit templates; the runtime uses a `MutationObserver` to replace fallback nodes when the associated template arrives.
 - This keeps streamed updates CSP-friendly (one module script, no inline custom elements).
 

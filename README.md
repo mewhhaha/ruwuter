@@ -305,6 +305,56 @@ fixi and the Client runtime solve different problems and work great together:
   - Keep client handlers small and self-contained; export handlers from route modules wrapped in `$` and they are served as tiny ESM modules at `./<export>.js`.
   - For strict CSP, use `<Client nonce={cspNonce} />`.
 
+### Shipping the Client Runtime
+
+Include the runtime so client handlers hydrate in the browser. The convenience components exported from `@mewhhaha/ruwuter/components` will emit the correct module scripts for you:
+
+```tsx
+import { Client, Resolve, SuspenseProvider } from "@mewhhaha/ruwuter/components";
+
+export default function Document({ children }: { children: JSX.Element }) {
+  return (
+    <SuspenseProvider>
+      <html>
+        <body>
+          {children}
+          <Resolve />
+          <Client />
+        </body>
+      </html>
+    </SuspenseProvider>
+  );
+}
+```
+
+When bundling manually (e.g. with Vite), you can import the runtime URLs via the package exports and inject the scripts yourself:
+
+```tsx
+import clientRuntimeUrl from "@mewhhaha/ruwuter/client?url&no-inline";
+import resolveRuntimeUrl from "@mewhhaha/ruwuter/resolve?url&no-inline";
+
+export function HtmlShell({ children }: { children: JSX.Element }) {
+  return (
+    <html>
+      <body>
+        {children}
+        <script type="module" src={resolveRuntimeUrl}></script>
+        <script type="module" src={clientRuntimeUrl}></script>
+      </body>
+    </html>
+  );
+}
+```
+
+For plain HTML output you can reference the emitted files directly:
+
+```html
+<script type="module" src="/_client/runtime/client.js"></script>
+<script type="module" src="/_client/runtime/resolve.js"></script>
+```
+
+For strict CSP, pass a nonce to both `<Client nonce={cspNonce} />` and `<Resolve nonce={cspNonce} />`, or add the `nonce` attribute to any manual `<script>` tags.
+
 ### Client Interactions and Refs (New)
 
 Ruwuter ships a tiny client interaction runtime with a unified `on` prop. Define named functions like `function click(){}`, `function input(){}`, `function mount(){}`, and `function unmount(){}` — and wrap any function you pass to `on={...}` in `$` so it can be loaded on demand. Bound state comes from `bind={...}` and can include shared `ref()` objects.
