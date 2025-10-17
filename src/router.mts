@@ -209,27 +209,17 @@ const notFound = (): Response => new Response(null, { status: 404 });
 type AssetExtension = "js" | "html";
 
 const assetPattern = /^f(\d+)-([^./]+)\.(js|html)$/;
-const legacyPattern = /^([^./]+)\.(js|html)$/;
 
 const parseAssetRequest = (
   asset: string,
-): { exportName: string; ext: AssetExtension; fragmentIndex?: number } | undefined => {
+): { exportName: string; ext: AssetExtension; fragmentIndex: number } | undefined => {
   const match = assetPattern.exec(asset);
-  if (match) {
-    const fragmentIndex = Number.parseInt(match[1], 10);
-    const exportName = match[2];
-    const ext = match[3] as AssetExtension;
-    return { exportName, ext, fragmentIndex: Number.isNaN(fragmentIndex) ? undefined : fragmentIndex };
-  }
-
-  const legacy = legacyPattern.exec(asset);
-  if (legacy) {
-    const exportName = legacy[1];
-    const ext = legacy[2] as AssetExtension;
-    return { exportName, ext };
-  }
-
-  return undefined;
+  if (!match) return undefined;
+  const fragmentIndex = Number.parseInt(match[1], 10);
+  if (Number.isNaN(fragmentIndex)) return undefined;
+  const exportName = match[2];
+  const ext = match[3] as AssetExtension;
+  return { exportName, ext, fragmentIndex };
 };
 
 const toParams = (
@@ -331,11 +321,9 @@ const serveAsset = async (
   const parsed = parseAssetRequest(asset);
   if (!parsed) return notFound();
 
-  const fragment =
-    Number.isInteger(parsed.fragmentIndex) && parsed.fragmentIndex! >= 0 &&
-    parsed.fragmentIndex! < fragments.length
-      ? fragments[parsed.fragmentIndex!]
-      : fragments[fragments.length - 1];
+  const fi = parsed.fragmentIndex;
+  if (fi < 0 || fi >= fragments.length) return notFound();
+  const fragment = fragments[fi];
   if (!fragment) return notFound();
 
   const { mod } = fragment;
@@ -349,16 +337,17 @@ const serveAsset = async (
 };
 
 const assignClientHrefs = (fragments: fragment[]): void => {
-  for (const fragment of fragments) {
-    const { mod } = fragment;
+  for (let index = 0; index < fragments.length; index++) {
+    const { mod } = fragments[index];
+    const prefix = `f${index}-`;
     for (const key in mod) {
       const value = mod[key];
       if (!isClientFunction(value)) continue;
       if (value.href == null) {
-        value.href = `./${key}.js`;
+        value.href = `./${prefix}${key}.js`;
       }
       if (/^[A-Z]/.test(key) && value.hrefHtml == null) {
-        value.hrefHtml = `./${key}.html`;
+        value.hrefHtml = `./${prefix}${key}.html`;
       }
     }
   }
