@@ -9,8 +9,8 @@
     "./types": "./src/types.mts",
     "./jsx-runtime": "./src/runtime/jsx-runtime.mts",
     "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
-    "./client-runtime": "./src/runtime/client-runtime.js",
-    "./resolve-runtime": "./src/runtime/resolve-runtime.js"
+    "./client-runtime": "./src/runtime/client-runtime.mts",
+    "./resolve-runtime": "./src/runtime/resolve-runtime.mts"
   },
   "bin": {
     "fs-routes": "./src/fs-routes/routes.mts"

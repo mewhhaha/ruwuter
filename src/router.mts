@@ -122,9 +122,11 @@ type ClientFunction = ((...args: unknown[]) => unknown) & {
   hrefHtml?: string;
 };
 
-const isFunction = <Fn extends (...args: unknown[]) => unknown>(
+function isFunction<Fn extends (...args: unknown[]) => unknown>(
   value: unknown,
-): value is Fn => typeof value === "function";
+): value is Fn {
+  return typeof value === "function";
+}
 
 const hasReadableStream = (
   value: unknown,
@@ -236,13 +238,13 @@ const pickParam = (params: Record<string, string>, key: string): string | undefi
   return Object.prototype.hasOwnProperty.call(params, key) ? params[key] : undefined;
 };
 
-const getExportFunction = <Fn extends (...args: any[]) => unknown>(
+function getExportFunction<Fn extends (...args: any[]) => unknown>(
   mod: mod,
   exportName: string,
-): Fn | undefined => {
+): Fn | undefined {
   const candidate = mod[exportName];
   return isFunction<Fn>(candidate) ? candidate : undefined;
-};
+}
 
 const resolveAssetLoader = (
   component: ComponentWithLoader,
