@@ -1,6 +1,6 @@
 {
   "name": "@mewhhaha/ruwuter",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
   "exports": {
     ".": "./src/router.mts",
@@ -10,7 +10,9 @@
     "./jsx-runtime": "./src/runtime/jsx-runtime.mts",
     "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
     "./client.mjs": "./src/runtime/client.mts",
-    "./resolve.mjs": "./src/runtime/resolve.mts"
+    "./resolve.mjs": "./src/runtime/resolve.mts",
+    "./client": "./src/runtime/client.mts",
+    "./resolve": "./src/runtime/resolve.mts"
   },
   "bin": {
     "fs-routes": "./src/fs-routes/routes.mts"
@@ -27,14 +29,26 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "@mewhhaha/ruwuter",
-    "lib": ["ESNext", "DOM", "DOM.Iterable", "DOM.AsyncIterable", "deno.ns"],
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable",
+      "DOM.AsyncIterable",
+      "deno.ns"
+    ],
     "verbatimModuleSyntax": true,
-    "types": ["./src/global.workers.d.ts"]
+    "types": [
+      "./src/global.workers.d.ts"
+    ]
   },
   "license": "MIT",
   "nodeModulesDir": "auto",
   "lint": {
-    "rules": { "include": ["recommended"] }
+    "rules": {
+      "include": [
+        "recommended"
+      ]
+    }
   },
   "fmt": {
     "lineWidth": 100

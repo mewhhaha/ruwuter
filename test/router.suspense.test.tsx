@@ -1,6 +1,6 @@
 import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
 import { Router, type Env, type fragment } from "../src/router.mts";
-import { Suspense, Resolve, SuspenseProvider } from "../src/components/suspense.mts";
+import { Suspense, SuspenseProvider } from "../src/components/suspense.mts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -46,7 +46,6 @@ describe("Suspense streaming", () => {
                       return <div>A-DONE</div>;
                     }}
                   </Suspense>
-                  <Resolve />
                 </body>
               </html>
             </SuspenseProvider>
@@ -83,7 +82,7 @@ describe("Suspense streaming", () => {
     const iFallback = full.indexOf("Loading A");
     const iResolved = full.indexOf("A-DONE");
     expect(iResolved).toBeGreaterThan(iFallback);
-    expect(full).toContain("@mewhhaha/ruwuter/resolve-runtime");
+    expect(full).toContain("@mewhhaha/ruwuter/resolve");
   });
 
   it("resolves multiple suspense boundaries in completion order", async () => {
@@ -108,7 +107,6 @@ describe("Suspense streaming", () => {
                       return <div>B-DONE</div>;
                     }}
                   </Suspense>
-                  <Resolve />
                 </body>
               </html>
             </SuspenseProvider>
@@ -169,7 +167,6 @@ describe("Suspense streaming", () => {
                       </Suspense>
                     </div>
                   </Suspense>
-                  <Resolve />
                 </body>
               </html>
             </SuspenseProvider>
@@ -222,7 +219,6 @@ describe("Suspense streaming", () => {
                   <Suspense fallback={<div>LAYOUT-LOADING</div>}>
                     {children}
                   </Suspense>
-                  <Resolve />
                 </body>
               </html>
             </SuspenseProvider>

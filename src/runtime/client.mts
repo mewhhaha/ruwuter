@@ -57,8 +57,15 @@ function initializeClientRuntime(): void {
   const loadModule = (() => {
     const cache = new Map<string, Promise<Record<string, unknown>>>();
     return (spec: string) => {
-      if (!cache.has(spec)) cache.set(spec, import(spec));
-      return cache.get(spec)!;
+      const resolved = (() => {
+        if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(spec)) return spec;
+        if (spec.startsWith("/")) {
+          return new URL(spec, window.location.origin).href;
+        }
+        return new URL(spec, window.location.href).href;
+      })();
+      if (!cache.has(resolved)) cache.set(resolved, import(resolved));
+      return cache.get(resolved)!;
     };
   })();
 

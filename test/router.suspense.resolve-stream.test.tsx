@@ -1,6 +1,6 @@
 import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
 import { Router, type Env, type fragment } from "../src/router.mts";
-import { Suspense, Resolve, SuspenseProvider } from "../src/components/suspense.mts";
+import { Suspense, SuspenseProvider } from "../src/components/suspense.mts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -46,7 +46,6 @@ describe("Resolve streams resolved suspense chunks", () => {
                       return <div>READY</div>;
                     }}
                   </Suspense>
-                  <Resolve />
                 </body>
               </html>
             </SuspenseProvider>

@@ -52,18 +52,6 @@ export const Suspense = ({ fallback, as: As = "div", children, ...props }: Suspe
 
 type ResolveProps = { nonce?: string };
 
-export const SuspenseProvider = ({
-  children,
-}: {
-  children: JSX.Element;
-}): JSX.Element => {
-  // Provide an empty registry for any Suspense boundaries within.
-  return jsx(context.Provider, {
-    value: new Map<string, Promise<[id: string, html: string]>>(),
-    children,
-  });
-};
-
 /**
  * Streams resolved Suspense content. Define once near the end of <body>.
  * If a strict CSP is used, supply a nonce so the defining script can run.
@@ -88,4 +76,27 @@ export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
       }
     })(),
   );
+};
+type SuspenseProviderProps = {
+  children: JSX.Element;
+  resolve?: boolean;
+  resolveNonce?: string;
+};
+
+export const SuspenseProvider = ({
+  children,
+  resolve = true,
+  resolveNonce,
+}: SuspenseProviderProps): JSX.Element => {
+  const registry = new Map<string, Promise<[id: string, html: string]>>();
+  const provided = resolve
+    ? jsx(Fragment, {
+        children: [children, jsx(Resolve, { nonce: resolveNonce })],
+      })
+    : children;
+
+  return jsx(context.Provider, {
+    value: registry,
+    children: provided,
+  });
 };

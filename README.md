@@ -280,8 +280,8 @@ export default function Dashboard() {
 
 - Router does not wrap Suspense. To enable streaming Suspense:
   - Wrap your root HTML with `SuspenseProvider`.
-  - Include a single `<Resolve />` near the end of `<body>` to stream resolved chunks.
-  - Add `nonce` to `<Resolve />` if you use a strict CSP.
+  - `SuspenseProvider` now appends a single `<Resolve />` after its children, so wrapping your document/body is sufficient for streaming.
+  - If you prefer to control placement yourself, use `<SuspenseProvider resolve={false}>` and render `<Resolve />` where you want it. Add `nonce` for strict CSP.
 - Handlers used with `on={...}` and URL-addressable components must be exported and wrapped in `on()`.
 - Function-valued attributes (e.g., `class={fn}` or `hidden={fn}`) are sent in the hydration payload and computed client-side; they re-run automatically when `ref()` values change.
 
@@ -318,7 +318,6 @@ export default function Document({ children }: { children: JSX.Element }) {
       <html>
         <body>
           {children}
-          <Resolve />
           <Client />
         </body>
       </html>
@@ -327,7 +326,7 @@ export default function Document({ children }: { children: JSX.Element }) {
 }
 ```
 
-When bundling manually (e.g. with Vite), you can import the runtime URLs via the package exports and inject the scripts yourself:
+When bundling manually (e.g. with Vite), you can import the runtime URLs via the package exports and inject the scripts yourself. The `?url&no-inline` suffix tells Vite to emit dedicated `.mjs` files instead of inlining the runtime.
 
 ```tsx
 import clientRuntimeUrl from "@mewhhaha/ruwuter/client?url&no-inline";
@@ -349,8 +348,8 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 For plain HTML output you can reference the emitted files directly:
 
 ```html
-<script type="module" src="/_client/runtime/client.js"></script>
-<script type="module" src="/_client/runtime/resolve.js"></script>
+<script type="module" src="/_client/runtime/client.mjs"></script>
+<script type="module" src="/_client/runtime/resolve.mjs"></script>
 ```
 
 For strict CSP, pass a nonce to both `<Client nonce={cspNonce} />` and `<Resolve nonce={cspNonce} />`, or add the `nonce` attribute to any manual `<script>` tags.
