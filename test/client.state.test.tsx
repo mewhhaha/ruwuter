@@ -15,7 +15,7 @@ describe("Ref hydration and on boundary", () => {
   it("emits hydration boundary and hydrates refs in bind payload", async () => {
     const count = ref(5);
     function click(_ev: Event, _signal: AbortSignal) {}
-    (click as any).href = "/_client/r/root/click.js";
+    (click as any).href = "./click.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -49,3 +49,4 @@ describe("Ref hydration and on boundary", () => {
     expect(html).toContain('data-hydrate="h_');
   });
 });
+

@@ -21,14 +21,14 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
   - Proper `AbortSignal` passing to handlers:
     - Per element, per event: abort previous controller before running the next.
     - Abort all controllers on unmount, then run unmount handlers.
-- No legacy inline function storage (no KV, no `/_client/f/` path). Only module‑based handlers are supported.
+- No legacy inline function storage (no KV-backed registries). Only module‑based handlers are supported.
 - Type safety: the file uses `// @ts-check` and JSDoc. Keep and expand types as you edit the file.
 
 ### Suspense client behavior
 
-- We use a small Custom Element (`resolved-data`) defined once via a nonce-bearing script.
-- Streamed chunks then only emit `<template>` + `<resolved-data>` elements — no additional inline scripts.
-- This ensures CSP compatibility for streamed updates and centralizes cleanup inside the CE `connectedCallback`.
+- A small runtime (imported from `@mewhhaha/ruwuter/resolve-runtime`) is responsible for resolving streamed `<template data-rw-target="...">` elements.
+- Streamed chunks only emit templates; the runtime uses a `MutationObserver` to replace fallback nodes when the associated template arrives.
+- This keeps streamed updates CSP-friendly (one module script, no inline custom elements).
 
 ## “on()” Wrapper Requirement
 

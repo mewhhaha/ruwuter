@@ -41,8 +41,8 @@ describe("Attribute binding (class)", () => {
     }
     (classFor as any).active = active;
     // Simulate static route export hrefs assigned by generator
-    (toggle as any).href = "/_client/r/root/toggle.js";
-    (classFor as any).href = "/_client/r/root/classFor.js";
+    (toggle as any).href = "./toggle.js";
+    (classFor as any).href = "./classFor.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -96,7 +96,7 @@ describe("Attribute binding (class)", () => {
     (globalThis as any).HTMLElement = (doc.createElement("div") as any).constructor;
 
     (window as any).__import = async (spec: string) => {
-      if (!spec.startsWith("/_client/r/")) throw new Error("Unexpected spec: " + spec);
+      if (!spec.startsWith("./")) throw new Error("Unexpected spec: " + spec);
       if (spec.endsWith("/toggle.js")) return { default: toggle };
       if (spec.endsWith("/classFor.js")) return { default: classFor };
       throw new Error("Unknown spec: " + spec);
@@ -138,3 +138,4 @@ describe("Attribute binding (class)", () => {
     expect(classOf()).toMatch(/\bis-active\b/);
   });
 });
+

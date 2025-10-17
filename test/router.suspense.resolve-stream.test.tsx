@@ -29,7 +29,7 @@ async function readUntil(
 }
 
 describe("Resolve streams resolved suspense chunks", () => {
-  it("emits <template> and <resolved-data> followed by resolved HTML", async () => {
+  it("streams templates for resolved Suspense content", async () => {
     const pattern = new URLPattern({ pathname: "/resolve-stream" });
     const fragments: fragment[] = [
       {
@@ -71,7 +71,7 @@ describe("Resolve streams resolved suspense chunks", () => {
     expect(first.done).toBe(false);
     expect(first.buffer).toContain("FALLBACK");
     expect(first.buffer).not.toContain("READY");
-    expect(first.buffer).not.toMatch(/<resolved-data\b/);
+    expect(first.buffer).not.toMatch(/<template\s+data-rw-target/);
 
     // Read to the end and verify Resolve emitted the streaming chunk
     let full = first.buffer;
@@ -81,9 +81,9 @@ describe("Resolve streams resolved suspense chunks", () => {
       full += textDecoder.decode(value, { stream: true });
     }
 
-    // Expect Resolve emitted a template + resolved-data element
-    expect(full).toMatch(/<template id=\"[^"]+\">/);
-    expect(full).toMatch(/<resolved-data\s+to=\"suspense-[^\"]+\"\s+from=\"[^"]+\"\s*>/);
+    // Expect Resolve emitted a template targeting the fallback element
+    
+    expect(full).toMatch(/<template\s+data-rw-target=\"suspense-[^"]+\"/);
     // Resolved HTML must be present
     expect(full).toContain("READY");
 
@@ -93,4 +93,5 @@ describe("Resolve streams resolved suspense chunks", () => {
     expect(iResolved).toBeGreaterThan(iFallback);
   });
 });
+
 

@@ -42,8 +42,8 @@ describe("Attribute binding (DOM)", () => {
     }
     (hiddenFor as any).show = show;
     // Simulate static route export hrefs assigned by generator
-    (toggle as any).href = "/_client/r/root/toggle.js";
-    (hiddenFor as any).href = "/_client/r/root/hiddenFor.js";
+    (toggle as any).href = "./toggle.js";
+    (hiddenFor as any).href = "./hiddenFor.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -100,7 +100,7 @@ describe("Attribute binding (DOM)", () => {
 
     // Stub dynamic import used by client runtime to load function modules
     (window as any).__import = async (spec: string) => {
-      if (!spec.startsWith("/_client/r/")) throw new Error("Unexpected spec: " + spec);
+      if (!spec.startsWith("./")) throw new Error("Unexpected spec: " + spec);
       if (spec.endsWith("/toggle.js")) return { default: toggle };
       if (spec.endsWith("/hiddenFor.js")) return { default: hiddenFor };
       throw new Error("Unknown spec: " + spec);
@@ -141,3 +141,4 @@ describe("Attribute binding (DOM)", () => {
     expect(panel.hasAttribute("hidden")).toBe(false);
   });
 });
+

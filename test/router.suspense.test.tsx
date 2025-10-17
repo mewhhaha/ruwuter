@@ -83,7 +83,7 @@ describe("Suspense streaming", () => {
     const iFallback = full.indexOf("Loading A");
     const iResolved = full.indexOf("A-DONE");
     expect(iResolved).toBeGreaterThan(iFallback);
-    expect(full).toContain("customElements.define('resolved-data'");
+    expect(full).toContain("@mewhhaha/ruwuter/resolve-runtime");
   });
 
   it("resolves multiple suspense boundaries in completion order", async () => {
@@ -274,3 +274,4 @@ describe("Suspense streaming", () => {
     expect(full).toContain("LEAF-READY");
   });
 });
+

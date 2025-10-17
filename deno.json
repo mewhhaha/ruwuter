@@ -8,7 +8,9 @@
     "./fs-routes": "./src/fs-routes/js.mts",
     "./types": "./src/types.mts",
     "./jsx-runtime": "./src/runtime/jsx-runtime.mts",
-    "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts"
+    "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
+    "./client-runtime": "./src/runtime/client-runtime.js",
+    "./resolve-runtime": "./src/runtime/resolve-runtime.js"
   },
   "bin": {
     "fs-routes": "./src/fs-routes/routes.mts"

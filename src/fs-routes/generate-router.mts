@@ -6,14 +6,47 @@ const unescapedDotRegex = /(?<!\[)\.(?![^[]*\])/g;
 
 const tsRegex = /\.ts(x)?$/;
 
-/**
- * Generate a regex literal for a route path using named capture groups
- * Supports optional segments marked with parentheses: (segment) or ($param)
- */
+type ParamInfo = {
+  names: string[];
+};
+
+const extractRouteParams = (routeName: string): ParamInfo => {
+  const paramNames = new Set<string>();
+  let wildcard = 0;
+
+  for (const segment of routeName.split(unescapedDotRegex)) {
+    const isOptional = segment.startsWith("(") && segment.endsWith(")");
+    const actualSegment = isOptional ? segment.slice(1, -1) : segment;
+
+    if (actualSegment === "$") {
+      const name = wildcard.toString();
+      paramNames.add(name);
+      wildcard++;
+      continue;
+    }
+
+    if (actualSegment.startsWith("$")) {
+      let name = actualSegment.slice(1);
+      let optional = isOptional;
+      if (name.startsWith("(") && name.endsWith(")")) {
+        name = name.slice(1, -1);
+        optional = true;
+      }
+      if (name.length === 0) {
+        if (!optional) paramNames.add(`${wildcard++}`);
+        continue;
+      }
+      paramNames.add(name);
+    }
+  }
+
+  return {
+    names: Array.from(paramNames),
+  };
+};
+
 const generatePatternString = (routePath: string): string => {
-  const segments = routePath
-    .split(unescapedDotRegex)
-    .filter((value) => !value.startsWith("_"));
+  const segments = routePath.split(unescapedDotRegex).filter((value) => !value.startsWith("_"));
 
   if (segments.length === 0) {
     return "/";
@@ -33,9 +66,17 @@ const generatePatternString = (routePath: string): string => {
       pattern += "*";
       break;
     } else if (actualSegment.startsWith("$")) {
-      const paramName = actualSegment.slice(1);
-      pattern += `:${paramName}`;
-      if (isOptional) pattern += "?";
+      let name = actualSegment.slice(1);
+      let optional = isOptional;
+      if (name.startsWith("(") && name.endsWith(")")) {
+        name = name.slice(1, -1);
+        optional = true;
+      }
+      if (name.length === 0) {
+        name = "wild";
+      }
+      pattern += `:${name}`;
+      if (optional) pattern += "?";
     } else {
       if (isOptional) {
         pattern += `(${actualSegment})?`;
@@ -48,12 +89,16 @@ const generatePatternString = (routePath: string): string => {
   return pattern;
 };
 
-/**
- * Generates a router file from the file-system route structure.
- *
- * @param appFolder - Path to the application folder containing the routes directory
- * @internal
- */
+const withAssetPattern = (pattern: string): string => {
+  if (pattern === "/") {
+    return "/:__asset?";
+  }
+  if (pattern.endsWith("/*")) {
+    return pattern;
+  }
+  return `${pattern}/:__asset?`;
+};
+
 export const generateRouter = async (appFolder: string): Promise<void> => {
   const routesFolder = path.join(appFolder, "routes");
 
@@ -74,68 +119,34 @@ export const generateRouter = async (appFolder: string): Promise<void> => {
     })
     .join("\n");
 
-  // Map route id -> source module spec (used by dev servers to serve virtual client modules)
-  const routeSpecs = files
-    .map((file) => {
-      const isDirectory = !file.endsWith(".tsx");
-      const routeId = file.replace(tsRegex, "");
-      const spec = isDirectory
-        ? `./routes/${routeId}/route.tsx`
-        : `./routes/${routeId}.tsx`;
-      return `ROUTE_SPECS[${JSON.stringify(routeId)}] = ${JSON.stringify(spec)};`;
-    })
-    .join("\n");
+  const routeData = files.map((file) => {
+    const routeId = file.replace(tsRegex, "");
+    const name = varName(file);
+    const pattern = withAssetPattern(generatePatternString(routeId));
+    const params = extractRouteParams(routeId).names;
+    return {
+      routeId,
+      name,
+      pattern,
+      params,
+    };
+  });
 
-  // Per-route base path and annotations
-  const routeBases = files
-    .map((file) => {
-      const routeId = file.replace(tsRegex, "");
-      const enc = encodeURIComponent(routeId);
-      return `CLIENT_BASES[${JSON.stringify(routeId)}] = "/_client/r/${enc}/";`;
+  const routes = routeData
+    .map(({ routeId, name, pattern }) => {
+      return [routeId, name, pattern] as const;
     })
-    .join("\n");
-
-  const annotateCalls = files
-    .map((file) => {
-      const name = varName(file);
-      const routeId = file.replace(tsRegex, "");
-      return `__annotate(${name} as any, ${JSON.stringify(routeId)});`;
-    })
-    .join("\n");
-
-  const routes = files
-    .map((file) => file.replace(tsRegex, ""))
-    .sort(bySpecificity)
-    .map((file) => {
-      return [file, varName(file), generatePatternString(file)] as const;
-    });
+    .sort(([a], [b]) => bySpecificity(a, b));
 
   const routeVars = routes
-    .map(([file, name]) => {
-      const params = file
-        .split(unescapedDotRegex)
-        .filter((segment) => {
-          // Handle optional parameters - check inside parentheses if needed
-          if (segment.startsWith("(") && segment.endsWith(")")) {
-            const innerSegment = segment.slice(1, -1);
-            return innerSegment.startsWith("$");
-          }
-          return segment.startsWith("$");
-        })
-        .map((segment) => {
-          // Extract parameter name, handling optional parameters
-          if (segment.startsWith("(") && segment.endsWith(")")) {
-            const innerSegment = segment.slice(1, -1);
-            return `"${innerSegment.slice(1)}"`;
-          }
-          return `"${segment.slice(1)}"`;
-        })
-        .join(",");
-
-      if (params) {
-        return `const $${name} = { id: "${file}", mod: ${name}, params: [${params}] };`;
+    .map(([routeId, name]) => {
+      const data = routeData.find((item) => item.routeId === routeId)!;
+      if (data.params.length > 0) {
+        return `const $${name} = { id: "${routeId}", mod: ${name}, params: [${data.params
+          .map((param) => JSON.stringify(param))
+          .join(",")}] };`;
       }
-      return `const $${name} = { id: "${file}", mod: ${name} };`;
+      return `const $${name} = { id: "${routeId}", mod: ${name} };`;
     })
     .join("\n");
 
@@ -150,14 +161,12 @@ export const generateRouter = async (appFolder: string): Promise<void> => {
         "$document",
         ...routes
           .filter(([prefix]) => file.startsWith(`${prefix}.`))
-          .map(([, name]) => `$${name}`)
+          .map(([, nestedName]) => `$${nestedName}`)
           .reverse(),
         `$${name}`,
       ];
 
-      return `[new URLPattern({ pathname: ${JSON.stringify(
-        pattern,
-      )} }), [${fragments.join(",")}]]`;
+      return `[new URLPattern({ pathname: ${JSON.stringify(pattern)} }), [${fragments.join(",")}]]`;
     })
     .join(",\n");
 
@@ -165,36 +174,10 @@ export const generateRouter = async (appFolder: string): Promise<void> => {
 import * as document from "./document.tsx";
 import { type route } from "@mewhhaha/ruwuter";
 ${routeImports}
-const MANIFEST: Record<string, { js: Record<string,string>, html: Record<string,string> }> = Object.create(null);
-const CLIENT_BASES: Record<string, string> = Object.create(null);
-const ROUTE_SPECS: Record<string, string> = Object.create(null);
-function __annotate(mod: Record<string, any>, routeId: string) {
-  const base = CLIENT_BASES[routeId] || "/_client/r/" + encodeURIComponent(routeId) + "/";
-  const entry = (MANIFEST[routeId] ||= { js: Object.create(null), html: Object.create(null) });
-  for (const k in mod) {
-    const v = (mod as any)[k];
-    if (typeof v === "function" && (v as any)[Symbol.for("@mewhhaha/ruwuter.clientfn")] === true) {
-      const href = base + k + ".js";
-      (v as any).href = href;
-      entry.js[k] = href;
-      if (/^[A-Z]/.test(k)) {
-        const hrefHtml = base + k + ".html";
-        (v as any).hrefHtml = hrefHtml;
-        entry.html[k] = hrefHtml;
-      }
-    }
-  }
-}
-${routeBases}
-${annotateCalls}
-${routeSpecs}
-${routeVars}
 const $document = { id: "", mod: document };
+${routeVars}
 
 export const routes: route[] = [${routeItems}];
-export const clientManifest = MANIFEST;
-export const clientUrlBases = CLIENT_BASES;
-export const clientModuleSpecs = ROUTE_SPECS;
 `;
 
   await writeFile(path.join(appFolder, "routes.mts"), file);

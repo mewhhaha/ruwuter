@@ -74,29 +74,7 @@ export const Resolve = ({ nonce }: ResolveProps): JSX.Element => {
       const registry = getRegistry();
       if (!registry) return;
       const nonceAttribute = nonce ? ` nonce="${nonce}"` : "";
-      // Define the custom element once with a nonce-bearing script so later chunks don't need inline scripts.
-      yield* html`
-<script type="application/javascript" ${nonceAttribute}>
-if (!customElements.get('resolved-data')) {
-  class ResolvedData extends HTMLElement {
-    connectedCallback() {
-      const templateId = this.getAttribute('from');
-      const targetId = this.getAttribute('to');
-      const template = document.getElementById(templateId || '');
-      const target = document.getElementById(targetId || '');
-      try {
-        if (template instanceof HTMLTemplateElement && target instanceof HTMLElement) {
-          target.replaceWith(template.content.cloneNode(true));
-        }
-      } finally {
-        this.remove();
-        template?.remove();
-      }
-    }
-  }
-  customElements.define('resolved-data', ResolvedData);
-}
-</script>`;
+      yield `<script type="module"${nonceAttribute}>import { startResolveRuntime } from "@mewhhaha/ruwuter/resolve-runtime"; startResolveRuntime();</script>`;
 
       // If we arrived before any Suspense registered, allow one tick for registration
       if (registry.size === 0) {
@@ -104,17 +82,10 @@ if (!customElements.get('resolved-data')) {
       }
 
       while (registry.size > 0) {
-        const templateId = crypto.randomUUID();
         const [id, element] = await Promise.race(registry.values());
         registry.delete(id);
-        yield* html`
-<template id="${templateId}">${element}</template>
-<resolved-data to="${id}" from="${templateId}"></resolved-data>`;
+        yield `<template data-rw-target="${id}">${element}</template>`;
       }
     })(),
   );
 };
-
-function html(strings: TemplateStringsArray, ...values: string[]): string {
-  return String.raw({ raw: strings }, ...values);
-}

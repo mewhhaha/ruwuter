@@ -14,7 +14,7 @@ const makeCtx = () => {
 describe("Unified on-prop", () => {
   it("supports on={fn} with event inferred from fn name and emits on-boundary", async () => {
     const h = function click() {};
-    (h as any).href = "/_client/r/root/click.js";
+    (h as any).href = "./click.js";
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
       {
@@ -46,3 +46,4 @@ describe("Unified on-prop", () => {
     // boundary-only check
   });
 });
+

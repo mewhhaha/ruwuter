@@ -59,7 +59,7 @@ export default {
     // Router does not wrap Suspense. Wrap your HTML with <SuspenseProvider>
     // and include <Resolve /> in your document/layout.
     const router = Router(routes);
-    return router.handle(request, { env, ctx });
+    return router.handle(request, env, ctx);
   },
 };
 ```
@@ -282,7 +282,7 @@ export default function Dashboard() {
   - Wrap your root HTML with `SuspenseProvider`.
   - Include a single `<Resolve />` near the end of `<body>` to stream resolved chunks.
   - Add `nonce` to `<Resolve />` if you use a strict CSP.
-- Handlers used with `on={...}` and URL-addressable components must be exported and wrapped in `$`.
+- Handlers used with `on={...}` and URL-addressable components must be exported and wrapped in `on()`.
 - Function-valued attributes (e.g., `class={fn}` or `hidden={fn}`) are sent in the hydration payload and computed client-side; they re-run automatically when `ref()` values change.
 
 ### Using Both fixi and Client
@@ -302,7 +302,7 @@ fixi and the Client runtime solve different problems and work great together:
 - Combine them
   - Use fixi for networking and server-rendered HTML; use Client for local UI polish.
   - If you attach both fixi and a client handler via `on={...}` to the same element, default behavior will proceed unless you call `ev.preventDefault()` inside your client handler. Prefer sibling/wrapper elements, or let the client handler perform the fetch and DOM update itself.
-  - Keep client handlers small and self-contained; export handlers from route modules wrapped in `$` and they are served as tiny ESM modules at `/_client/r/<route>/<export>.js`.
+  - Keep client handlers small and self-contained; export handlers from route modules wrapped in `$` and they are served as tiny ESM modules at `./<export>.js`.
   - For strict CSP, use `<Client nonce={cspNonce} />`.
 
 ### Client Interactions and Refs (New)
@@ -311,10 +311,10 @@ Ruwuter ships a tiny client interaction runtime with a unified `on` prop. Define
 
 ```tsx
 // app/_index.tsx
-import { Client, ref, $ } from "@mewhhaha/ruwuter/components";
+import { Client, ref, on } from "@mewhhaha/ruwuter/components";
 
-// Exported handler shipped as a tiny ESM module via /_client/r/<route>/click.js
-export const click = $(function click(ev: Event, signal: AbortSignal) {
+// Exported handler shipped as a tiny ESM module via ./click.js
+export const click = on(function click(ev: Event, signal: AbortSignal) {
   this.count.set((v: number) => v + 1);
 });
 
@@ -338,7 +338,7 @@ export default function HomePage() {
 
 ### Component Reloads (Built‑in)
 
-Wrap exported components with `$` to make them addressable by URL. Ruwuter serves them at `/_client/r/<route>/<Export>.html` and you can wire them declaratively:
+Wrap exported components with `$` to make them addressable by URL. Ruwuter serves them at `./<Export>.html` and you can wire them declaratively:
 
 ```html
 <div id="panel" data-rw-src="/users/user#Panel" data-rw-trigger="click"></div>
@@ -351,9 +351,9 @@ Example:
 
 ```tsx
 // app/users.user.tsx
-import { $, Client } from "@mewhhaha/ruwuter/components";
+import { Client, on } from "@mewhhaha/ruwuter/components";
 
-export const Panel = $(function Panel({ loaderData }: { loaderData: any }) {
+export const Panel = on(function Panel({ loaderData }: { loaderData: any }) {
   return <div>{loaderData.user.name}</div>;
 });
 
@@ -382,7 +382,7 @@ Instead of data attributes per handler, Ruwuter emits one comment boundary per e
     "on": [
       {
         "t": "m",
-        "s": "/_client/r/users.user/click.js",
+        "s": "./click.js",
         "x": "default",
         "ev": "click"
       }

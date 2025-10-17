@@ -41,8 +41,8 @@ describe("Client runtime DOM behaviour", () => {
       (window as any).__unmounted = ((window as any).__unmounted || 0) + 1;
     }
     // Simulate static route export hrefs assigned by generator
-    (mount as any).href = "/_client/r/root/mount.js";
-    (unmount as any).href = "/_client/r/root/unmount.js";
+    (mount as any).href = "./mount.js";
+    (unmount as any).href = "./unmount.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -108,7 +108,7 @@ describe("Client runtime DOM behaviour", () => {
 
     // Stub dynamic import used by client runtime to load function modules
     (window as any).__import = async (spec: string) => {
-      if (!spec.startsWith("/_client/r/")) throw new Error("Unexpected spec: " + spec);
+      if (!spec.startsWith("./")) throw new Error("Unexpected spec: " + spec);
       if (spec.endsWith("/mount.js")) return { default: mount };
       if (spec.endsWith("/unmount.js")) return { default: unmount };
       throw new Error("Unknown spec: " + spec);
@@ -136,3 +136,4 @@ describe("Client runtime DOM behaviour", () => {
     expect((window as any).__unmounted).toBeGreaterThanOrEqual(1);
   });
 });
+

@@ -19,7 +19,7 @@ describe("Ref sharing", () => {
     function click(this: any, _ev: Event, _signal: AbortSignal) {
       this.count.set((v: number) => v + 1);
     }
-    (click as any).href = "/_client/r/root/click.js";
+    (click as any).href = "./click.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -53,3 +53,4 @@ describe("Ref sharing", () => {
     expect(html).toMatch(/<script type="application\/json" data-hydrate="h/);
   });
 });
+

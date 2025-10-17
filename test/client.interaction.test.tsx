@@ -14,7 +14,7 @@ const makeCtx = () => {
 describe("Client interactions (no bundler)", () => {
   it("renders on-boundary and serves function module", async () => {
     function click(_ev: Event, _signal: AbortSignal) {}
-    (click as any).href = "/_client/r/root/click.js";
+    (click as any).href = "./click.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -49,3 +49,4 @@ describe("Client interactions (no bundler)", () => {
     // boundary-only check
   });
 });
+

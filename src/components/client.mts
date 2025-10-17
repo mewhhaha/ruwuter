@@ -10,10 +10,9 @@
 
 import { into, type Html } from "../runtime/node.mts";
 import { useHook } from "../runtime/hooks.mts";
-import cr from "./client.runtime.js";
 import { sanitizeDynamicImportSource } from "../utils/serialize.mts";
 
-const clientRuntime = `(${sanitizeDynamicImportSource(cr.toString())})()`;
+const CLIENT_RUNTIME_MODULE = "@mewhhaha/ruwuter/client-runtime";
 
 /** Client handler signature for on‑module functions. */
 export type Handler<This = any> = (
@@ -82,6 +81,6 @@ export function ref<T>(initial: T): Ref<T> {
 export const Client = ({ nonce }: { nonce?: string }): Html => {
   const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
   return into(
-    `<script type="module"${nonceAttr}>\n${clientRuntime}\n</script>`,
+    `<script type="module"${nonceAttr}>import { startClientRuntime } from "${CLIENT_RUNTIME_MODULE}"; startClientRuntime();</script>`,
   );
 };

@@ -20,8 +20,8 @@ describe("mount/unmount via unified on", () => {
     function unmount(this: any, _ev: Event, _s: AbortSignal) {
       /* cleanup */
     }
-    (mount as any).href = "/_client/r/root/mount.js";
-    (unmount as any).href = "/_client/r/root/unmount.js";
+    (mount as any).href = "./mount.js";
+    (unmount as any).href = "./unmount.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -54,3 +54,4 @@ describe("mount/unmount via unified on", () => {
     expect(cnt).toBeGreaterThanOrEqual(2);
   });
 });
+

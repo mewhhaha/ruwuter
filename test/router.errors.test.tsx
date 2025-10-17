@@ -155,3 +155,4 @@ describe("Thrown Response handling", () => {
     expect(text).toContain("Not Found");
   });
 });
+
