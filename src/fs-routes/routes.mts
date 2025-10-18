@@ -2,6 +2,7 @@
 
 import path from "node:path";
 import { generate } from "./js.mts";
+import process from "node:process";
 
 const appFolder = path.normalize(process.argv[2]);
 
