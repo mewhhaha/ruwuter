@@ -61,20 +61,21 @@ type EventFactory<Type extends string, Ev extends Event> = <
   href: HandlerModule<Fn>,
   options?: EventOptions,
 ) => ClientEventTuple<Fn, Type>;
-
-const eventFactory = <Type extends string, Ev extends Event>(
+function eventFactory<Type extends string, Ev extends Event>(
   type: Type,
-): EventFactory<Type, Ev> => {
-  const factory = <
+): EventFactory<Type, Ev> {
+  function factory<
     This = unknown,
     Result = unknown | Promise<unknown>,
     Fn extends Handler<This, Ev, Result> = Handler<This, Ev, Result>,
   >(
     href: HandlerModule<Fn>,
     options?: EventOptions,
-  ): ClientEventTuple<Fn, Type> => on<Type, Fn>(type, href, options);
+  ): ClientEventTuple<Fn, Type> {
+    return on<Type, Fn>(type, href, options);
+  }
   return factory as EventFactory<Type, Ev>;
-};
+}
 
 /** Builds a `click` event tuple. */
 export const click: EventFactory<"click", MouseEvent> = eventFactory<"click", MouseEvent>("click");
