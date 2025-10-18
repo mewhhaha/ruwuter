@@ -28,6 +28,4 @@ export const generate = async (appFolder: string): Promise<void> => {
   console.log("✅ Generated router for", appFolder);
   await generateTypes(appFolder);
   console.log("✅ Generated types for", appFolder);
-  await generateClientHandlerTypes(appFolder);
-  console.log("✅ Generated client handler declarations for", appFolder);
 };

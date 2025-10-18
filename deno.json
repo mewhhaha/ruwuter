@@ -1,6 +1,6 @@
 {
   "name": "@mewhhaha/ruwuter",
-  "version": "0.1.12",
+  "version": "0.1.11",
   "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
   "exports": {
     ".": "./src/router.mts",
@@ -40,10 +40,6 @@
     "verbatimModuleSyntax": true,
     "types": [
       "./src/global.workers.d.ts"
-    ],
-    "rootDirs": [
-      "./",
-      "./types"
     ]
   },
   "license": "MIT",
