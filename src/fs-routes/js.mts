@@ -15,7 +15,6 @@
 
 import { generateRouter } from "./generate-router.mts";
 import { generateTypes } from "./generate-types.mts";
-import { generateClientHandlerTypes } from "./generate-client-handlers.mts";
 
 /**
  * Generates router and TypeScript types from a file-system based route structure.
