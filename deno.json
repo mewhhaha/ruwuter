@@ -1,63 +1,69 @@
 {
-    "name": "@mewhhaha/ruwuter",
-    "version": "0.1.11",
-    "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
-    "exports": {
-        ".": "./src/router.mts",
-        "./components": "./src/components/index.mts",
-        "./events": "./src/events.mts",
-        "./fs-routes": "./src/fs-routes/js.mts",
-        "./types": "./src/types.mts",
-        "./jsx-runtime": "./src/runtime/jsx-runtime.mts",
-        "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
-        "./client.mjs": "./src/runtime/client.mts",
-        "./resolve.mjs": "./src/runtime/resolve.mts",
-        "./client": "./src/runtime/client.mts",
-        "./resolve": "./src/runtime/resolve.mts"
-    },
-    "bin": {
-        "fs-routes": "./src/fs-routes/routes.mts"
-    },
-    "tasks": {
-        "test": "deno test -A",
-        "test:dom": "deno test -A",
-        "test:workers": "deno run -A npm:vitest run -c vitest.config.ts",
-        "lint": "deno run -A npm:oxlint --max-warnings=0",
-        "format": "deno run -A npm:prettier . --check",
-        "typecheck": "deno check -A src/ test/ test-dom/",
-        "cf-typegen": "wrangler typegen"
-    },
-    "compilerOptions": {
-        "jsx": "react-jsx",
-        "jsxImportSource": "@mewhhaha/ruwuter",
-        "lib": [
-            "ESNext",
-            "DOM",
-            "DOM.Iterable",
-            "DOM.AsyncIterable",
-            "deno.ns"
-        ],
-        "verbatimModuleSyntax": true,
-        "types": ["./src/global.workers.d.ts"]
-    },
-    "license": "MIT",
-    "nodeModulesDir": "auto",
-    "lint": {
-        "include": ["src/"],
-        "exclude": ["test/**", "test-dom/**", "test-support/**"],
-        "rules": {
-            "tags": ["recommended"]
-        }
-    },
-    "fmt": {
-        "lineWidth": 100
-    },
-    "imports": {
-        "@b-fuze/deno-dom": "jsr:@b-fuze/deno-dom@^0.1.56",
-        "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20251011.0",
-        "@mewhhaha/ruwuter/jsx-runtime": "./src/runtime/jsx-runtime.mts",
-        "@mewhhaha/ruwuter/jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
-        "@mewhhaha/ruwuter/events": "./src/events.mts",
-        "urlpattern-polyfill": "npm:urlpattern-polyfill@^10.1.0"
+  "name": "@mewhhaha/ruwuter",
+  "version": "0.1.11",
+  "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
+  "exports": {
+    ".": "./src/router.mts",
+    "./components": "./src/components/index.mts",
+    "./events": "./src/events.mts",
+    "./fs-routes": "./src/fs-routes/js.mts",
+    "./types": "./src/types.mts",
+    "./jsx-runtime": "./src/runtime/jsx-runtime.mts",
+    "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
+    "./client.mjs": "./src/runtime/client.mts",
+    "./resolve.mjs": "./src/runtime/resolve.mts",
+    "./client": "./src/runtime/client.mts",
+    "./resolve": "./src/runtime/resolve.mts"
+  },
+  "bin": {
+    "fs-routes": "./src/fs-routes/routes.mts"
+  },
+  "tasks": {
+    "test": "deno test -A",
+    "test:dom": "deno test -A",
+    "test:workers": "deno run -A npm:vitest run -c vitest.config.ts",
+    "lint": "deno run -A npm:oxlint --max-warnings=0",
+    "format": "deno run -A npm:prettier . --check",
+    "typecheck": "deno check -A src/ test/ test-dom/",
+    "cf-typegen": "wrangler typegen"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@mewhhaha/ruwuter",
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable",
+      "DOM.AsyncIterable",
+      "deno.ns"
+    ],
+    "verbatimModuleSyntax": true,
+    "types": [
+      "./src/global.workers.d.ts"
+    ],
+    "rootDirs": [
+      "./",
+      "./types"
+    ]
+  },
+  "license": "MIT",
+  "nodeModulesDir": "auto",
+  "lint": {
+    "rules": {
+      "include": [
+        "recommended"
+      ]
     }
+  },
+  "fmt": {
+    "lineWidth": 100
+  },
+  "imports": {
+    "@b-fuze/deno-dom": "jsr:@b-fuze/deno-dom@^0.1.56",
+    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20251011.0",
+    "@mewhhaha/ruwuter/jsx-runtime": "./src/runtime/jsx-runtime.mts",
+    "@mewhhaha/ruwuter/jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
+    "@mewhhaha/ruwuter/events": "./src/events.mts",
+    "urlpattern-polyfill": "npm:urlpattern-polyfill@^10.1.0"
+  }
 }
