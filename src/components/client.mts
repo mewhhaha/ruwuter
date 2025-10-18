@@ -14,7 +14,7 @@ const CLIENT_RUNTIME_MODULE = "@mewhhaha/ruwuter/client";
 
 /** Client handler signature for browser-dispatched events. */
 export type Handler<
-  This = unknown,
+  This = any,
   Ev extends Event = Event,
   Result = unknown | Promise<unknown>,
 > = (this: This, ev: Ev, signal: AbortSignal) => Result;

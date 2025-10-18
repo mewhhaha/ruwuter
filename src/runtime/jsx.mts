@@ -100,7 +100,7 @@ export namespace JSX {
   export interface HtmlTag extends FixiAttributes, AriaAttributes {
     // Ruwuter client additions
     bind?: Record<string, any> | undefined;
-    on?: ClientEventTuple | ClientEventTuple[] | undefined;
+    on?: ClientEventTuple<any, any> | ClientEventTuple<any, any>[] | undefined;
   }
   export interface HtmlBodyTag {
     onAfterprint?: undefined | string;

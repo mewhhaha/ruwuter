@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdir, readdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 
 const unescapedDotRegex = /(?<!\[)\.(?![^[]*\])/g;
 const tsRegex = /\.(m)?ts(x)?$/;
@@ -11,13 +11,27 @@ const tsRegex = /\.(m)?ts(x)?$/;
  * @internal
  */
 export const generateTypes = async (appFolder: string): Promise<void> => {
-  const routesFolder = path.join(appFolder, "routes");
+  const resolvedAppFolder = path.resolve(appFolder);
+  const routesFolder = path.join(resolvedAppFolder, "routes");
+  let files: string[] = [];
+  try {
+    files = await readdir(routesFolder);
+  } catch {
+    await rm(path.join(".router", "types", path.relative(process.cwd(), resolvedAppFolder)), {
+      recursive: true,
+      force: true,
+    });
+    return;
+  }
 
-  const files = await readdir(routesFolder);
+  const relativeAppFolder = path.relative(process.cwd(), resolvedAppFolder) ||
+    path.basename(resolvedAppFolder);
+  const typesRoot = path.join(".router", "types", relativeAppFolder);
+  const routesTypesRoot = path.join(typesRoot, "routes");
 
   const tasks: Promise<void>[] = [];
-  await rm(path.join(".router"), { recursive: true, force: true });
-  await mkdir(path.join(".router", "types", routesFolder), { recursive: true });
+  await rm(typesRoot, { recursive: true, force: true });
+  await mkdir(routesTypesRoot, { recursive: true });
 
   // First, extract all route parameters
   const routeParams = new Map<
@@ -57,8 +71,7 @@ export const generateTypes = async (appFolder: string): Promise<void> => {
   // For each route, find all child routes and propagate their parameters
   for (const layoutRoute of layoutRoutes) {
     const layoutParams = allRouteParams.get(layoutRoute) || new Set();
-    const layoutOptionalParams =
-      allOptionalParams.get(layoutRoute) || new Set();
+    const layoutOptionalParams = allOptionalParams.get(layoutRoute) || new Set();
 
     // Find all child routes
     for (const routeName of routeParams.keys()) {
@@ -104,7 +117,7 @@ export const generateTypes = async (appFolder: string): Promise<void> => {
       paramsString,
     );
 
-    const basePath = path.join(".router", "types", routesFolder);
+    const basePath = routesTypesRoot;
     if (isDirectory) {
       const task = async () => {
         await mkdir(path.join(basePath, file), { recursive: true });
@@ -115,7 +128,7 @@ export const generateTypes = async (appFolder: string): Promise<void> => {
       };
       tasks.push(task());
     } else {
-      const task = async () =>
+      const task = () =>
         writeFile(
           path.join(basePath, `+types.${file.replace(tsRegex, ".ts")}`),
           template,
@@ -125,11 +138,7 @@ export const generateTypes = async (appFolder: string): Promise<void> => {
   }
 
   const rootTemplate = createTemplate("document.tsx", "");
-  const task = writeFile(
-    path.join(".router", "types", appFolder, "+types.document.ts"),
-    rootTemplate,
-  );
-  tasks.push(task);
+  tasks.push(writeFile(path.join(typesRoot, "+types.document.ts"), rootTemplate));
 
   await Promise.all(tasks);
 };
