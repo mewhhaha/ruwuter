@@ -53,67 +53,84 @@ export function on<Type extends string, Fn extends (...args: any[]) => unknown>(
   return options === undefined ? [type, href] : [type, href, options];
 }
 
-const eventFactory = <Type extends string, Ev extends Event>(type: Type) =>
-<
+type EventFactory<Type extends string, Ev extends Event> = <
   This = unknown,
   Result = unknown | Promise<unknown>,
-  Fn extends Handler<This, Ev, Result> = Handler<This, Ev, Result>,
 >(
-  href: HandlerModule<Fn>,
+  href: HandlerModule<Handler<This, Ev, Result>>,
   options?: EventOptions,
-): ClientEventTuple<Fn, Type> => on<Type, Fn>(type, href, options);
+) => ClientEventTuple<Handler<This, Ev, Result>, Type>;
+
+const eventFactory = <Type extends string, Ev extends Event>(
+  type: Type,
+): EventFactory<Type, Ev> => {
+  return function <This = unknown, Result = unknown | Promise<unknown>>(
+    href: HandlerModule<Handler<This, Ev, Result>>,
+    options?: EventOptions,
+  ): ClientEventTuple<Handler<This, Ev, Result>, Type> {
+    return on<Type, Handler<This, Ev, Result>>(type, href, options);
+  };
+};
 
 /** Builds a `click` event tuple. */
-export const click = eventFactory<"click", MouseEvent>("click");
+export const click: EventFactory<"click", MouseEvent> = eventFactory<"click", MouseEvent>("click");
 
 /** Builds a `submit` event tuple. */
-export const submit = eventFactory<"submit", SubmitEvent>("submit");
+export const submit: EventFactory<"submit", SubmitEvent> = eventFactory<"submit", SubmitEvent>(
+  "submit",
+);
 
 /** Builds an `input` event tuple. */
-export const input = eventFactory<"input", InputEvent>("input");
+export const input: EventFactory<"input", InputEvent> = eventFactory<"input", InputEvent>("input");
 
 /** Builds a `change` event tuple. */
-export const change = eventFactory<"change", Event>("change");
+export const change: EventFactory<"change", Event> = eventFactory<"change", Event>("change");
 
 /** Builds a `focus` event tuple. */
-export const focus = eventFactory<"focus", FocusEvent>("focus");
+export const focus: EventFactory<"focus", FocusEvent> = eventFactory<"focus", FocusEvent>("focus");
 
 /** Builds a `blur` event tuple. */
-export const blur = eventFactory<"blur", FocusEvent>("blur");
+export const blur: EventFactory<"blur", FocusEvent> = eventFactory<"blur", FocusEvent>("blur");
 
 /** Builds a `mount` lifecycle tuple. */
-export const mount = <
+type LifecycleFactory<Type extends string> = <
   This = unknown,
   Result = unknown | Promise<unknown>,
-  Fn extends Handler<This, Event, Result> = Handler<This, Event, Result>,
 >(
-  href: HandlerModule<Fn>,
+  href: HandlerModule<Handler<This, Event, Result>>,
   options?: EventOptions,
-): ClientEventTuple<Fn, "mount"> => on("mount", href, options);
+) => ClientEventTuple<Handler<This, Event, Result>, Type>;
+
+const lifecycleFactory = <Type extends "mount" | "unmount">(
+  type: Type,
+): LifecycleFactory<Type> => {
+  return function <This = unknown, Result = unknown | Promise<unknown>>(
+    href: HandlerModule<Handler<This, Event, Result>>,
+    options?: EventOptions,
+  ): ClientEventTuple<Handler<This, Event, Result>, Type> {
+    return on<Type, Handler<This, Event, Result>>(type, href, options);
+  };
+};
+
+export const mount: LifecycleFactory<"mount"> = lifecycleFactory("mount");
 
 /** Builds an `unmount` lifecycle tuple. */
-export const unmount = <
-  This = unknown,
-  Result = unknown | Promise<unknown>,
-  Fn extends Handler<This, Event, Result> = Handler<This, Event, Result>,
->(
-  href: HandlerModule<Fn>,
-  options?: EventOptions,
-): ClientEventTuple<Fn, "unmount"> => on("unmount", href, options);
+export const unmount: LifecycleFactory<"unmount"> = lifecycleFactory("unmount");
 
 /**
  * Creates an attribute descriptor that points to a client module computing the attribute value.
  * The optional `scope` object is shallow-cloned on the client and used as `this` during updates.
  */
-export const attribute = <
+type AttributeFactory = <
   This = unknown,
   Result = unknown | Promise<unknown>,
-  Fn extends Handler<This, Event, Result> = Handler<This, Event, Result>,
   Scope extends AttrScope | undefined = AttrScope,
 >(
-  href: HandlerModule<Fn>,
+  href: HandlerModule<Handler<This, Event, Result>>,
   scope?: Scope,
-): ClientAttrDescriptor<Fn, Scope> => ({
+) => ClientAttrDescriptor<Handler<This, Event, Result>, Scope>;
+
+export const attribute: AttributeFactory = (href, scope) => ({
   __ruwuterAttr: true,
   href,
   scope,
