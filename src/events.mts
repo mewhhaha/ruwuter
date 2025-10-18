@@ -67,16 +67,16 @@ type EventFactory<Type extends string, Ev extends Event> = <
   options?: EventOptions,
 ) => ClientEventTuple<Handler<This, Ev, Result>, Type>;
 
-const eventFactory = <Type extends string, Ev extends Event,>(
+function eventFactory<Type extends string, Ev extends Event>(
   type: Type,
-): EventFactory<Type, Ev> => {
+): EventFactory<Type, Ev> {
   return function <This = unknown, Result = unknown | Promise<unknown>>(
     href: HandlerModule<Handler<This, Ev, Result>>,
     options?: EventOptions,
   ): ClientEventTuple<Handler<This, Ev, Result>, Type> {
     return on<Type, Handler<This, Ev, Result>>(type, href, options);
   };
-};
+}
 
 /** Builds a `click` event tuple. */
 export const click: EventFactory<"click", MouseEvent> = eventFactory<"click", MouseEvent>("click");
@@ -107,16 +107,16 @@ type LifecycleFactory<Type extends string> = <
   options?: EventOptions,
 ) => ClientEventTuple<Handler<This, Event, Result>, Type>;
 
-const lifecycleFactory = <Type extends "mount" | "unmount",>(
+function lifecycleFactory<Type extends "mount" | "unmount">(
   type: Type,
-): LifecycleFactory<Type> => {
+): LifecycleFactory<Type> {
   return function <This = unknown, Result = unknown | Promise<unknown>>(
     href: HandlerModule<Handler<This, Event, Result>>,
     options?: EventOptions,
   ): ClientEventTuple<Handler<This, Event, Result>, Type> {
     return on<Type, Handler<This, Event, Result>>(type, href, options);
   };
-};
+}
 
 export const mount: LifecycleFactory<"mount"> = lifecycleFactory("mount");
 
