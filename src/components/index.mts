@@ -5,6 +5,6 @@ export * from "./suspense.mts";
  * @module
  *
  * Public component entrypoint for @mewhhaha/ruwuter.
- * Re‑exports the client helpers (Client, on, ref), context utilities,
+ * Re‑exports the client helpers (Client, ref), context utilities,
  * and Suspense components (Suspense, Resolve, SuspenseProvider).
  */

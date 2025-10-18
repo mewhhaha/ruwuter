@@ -64,13 +64,6 @@ type HydrationPayload = { bind?: unknown; on?: ModuleEntry[]; attrs?: AttrItem[]
 
 const escapeJsonForScript = (json: string): string => json.replaceAll("</script>", "<\\/script>");
 
-const deriveEventName = (
-  fn: ((event: Event, signal: AbortSignal) => unknown) & { event?: string },
-): string =>
-  (typeof fn?.event === "string" && fn.event) ||
-  fn?.name?.replace(/^on/i, "").toLowerCase() ||
-  "click";
-
 /**
  * Core JSX factory function that creates HTML elements or calls component functions.
  *
@@ -106,21 +99,19 @@ export function jsx(
       continue;
     }
 
-    // New unified `on` handlers: accept one or several functions, infer event by function name
-    if (key === "on" && (typeof value === "function" || Array.isArray(value))) {
-      const fns = Array.isArray(value) ? value : [value];
+    // Event handlers: expect tuple descriptors [eventType, href, options?]
+    if (key === "on" && Array.isArray(value)) {
+      const base = value as unknown[];
+      const tuples = Array.isArray(base[0]) ? base : [base];
       const items: ModuleEntry[] = [];
-      for (const fn of fns) {
-        if (typeof fn !== "function") continue;
-        const ev = deriveEventName(fn);
-        const href = fn.href as unknown;
-        if (typeof href === "string" && href) {
-          items.push({ t: "m", s: href, x: "default", ev });
-        }
+      for (const tuple of tuples) {
+        if (!Array.isArray(tuple) || tuple.length < 2) continue;
+        const [ev, href] = tuple as [unknown, unknown, unknown];
+        if (typeof ev !== "string" || ev.length === 0) continue;
+        if (typeof href !== "string" || href.length === 0) continue;
+        items.push({ t: "m", s: href, x: "default", ev });
       }
-      if (items.length) {
-        ensureHydration().on = items;
-      }
+      if (items.length) ensureHydration().on = items;
       continue;
     }
 
@@ -128,17 +119,35 @@ export function jsx(
 
     // Attribute binding: function-valued props (e.g., class={fn})
     // Collect into a hydration payload array so the client can compute + update on ref changes
+    if (value && typeof value === "object") {
+      const descriptor = value as { __ruwuterAttr?: unknown; href?: unknown; scope?: unknown };
+      if (descriptor.__ruwuterAttr === true) {
+        const href = descriptor.href;
+        if (typeof href === "string" && href) {
+          const entry: ModuleEntry = { t: "m", s: href, x: "default" };
+          const args: Record<string, unknown> = Object.create(null);
+          if (descriptor.scope && typeof descriptor.scope === "object") {
+            const scopeRecord = descriptor.scope as Record<string, unknown>;
+            for (const name of Object.keys(scopeRecord)) {
+              args[name] = scopeRecord[name];
+            }
+          }
+          (ensureHydration().attrs ||= []).push({ n: key, e: entry, a: args });
+        }
+        continue;
+      }
+    }
+
     if (typeof value === "function") {
-      // @ts-expect-error Adding the href illegally
-      const href = value.href as unknown;
+      // Legacy support path for pre-module attr handlers that rely on generator-assigned hrefs
+      const href = (value as { href?: unknown }).href;
       if (typeof href === "string" && href) {
         const entry: ModuleEntry = { t: "m", s: href, x: "default" };
-        // Pick only string keys and exclude reserved ones like href/event
         const args: Record<string, unknown> = Object.create(null);
-        for (const k of Object.keys(value)) {
+        const legacyArgs = value as unknown as Record<string, unknown>;
+        for (const k of Object.keys(legacyArgs)) {
           if (k === "href" || k === "event") continue;
-          // @ts-expect-error We can't validate this
-          args[k] = value[k];
+          args[k] = legacyArgs[k];
         }
         (ensureHydration().attrs ||= []).push({ n: key, e: entry, a: args });
       }

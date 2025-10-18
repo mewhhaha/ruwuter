@@ -1,6 +1,7 @@
 import type { Html } from "./node.mts";
 import type { FixiAttributes } from "./fixi.mts";
-import type { Ref as ClientRef, Handler as ClientHandler } from "../components/client.mts";
+import type { Ref as ClientRef } from "../components/client.mts";
+import type { ClientAttrDescriptor, ClientEventTuple } from "../events.mts";
 
 /**
  * JSX namespace containing type definitions for JSX elements and attributes.
@@ -99,7 +100,7 @@ export namespace JSX {
   export interface HtmlTag extends FixiAttributes, AriaAttributes {
     // Ruwuter client additions
     bind?: Record<string, any> | undefined;
-    on?: ClientHandler | ClientHandler[] | undefined;
+    on?: ClientEventTuple | ClientEventTuple[] | undefined;
   }
   export interface HtmlBodyTag {
     onAfterprint?: undefined | string;
@@ -193,11 +194,11 @@ export namespace JSX {
 
   export interface HtmlTag {
     accesskey?: string | undefined;
-    class?: string | ((...args: any[]) => unknown) | undefined;
+    class?: string | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
     contenteditable?: string | undefined;
     dir?: string | undefined;
-    hidden?: string | boolean | ((...args: any[]) => unknown) | undefined;
-    inert?: string | boolean | ((...args: any[]) => unknown) | undefined;
+    hidden?: string | boolean | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
+    inert?: string | boolean | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
     popover?: "auto" | "hint" | "manual";
     popovertarget?: string | undefined;
     popoveraction?: "close" | "open" | "toggle" | (string & {}) | undefined;
@@ -253,7 +254,7 @@ export namespace JSX {
   export interface HtmlButtonTag extends HtmlTag {
     action?: string | undefined;
     autofocus?: string | undefined;
-    disabled?: boolean | ((...args: any[]) => unknown) | undefined;
+    disabled?: boolean | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
     enctype?: string | undefined;
     commandfor?: string | undefined;
     command?:

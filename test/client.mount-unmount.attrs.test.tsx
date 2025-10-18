@@ -1,6 +1,7 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.mts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, type fragment, Router } from "../src/router.mts";
 import { Client, ref } from "../src/components/client.mts";
+import * as events from "../src/events.mts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -14,14 +15,8 @@ const makeCtx = () => {
 describe("mount/unmount via unified on", () => {
   it("emits on-boundaries for mount and unmount", async () => {
     const count = ref(0);
-    function mount(this: any, _ev: Event, _s: AbortSignal) {
-      this.count.set((v: number) => v + 1);
-    }
-    function unmount(this: any, _ev: Event, _s: AbortSignal) {
-      /* cleanup */
-    }
-    (mount as any).href = "./mount.js";
-    (unmount as any).href = "./unmount.js";
+    const mountHref = "./handlers/mount.client.js";
+    const unmountHref = "./handlers/unmount.client.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -31,8 +26,8 @@ describe("mount/unmount via unified on", () => {
           default: () => (
             <html>
               <body>
-                <div id="n" bind={{ count }} on={[mount]} />
-                <div id="u" on={[unmount]} />
+                <div id="n" bind={{ count }} on={[events.mount(mountHref)]} />
+                <div id="u" on={[events.unmount(unmountHref)]} />
                 <Client />
               </body>
             </html>
@@ -54,4 +49,3 @@ describe("mount/unmount via unified on", () => {
     expect(cnt).toBeGreaterThanOrEqual(2);
   });
 });
-

@@ -1,6 +1,7 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.mts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, type fragment, Router } from "../src/router.mts";
 import { Client, ref } from "../src/components/client.mts";
+import * as events from "../src/events.mts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -16,10 +17,7 @@ describe("Ref sharing", () => {
     const count = ref(7);
 
     // Handler via unified on + bind
-    function click(this: any, _ev: Event, _signal: AbortSignal) {
-      this.count.set((v: number) => v + 1);
-    }
-    (click as any).href = "./click.js";
+    const clickHref = "./handlers/click.client.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -29,7 +27,7 @@ describe("Ref sharing", () => {
           default: () => (
             <html>
               <body>
-                <button id="btn" bind={{ count }} on={click}>
+                <button id="btn" bind={{ count }} on={events.click(clickHref)}>
                   {count}
                 </button>
                 <Client />
@@ -53,4 +51,3 @@ describe("Ref sharing", () => {
     expect(html).toMatch(/<script type="application\/json" data-hydrate="h/);
   });
 });
-

@@ -1,8 +1,10 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import "./setup.ts";
 import { DOMParser } from "@b-fuze/deno-dom";
-import { Router, type Env, type fragment } from "../src/router.mts";
+import { type Env, type fragment, Router } from "../src/router.mts";
 import { Client, ref } from "../src/components/client.mts";
+import * as events from "../src/events.mts";
+import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -13,11 +15,7 @@ const makeCtx = () => {
   return { ctx, pending } as const;
 };
 
-function extractClientScript(html: string): string {
-  const m = html.match(/<script type="module"[^>]*>([\s\S]*?)<\/script>/);
-  if (!m) throw new Error("Client script not found");
-  return m[1];
-}
+const runtimeUrl = () => nextClientRuntimeUrl();
 
 async function waitFor(check: () => boolean, timeoutMs = 700) {
   const start = Date.now();
@@ -26,6 +24,94 @@ async function waitFor(check: () => boolean, timeoutMs = 700) {
     await new Promise((r) => setTimeout(r, 5));
   }
   throw new Error("waitFor timeout");
+}
+
+function setupDomEnvironment(html: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(
+    "<!doctype html><html><head></head><body></body></html>",
+    "text/html",
+  )!;
+
+  const window: any = {
+    document: doc,
+    Event,
+    AbortController,
+    queueMicrotask,
+    setTimeout,
+    clearTimeout,
+    console,
+  };
+  window.location = new URL("https://example.com/");
+  window.window = window;
+
+  const observers: Set<(m: MutationRecord[]) => void> = new Set();
+  class PolyfillMutationObserver {
+    cb: (m: MutationRecord[]) => void;
+    constructor(cb: (m: MutationRecord[]) => void) {
+      this.cb = cb;
+    }
+    observe() {
+      observers.add(this.cb);
+    }
+    disconnect() {
+      observers.delete(this.cb);
+    }
+  }
+
+  const saved = {
+    window: (globalThis as any).window,
+    document: (globalThis as any).document,
+    Comment: (globalThis as any).Comment,
+    Node: (globalThis as any).Node,
+    Element: (globalThis as any).Element,
+    HTMLElement: (globalThis as any).HTMLElement,
+    HTMLScriptElement: (globalThis as any).HTMLScriptElement,
+    MutationObserver: (globalThis as any).MutationObserver,
+  };
+
+  (globalThis as any).window = window;
+  (globalThis as any).document = doc;
+  (globalThis as any).MutationObserver = window.MutationObserver = PolyfillMutationObserver as any;
+  (globalThis as any).Comment = (doc.createComment as any)
+    ? (doc.createComment("x") as any).constructor
+    : saved.Comment || (class {} as any);
+  (globalThis as any).Node = saved.Node || ({ ELEMENT_NODE: 1, COMMENT_NODE: 8 } as any);
+  (globalThis as any).Element = (doc.createElement("div") as any).constructor;
+  (globalThis as any).HTMLElement = (doc.createElement("div") as any).constructor;
+  (globalThis as any).HTMLScriptElement = (doc.createElement("script") as any).constructor;
+
+  doc.body.innerHTML = html.replace(/^<!doctype html>/i, "");
+
+  return {
+    window,
+    doc,
+    cleanup() {
+      (globalThis as any).window = saved.window;
+      if (typeof saved.document === "undefined") delete (globalThis as any).document;
+      else (globalThis as any).document = saved.document;
+
+      if (typeof saved.Comment === "undefined") delete (globalThis as any).Comment;
+      else (globalThis as any).Comment = saved.Comment;
+
+      if (typeof saved.Node === "undefined") delete (globalThis as any).Node;
+      else (globalThis as any).Node = saved.Node;
+
+      if (typeof saved.Element === "undefined") delete (globalThis as any).Element;
+      else (globalThis as any).Element = saved.Element;
+
+      if (typeof saved.HTMLElement === "undefined") delete (globalThis as any).HTMLElement;
+      else (globalThis as any).HTMLElement = saved.HTMLElement;
+
+      if (typeof saved.HTMLScriptElement === "undefined") {
+        delete (globalThis as any).HTMLScriptElement;
+      } else (globalThis as any).HTMLScriptElement = saved.HTMLScriptElement;
+
+      if (typeof saved.MutationObserver === "undefined") {
+        delete (globalThis as any).MutationObserver;
+      } else (globalThis as any).MutationObserver = saved.MutationObserver;
+    },
+  };
 }
 
 describe("Attribute binding (class)", () => {
@@ -39,10 +125,8 @@ describe("Attribute binding (class)", () => {
     function classFor(this: any, _ev: Event, _signal: AbortSignal) {
       return this.active.get() ? "is-active" : "";
     }
-    (classFor as any).active = active;
-    // Simulate static route export hrefs assigned by generator
-    (toggle as any).href = "./toggle.js";
-    (classFor as any).href = "./classFor.js";
+    const toggleHref = "./handlers/toggle.client.js";
+    const classHref = "./handlers/classFor.client.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -52,10 +136,10 @@ describe("Attribute binding (class)", () => {
           default: () => (
             <html>
               <body>
-                <button id="t" bind={{ active }} on={toggle}>
+                <button id="t" bind={{ active }} on={events.click(toggleHref)}>
                   Toggle
                 </button>
-                <div id="p" class={classFor}>
+                <div id="p" class={events.attribute(classHref, { active })}>
                   Panel
                 </div>
                 <Client />
@@ -75,67 +159,56 @@ describe("Attribute binding (class)", () => {
     );
     const html = await res.text();
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(
-      "<!doctype html><html><head></head><body></body></html>",
-      "text/html",
-    )!;
-    const window: any = { document: doc, Event, AbortController };
-    (globalThis as any).MutationObserver = (window.MutationObserver = class {
-      cb: (m: any[]) => void;
-      constructor(cb: (m: any[]) => void) { this.cb = cb; }
-      observe() {}
-      disconnect() {}
-    } as any);
-    doc.body.innerHTML = html.replace(/^<!doctype html>/i, "");
-    (globalThis as any).Comment = (doc.createComment as any)
-      ? (doc.createComment("x") as any).constructor
-      : (globalThis as any).Comment || (class {} as any);
-    (globalThis as any).Node = (globalThis as any).Node || ({ ELEMENT_NODE: 1 } as any);
-    (globalThis as any).Element = (doc.createElement("div") as any).constructor;
-    (globalThis as any).HTMLElement = (doc.createElement("div") as any).constructor;
+    const { window, doc, cleanup } = setupDomEnvironment(html);
+    try {
+      const resolveHref = (href: string) => new URL(href, window.location.href).href;
+      window.__ruwuter = {
+        loadModule: async (spec: string) => {
+          if (spec === resolveHref(toggleHref)) return { default: toggle };
+          if (spec === resolveHref(classHref)) {
+            (classFor as any).active = active;
+            return { default: classFor };
+          }
+          throw new Error("Unknown module: " + spec);
+        },
+      };
 
-    (window as any).__import = async (spec: string) => {
-      if (!spec.startsWith("./")) throw new Error("Unexpected spec: " + spec);
-      if (spec.endsWith("/toggle.js")) return { default: toggle };
-      if (spec.endsWith("/classFor.js")) return { default: classFor };
-      throw new Error("Unknown spec: " + spec);
-    };
+      await import(runtimeUrl());
 
-    const script = extractClientScript(html).replaceAll(
-      /\bimport\s*\(/g,
-      "window.__import(",
-    );
-    new Function("window", "document", script)(window, doc as any);
+      doc.dispatchEvent(new Event("DOMContentLoaded"));
 
-    doc.dispatchEvent(new Event("DOMContentLoaded"));
+      const panel = doc.getElementById("p")! as any;
+      const classOf = () => ("className" in panel
+        ? String(panel.className || "")
+        : String(panel.getAttribute("class") || ""));
+      await waitFor(() =>
+        classOf() === "", 1000);
+      expect(classOf()).toBe("");
 
-    const panel = doc.getElementById("p")! as any;
-    const classOf = () => ("className" in panel ? String(panel.className || "") : String(panel.getAttribute("class") || ""));
-    await waitFor(() => classOf() === "", 1000);
-    expect(classOf()).toBe("");
+      const scripts = Array.from(
+        doc.querySelectorAll('script[type="application/json"][data-hydrate]'),
+      );
+      let bindId: string | undefined;
+      for (const s of scripts) {
+        try {
+          const payload = JSON.parse(s.textContent || "{}");
+          if (payload && payload.bind && payload.bind.active && payload.bind.active.i) {
+            bindId = payload.bind.active.i as string;
+            break;
+          }
+        } catch {}
+      }
+      if (!bindId) throw new Error("bind id for active not found");
 
-    // Toggle by driving the client state directly (deno-dom click events can be flaky)
-    const scripts = Array.from(
-      doc.querySelectorAll('script[type="application/json"][data-hydrate]'),
-    );
-    let bindId: string | undefined;
-    for (const s of scripts) {
-      try {
-        const payload = JSON.parse(s.textContent || "{}");
-        if (payload && payload.bind && payload.bind.active && payload.bind.active.i) {
-          bindId = payload.bind.active.i as string;
-          break;
-        }
-      } catch {}
+      await new Promise((r) => setTimeout(r, 10));
+      const store = (window.__ruwuter as any)?.store;
+      if (!store) throw new Error("client store not available");
+      store.set(bindId, true);
+
+      await waitFor(() => /\bis-active\b/.test(classOf()), 1000);
+      expect(classOf()).toMatch(/\bis-active\b/);
+    } finally {
+      cleanup();
     }
-    if (!bindId) throw new Error("bind id for active not found");
-    // Allow hydration to finish initial attribute compute + watcher registration
-    await new Promise((r) => setTimeout(r, 10));
-    (window as any).__client.set(bindId, true);
-
-    await waitFor(() => /\bis-active\b/.test(classOf()), 1000);
-    expect(classOf()).toMatch(/\bis-active\b/);
   });
 });
-

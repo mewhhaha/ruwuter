@@ -3,45 +3,23 @@
  *
  * Client‑side interaction helpers and shared refs for Ruwuter.
  * Provides:
- * - `on(fn)` to mark route‑exported client handlers/components for client loading
  * - `ref(initial)` to create small shared refs across hydration boundaries
  * - `Client` to inject the small browser runtime as a module script
+ * - `Handler` type used by the client events helpers
  */
 
-import { into, type Html } from "../runtime/node.mts";
+import { type Html, into } from "../runtime/node.mts";
 import { useHook } from "../runtime/hooks.mts";
-import { sanitizeDynamicImportSource } from "../utils/serialize.mts";
-
 const CLIENT_RUNTIME_MODULE = "@mewhhaha/ruwuter/client";
 
-/** Client handler signature for on‑module functions. */
-export type Handler<This = any> = (
-  this: This,
-  ev: Event,
-  signal: AbortSignal,
-) => unknown | Promise<unknown>;
+/** Client handler signature for browser-dispatched events. */
+export type Handler<
+  This = unknown,
+  Ev extends Event = Event,
+  Result = unknown | Promise<unknown>,
+> = (this: This, ev: Ev, signal: AbortSignal) => Result;
 
-// Marker used by the routes generator to annotate module-exported handlers
-const CLIENT_FN = Symbol.for("@mewhhaha/ruwuter.clientfn");
-
-/** Marks a route‑exported handler or component so the routes generator can attach an href. */
-export function on<F extends ((event: Event, signal: AbortSignal) => unknown) & { [CLIENT_FN]: true}>(fn: F): F & { href?: string } {
-  fn[CLIENT_FN] = true;
-  // Friendly fix for Vite SSR dynamic import placeholders in serialized handlers
-  try {
-    const original = Function.prototype.toString.call(fn) as string;
-    const fixed = sanitizeDynamicImportSource(original);
-    if (fixed !== original) {
-      Object.defineProperty(fn, "toString", { value: () => fixed });
-    }
-  } catch {
-    // non-fatal: keep original function as-is
-  }
-  return fn as any;
-}
-
-
-const registry = new Map()
+const registry = new Map<string, unknown>();
 
 /** A small shared ref container used across hydration boundaries. */
 export type Ref<T> = {
@@ -60,15 +38,16 @@ export function ref<T>(initial: T): Ref<T> {
       id,
       get(): T {
         try {
-          return registry.get(id) ?? initial;
+          const value = registry.get(id);
+          return (value as T | undefined) ?? initial;
         } catch {
           return initial;
         }
       },
-      set(next: T): void {
-        const prev = registry.get(id) ?? initial;
-        const val = typeof next === "function" ? next(prev) : next;
-        registry.set(id, val)
+      set(next: T | ((prev: T) => T)): void {
+        const prev = (registry.get(id) as T | undefined) ?? initial;
+        const val = typeof next === "function" ? (next as (prev: T) => T)(prev) : next;
+        registry.set(id, val);
       },
       toJSON() {
         return marker;

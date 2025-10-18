@@ -32,8 +32,7 @@ export type InferComponentProps<module> = {
   children?: JSX.Element;
   loaderData: module extends {
     loader: infer loader extends (...args: any) => any;
-  }
-    ? Awaited<ReturnType<loader>>
+  } ? Awaited<ReturnType<loader>>
     : undefined;
 };
 
@@ -74,8 +73,7 @@ export type InferHeadersFunction<
   context: [Env, ExecutionContext];
   loaderData: module extends {
     loader: infer loader extends (...args: any) => any;
-  }
-    ? ReturnType<loader>
+  } ? ReturnType<loader>
     : undefined;
 }) => Promise<Headers | HeadersLike> | Headers | HeadersLike;
 

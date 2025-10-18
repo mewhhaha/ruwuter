@@ -1,6 +1,7 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.mts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, type fragment, Router } from "../src/router.mts";
 import { Client } from "../src/components/client.mts";
+import * as events from "../src/events.mts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -12,9 +13,8 @@ const makeCtx = () => {
 };
 
 describe("Unified on-prop", () => {
-  it("supports on={fn} with event inferred from fn name and emits on-boundary", async () => {
-    const h = function click() {};
-    (h as any).href = "./click.js";
+  it("supports tuple-based handlers and emits a hydration boundary", async () => {
+    const clickHref = "./handlers/click.client.js";
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
       {
@@ -23,7 +23,7 @@ describe("Unified on-prop", () => {
           default: () => (
             <html>
               <body>
-                <button id="c" on={h}>
+                <button id="c" on={events.click(clickHref)}>
                   0
                 </button>
                 <Client />
@@ -46,4 +46,3 @@ describe("Unified on-prop", () => {
     // boundary-only check
   });
 });
-

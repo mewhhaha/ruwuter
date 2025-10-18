@@ -43,8 +43,13 @@ interface ElementContext {
   attrScopes: Map<string, Record<string, unknown>>;
 }
 
+type ModuleNamespace = Record<string, unknown>;
+
 interface GlobalClientWindow extends Window {
-  __ruwuter?: { store: RefStore };
+  __ruwuter?: {
+    store?: RefStore;
+    loadModule?: (spec: string) => Promise<ModuleNamespace>;
+  };
 }
 
 const hasWindow = typeof window !== "undefined";
@@ -53,18 +58,28 @@ function initializeClientRuntime(): void {
   if (!hasWindow) return;
   const globalWindow = window as GlobalClientWindow;
   if (globalWindow.__ruwuter?.store) return;
+  if (typeof document === "undefined") return;
 
   const loadModule = (() => {
-    const cache = new Map<string, Promise<Record<string, unknown>>>();
+    const cache = new Map<string, Promise<ModuleNamespace>>();
+
+    const resolve = (spec: string) => {
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(spec)) return spec; // already absolute URL
+      if (spec.startsWith("/")) return new URL(spec, window.location.origin).href;
+      // Resolve relative to the current directory, not treating the last path segment as a file
+      const baseDir = new URL(".", window.location.href);
+      return new URL(spec, baseDir).href;
+    };
+
     return (spec: string) => {
-      const resolved = (() => {
-        if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(spec)) return spec; // already absolute URL
-        if (spec.startsWith("/")) return new URL(spec, window.location.origin).href;
-        // Resolve relative to the current directory, not treating the last path segment as a file
-        const baseDir = new URL('.', window.location.href);
-        return new URL(spec, baseDir).href;
-      })();
-      if (!cache.has(resolved)) cache.set(resolved, import(resolved));
+      const resolved = resolve(spec);
+      if (!cache.has(resolved)) {
+        const customLoader = globalWindow.__ruwuter?.loadModule;
+        cache.set(
+          resolved,
+          customLoader ? customLoader(resolved) : import(resolved),
+        );
+      }
       return cache.get(resolved)!;
     };
   })();
@@ -81,7 +96,9 @@ function initializeClientRuntime(): void {
 
     const set = (id: string, next: unknown | ((prev: unknown) => unknown)) => {
       const current = values.get(id);
-      const value = typeof next === "function" ? (next as (prev: unknown) => unknown)(current) : next;
+      const value = typeof next === "function"
+        ? (next as (prev: unknown) => unknown)(current)
+        : next;
       values.set(id, value);
       const subs = listeners.get(id);
       if (!subs) return;
@@ -158,14 +175,13 @@ function initializeClientRuntime(): void {
   async function resolveEntry(entry?: ModuleEntry): Promise<ClientFn | undefined> {
     if (!entry || entry.t !== "m") return undefined;
     const mod = await loadModule(entry.s);
-    const candidate =
-      entry.x && entry.x in mod && typeof mod[entry.x] === "function"
-        ? (mod[entry.x] as ClientFn)
-        : typeof mod.default === "function"
-          ? (mod.default as ClientFn)
-          : typeof mod === "function"
-            ? (mod as unknown as ClientFn)
-            : undefined;
+    const candidate = entry.x && entry.x in mod && typeof mod[entry.x] === "function"
+      ? (mod[entry.x] as ClientFn)
+      : typeof mod.default === "function"
+      ? (mod.default as ClientFn)
+      : typeof mod === "function"
+      ? (mod as unknown as ClientFn)
+      : undefined;
     return candidate;
   }
 
@@ -184,7 +200,12 @@ function initializeClientRuntime(): void {
     return ctx;
   }
 
-  async function invokeEntry(el: Element, entry: ModuleEntry, type: string, ev: Event): Promise<void> {
+  async function invokeEntry(
+    el: Element,
+    entry: ModuleEntry,
+    type: string,
+    ev: Event,
+  ): Promise<void> {
     const fn = await resolveEntry(entry);
     if (!fn) return;
     const ctx = getContext(el);
@@ -273,7 +294,11 @@ function initializeClientRuntime(): void {
     );
   }
 
-  function collectRefs(value: unknown, visit: (ref: RefObject) => void, seen: Set<unknown> = new Set()): void {
+  function collectRefs(
+    value: unknown,
+    visit: (ref: RefObject) => void,
+    seen: Set<unknown> = new Set(),
+  ): void {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
 

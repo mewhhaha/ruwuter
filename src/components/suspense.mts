@@ -23,7 +23,9 @@ type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
   children: JSX.Element | (() => Promise<JSX.Element>);
 } & Omit<JSX.IntrinsicElements[AS], "children">;
 
-export const Suspense = ({ fallback, as: As = "div", children, ...props }: SuspenseProps): JSX.Element => {
+export const Suspense = (
+  { fallback, as: As = "div", children, ...props }: SuspenseProps,
+): JSX.Element => {
   const id = `suspense-${crypto.randomUUID()}`;
   return into(
     (async function* () {
@@ -50,14 +52,16 @@ export const Suspense = ({ fallback, as: As = "div", children, ...props }: Suspe
   );
 };
 
-
 /**
  * Streams resolved Suspense content. Define once near the end of <body>.
  * If a strict CSP is used, supply a nonce so the defining script can run.
  */
-export const Resolve = (): JSX.Element => {
+export const Resolve = ({ nonce }: { nonce?: string } = {}): JSX.Element => {
+  const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
   return into(
     (async function* () {
+      yield `<script type="module"${nonceAttr}>import "@mewhhaha/ruwuter/resolve";</script>`;
+
       const registry = getRegistry();
       if (!registry) return;
 
@@ -83,8 +87,8 @@ export const SuspenseProvider = ({
 }: SuspenseProviderProps): JSX.Element => {
   const registry = new Map<string, Promise<[id: string, html: string]>>();
   const provided = jsx(Fragment, {
-        children: [children, jsx(Resolve, {})],
-      });
+    children: [children, jsx(Resolve, {})],
+  });
 
   return jsx(context.Provider, {
     value: registry,

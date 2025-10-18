@@ -1,6 +1,7 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.mts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, type fragment, Router } from "../src/router.mts";
 import { Client } from "../src/components/client.mts";
+import * as events from "../src/events.mts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -13,8 +14,7 @@ const makeCtx = () => {
 
 describe("Client interactions (no bundler)", () => {
   it("renders on-boundary and serves function module", async () => {
-    function click(_ev: Event, _signal: AbortSignal) {}
-    (click as any).href = "./click.js";
+    const clickHref = "./handlers/click.client.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -24,7 +24,7 @@ describe("Client interactions (no bundler)", () => {
           default: () => (
             <html>
               <body>
-                <button id="b" bind={{ by: 2 }} on={click}>
+                <button id="b" bind={{ by: 2 }} on={events.click(clickHref)}>
                   0
                 </button>
                 <Client />
@@ -49,4 +49,3 @@ describe("Client interactions (no bundler)", () => {
     // boundary-only check
   });
 });
-

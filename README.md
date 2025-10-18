@@ -84,17 +84,13 @@ app/
 
 ```tsx
 // app/_index.tsx
-import { on, ref } from "@mewhhaha/ruwuter/components";
-import { SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import { ref, Client, SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import * as events from "@mewhhaha/ruwuter/events";
+import clickHref from "./click.client.ts?url&no-inline";
 import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
-import clientUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
-
-// Wrap client functions with on() so the routes generator annotates them.
-export const click = on(function click(ev: Event, signal: AbortSignal) {
-  alert(this.msg);
-});
 
 export default function HomePage() {
+  const greeting = ref("hai~");
   return (
       <html>
         <head>
@@ -105,8 +101,8 @@ export default function HomePage() {
             crossorigin="anonymous"
             integrity="sha256-0957yKwrGW4niRASx0/UxJxBY/xBhYK63vDCnTF7hH4="
           ></script>
-          <script type="module" src={clientUrl}></script> 
-          <script type="module" src={resolveUrl}></script> 
+          <Client />
+          <script type="module" src={resolveUrl}></script>
         </head>
         <body>
           <SuspenseProvider>
@@ -118,8 +114,8 @@ export default function HomePage() {
                 Click me (fixi)
               </button>
               <div id="result"></div>
-              {/* Client example (new on + bind). Handlers must be wrapped in on(). */}
-              <button bind={{ msg: "hai~" }} on={click}>
+              {/* Client example using URL-based handler modules. */}
+              <button bind={{ msg: greeting }} on={events.click(clickHref)}>
                 Click me (client)
               </button>
             </div>
@@ -127,6 +123,11 @@ export default function HomePage() {
         </body>
       </html>
   );
+}
+
+// app/click.client.ts
+export default function click(this: { msg: { get(): string } }, _ev: Event, _signal: AbortSignal) {
+  alert(this.msg.get());
 }
 ```
 
@@ -284,7 +285,7 @@ export default function Dashboard() {
   - Wrap your root HTML with `SuspenseProvider`.
   - `SuspenseProvider` now appends a single `<Resolve />` after its children, so wrapping your document/body is sufficient for streaming.
   - If you prefer to control placement yourself, use `<SuspenseProvider resolve={false}>` and render `<Resolve />` where you want it. Add `nonce` for strict CSP.
-- Handlers used with `on={...}` and URL-addressable components must be exported and wrapped in `on()`.
+- Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerHref)`).
 - Function-valued attributes (e.g., `class={fn}` or `hidden={fn}`) are sent in the hydration payload and computed client-side; they re-run automatically when `ref()` values change.
 
 ### Using Both fixi and Client
@@ -303,8 +304,8 @@ fixi and the Client runtime solve different problems and work great together:
 
 - Combine them
   - Use fixi for networking and server-rendered HTML; use Client for local UI polish.
-  - If you attach both fixi and a client handler via `on={...}` to the same element, default behavior will proceed unless you call `ev.preventDefault()` inside your client handler. Prefer sibling/wrapper elements, or let the client handler perform the fetch and DOM update itself.
-  - Keep client handlers small and self-contained; export handlers from route modules wrapped in `$` and they are served as tiny ESM modules at `./<export>.js`.
+  - If you attach both fixi and a client handler tuple via `on={...}`, default browser behavior continues unless you call `ev.preventDefault()` inside your client handler. Prefer sibling/wrapper elements, or let the client handler perform the fetch and DOM update itself.
+  - Keep client handlers small and self-contained; place them in sidecar `*.client.ts` files and import their URLs with `?url`.
   - For strict CSP, use `<Client nonce={cspNonce} />`.
 
 ### Shipping the Client Runtime
@@ -358,23 +359,25 @@ For strict CSP, pass a nonce to both `<Client nonce={cspNonce} />` and `<Resolve
 
 ### Client Interactions and Refs (New)
 
-Ruwuter ships a tiny client interaction runtime with a unified `on` prop. Define named functions like `function click(){}`, `function input(){}`, `function mount(){}`, and `function unmount(){}` — and wrap any function you pass to `on={...}` in `$` so it can be loaded on demand. Bound state comes from `bind={...}` and can include shared `ref()` objects.
+Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their URLs with `?url`, and build tuples like `events.click(handlerHref)` or `events.attribute(attrHref, scope)`. Bound state comes from `bind={...}` and can include shared `ref()` objects.
 
 ```tsx
-// app/_index.tsx
-import { Client, ref, on } from "@mewhhaha/ruwuter/components";
+// app/click.client.ts
+export default function click(this: { count: { set(updater: (v: number) => number): void } }, _ev: Event) {
+  this.count.set((v) => v + 1);
+}
 
-// Exported handler shipped as a tiny ESM module via ./click.js
-export const click = on(function click(ev: Event, signal: AbortSignal) {
-  this.count.set((v: number) => v + 1);
-});
+// app/_index.tsx
+import { Client, ref } from "@mewhhaha/ruwuter/components";
+import * as events from "@mewhhaha/ruwuter/events";
+import clickHref from "./click.client.ts?url";
 
 export default function HomePage() {
   const count = ref(0);
   return (
     <html>
       <body>
-        <button bind={{ count }} on={click}>
+        <button bind={{ count }} on={events.click(clickHref)}>
           +1
         </button>
         <Client />
@@ -384,41 +387,8 @@ export default function HomePage() {
 }
 ```
 
-- Lifecycle: `on={[function mount(){}, function unmount(){}]}`. `mount` fires after `DOMContentLoaded`; `unmount` fires when removed.
-- Attribute binding: function‑valued props (e.g., `class={fn}` or `hidden={fn}`) compute from `this` (the bound object). If those functions read a `ref`, they re‑run when that ref changes.
-
-### Component Reloads (Built‑in)
-
-Wrap exported components with `$` to make them addressable by URL. Ruwuter serves them at `./<Export>.html` and you can wire them declaratively:
-
-```html
-<div id="panel" data-rw-src="/users/user#Panel" data-rw-trigger="click"></div>
-```
-
-- `data-rw-src` points to the route + export name (e.g., `/users/user#Panel`).
-- `data-rw-trigger` attaches a reload to an event on the same element; or dispatch `new Event("rw:reload")` yourself.
-
-Example:
-
-```tsx
-// app/users.user.tsx
-import { Client, on } from "@mewhhaha/ruwuter/components";
-
-export const Panel = on(function Panel({ loaderData }: { loaderData: any }) {
-  return <div>{loaderData.user.name}</div>;
-});
-
-export default function Page({ loaderData }: { loaderData: any }) {
-  return (
-    <html>
-      <body>
-        <div id="panel" data-rw-src="/users/user#Panel" data-rw-trigger="click" />
-        <Client />
-      </body>
-    </html>
-  );
-}
-```
+- Lifecycle: `on={[events.mount(mountHref), events.unmount(unmountHref)]}`. `mount` fires after `DOMContentLoaded`; `unmount` fires when the element is removed.
+- Attribute binding: use `hidden={events.attribute(hiddenHref, { show })}`. Attribute handlers run with the provided scope as `this` and re-run whenever watched refs change.
 
 ### Hydration Boundaries (New)
 

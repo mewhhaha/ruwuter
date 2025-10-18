@@ -1,6 +1,7 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.mts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, type fragment, Router } from "../src/router.mts";
 import { Client, ref } from "../src/components/client.mts";
+import * as events from "../src/events.mts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -14,8 +15,7 @@ const makeCtx = () => {
 describe("Ref hydration and on boundary", () => {
   it("emits hydration boundary and hydrates refs in bind payload", async () => {
     const count = ref(5);
-    function click(_ev: Event, _signal: AbortSignal) {}
-    (click as any).href = "./click.js";
+    const clickHref = "./handlers/click.client.js";
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -25,7 +25,7 @@ describe("Ref hydration and on boundary", () => {
           default: () => (
             <html>
               <body>
-                <button id="btn" bind={{ count, by: 1 }} on={click}>
+                <button id="btn" bind={{ count, by: 1 }} on={events.click(clickHref)}>
                   X
                 </button>
                 <Client />
@@ -49,4 +49,3 @@ describe("Ref hydration and on boundary", () => {
     expect(html).toContain('data-hydrate="h_');
   });
 });
-

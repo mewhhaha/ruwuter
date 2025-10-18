@@ -19,11 +19,34 @@ export function describe(name: string, fn: () => void) {
   }
 }
 
-export function it(name: string, fn: () => any | Promise<any>) {
+type TestOptions = {
+  permissions?: Deno.PermissionOptionsObject;
+};
+
+export function it(name: string, fn: () => any | Promise<any>): void;
+export function it(
+  name: string,
+  options: TestOptions,
+  fn: () => any | Promise<any>,
+): void;
+export function it(
+  name: string,
+  optionsOrFn: TestOptions | (() => any | Promise<any>),
+  maybeFn?: () => any | Promise<any>,
+) {
   const fullName = [...nameStack, name].join(" > ");
-  Deno.test(fullName, async () => {
-    await fn();
-  });
+  const fn = typeof optionsOrFn === "function" ? optionsOrFn : maybeFn;
+  if (!fn) throw new Error("Test function is required");
+  const options = typeof optionsOrFn === "function" ? undefined : optionsOrFn;
+  Deno.test(
+    {
+      name: fullName,
+      permissions: options?.permissions,
+    },
+    async () => {
+      await fn();
+    },
+  );
 }
 
 type ExpectObj<T> = {

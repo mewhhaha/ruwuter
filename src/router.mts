@@ -21,15 +21,13 @@
  */
 
 import type { JSX } from "./runtime/jsx.mts";
-import { into, isHtml, type Html } from "./runtime/node.mts";
+import { type Html, into, isHtml } from "./runtime/node.mts";
 // SuspenseProvider must be applied by the consumer in their layout/document.
 import { bindContext, runWithContextStore } from "./components/context.mts";
 import { runWithHooksStore } from "./runtime/hooks.mts";
 
 export type { Html } from "./runtime/node.mts";
 export type { JSX } from "./runtime/jsx.mts";
-
-const CLIENT_FN_SYMBOL = Symbol.for("@mewhhaha/ruwuter.clientfn");
 
 /**
  * Renders an Html value to a string.
@@ -116,12 +114,6 @@ type ComponentWithLoader = ((args: Record<string, unknown>) => unknown) & {
   loader?: loader;
 };
 
-type ClientFunction = ((...args: unknown[]) => unknown) & {
-  [CLIENT_FN_SYMBOL]?: true;
-  href?: string;
-  hrefHtml?: string;
-};
-
 function isFunction<Fn extends (...args: unknown[]) => unknown>(
   value: unknown,
 ): value is Fn {
@@ -140,11 +132,6 @@ const hasToPromise = (value: unknown): value is { toPromise: () => Promise<strin
   if (!value || typeof value !== "object") return false;
   const method = Reflect.get(value, "toPromise");
   return typeof method === "function";
-};
-
-const isClientFunction = (value: unknown): value is ClientFunction => {
-  if (!isFunction(value)) return false;
-  return Reflect.get(value, CLIENT_FN_SYMBOL) === true;
 };
 
 /**
@@ -173,11 +160,6 @@ const HTML_HEADERS = {
   "Cache-Control": "no-store",
 } as const;
 
-const JS_HEADERS = {
-  "Content-Type": "application/javascript; charset=utf-8",
-  "Cache-Control": "no-store",
-} as const;
-
 const streamHtml = (value: Html): Response => {
   return new Response(value.toReadableStream(), {
     status: 200,
@@ -192,34 +174,19 @@ const stringHtml = (body: string): Response => {
   });
 };
 
-const moduleResponse = (fn: (...args: unknown[]) => unknown): Response => {
-  const source = fn.toString();
-  const decl =
-    source.startsWith("function") || source.startsWith("async function")
-      ? source
-      : `(${source})`;
-  return new Response(`export default ${decl};\n`, {
-    status: 200,
-    headers: JS_HEADERS,
-  });
-};
-
 const notFound = (): Response => new Response(null, { status: 404 });
 
-type AssetExtension = "js" | "html";
-
-const assetPattern = /^f(\d+)-([^./]+)\.(js|html)$/;
+const assetPattern = /^f(\d+)-([^./]+)\.html$/;
 
 const parseAssetRequest = (
   asset: string,
-): { exportName: string; ext: AssetExtension; fragmentIndex: number } | undefined => {
+): { exportName: string; fragmentIndex: number } | undefined => {
   const match = assetPattern.exec(asset);
   if (!match) return undefined;
   const fragmentIndex = Number.parseInt(match[1], 10);
   if (Number.isNaN(fragmentIndex)) return undefined;
   const exportName = match[2];
-  const ext = match[3] as AssetExtension;
-  return { exportName, ext, fragmentIndex };
+  return { exportName, fragmentIndex };
 };
 
 const toParams = (
@@ -269,22 +236,8 @@ const normalizeRendered = async (rendered: unknown): Promise<Response> => {
     const body = await rendered.toPromise();
     return stringHtml(body);
   }
-  const body =
-    rendered == null
-      ? ""
-      : typeof rendered === "string"
-        ? rendered
-        : String(rendered);
+  const body = rendered == null ? "" : typeof rendered === "string" ? rendered : String(rendered);
   return stringHtml(body);
-};
-
-const serveJsAsset = (
-  mod: mod,
-  exportName: string,
-): Response | undefined => {
-  const target = getExportFunction<(...args: unknown[]) => unknown>(mod, exportName);
-  if (!target) return undefined;
-  return moduleResponse(target);
 };
 
 const serveHtmlAsset = async (
@@ -328,32 +281,9 @@ const serveAsset = async (
 
   const { mod } = fragment;
 
-  if (parsed.ext === "js") {
-    return serveJsAsset(mod, parsed.exportName) ?? notFound();
-  }
-
   const htmlResponse = await serveHtmlAsset(mod, parsed.exportName, ctx);
   return htmlResponse ?? notFound();
 };
-
-const assignClientHrefs = (fragments: fragment[]): void => {
-  for (let index = 0; index < fragments.length; index++) {
-    const { mod } = fragments[index];
-    const prefix = `f${index}-`;
-    for (const key in mod) {
-      const value = mod[key];
-      if (!isClientFunction(value)) continue;
-      if (value.href == null) {
-        value.href = `./${prefix}${key}.js`;
-      }
-      if (/^[A-Z]/.test(key) && value.hrefHtml == null) {
-        value.hrefHtml = `./${prefix}${key}.html`;
-      }
-    }
-  }
-};
-
-
 
 export const Router = (routes: route[]): router => {
   const handle = (
@@ -388,8 +318,6 @@ export const Router = (routes: route[]): router => {
           params: clonedParams,
           context: args,
         };
-
-        assignClientHrefs(fragments);
 
         if (assetName !== undefined) {
           return await serveAsset(fragments, assetName, ctx);
@@ -426,7 +354,7 @@ export const Router = (routes: route[]): router => {
 
           return new Response(null, { status: 500 });
         }
-      }),
+      })
     );
   };
 

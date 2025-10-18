@@ -1,10 +1,11 @@
 {
   "name": "@mewhhaha/ruwuter",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
   "exports": {
     ".": "./src/router.mts",
     "./components": "./src/components/index.mts",
+    "./events": "./src/events.mts",
     "./fs-routes": "./src/fs-routes/js.mts",
     "./types": "./src/types.mts",
     "./jsx-runtime": "./src/runtime/jsx-runtime.mts",
@@ -58,6 +59,7 @@
     "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20251011.0",
     "@mewhhaha/ruwuter/jsx-runtime": "./src/runtime/jsx-runtime.mts",
     "@mewhhaha/ruwuter/jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
+    "@mewhhaha/ruwuter/events": "./src/events.mts",
     "urlpattern-polyfill": "npm:urlpattern-polyfill@^10.1.0"
   }
 }
