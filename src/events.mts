@@ -23,8 +23,8 @@ export type ClientEventTuple<
   Fn extends (...args: any[]) => unknown = AnyHandler,
   Type extends string = string,
 > =
-  | [Type, HandlerModule<Fn>]
-  | [Type, HandlerModule<Fn>, EventOptions];
+  | [Type, HandlerModule<AnyHandler>]
+  | [Type, HandlerModule<AnyHandler>, EventOptions];
 
 type AttrScope = Record<string, unknown>;
 
@@ -34,7 +34,7 @@ export type ClientAttrDescriptor<
   Scope extends AttrScope | undefined = AttrScope,
 > = {
   readonly __ruwuterAttr: true;
-  href: HandlerModule<Fn>;
+  href: HandlerModule<AnyHandler>;
   scope?: Scope;
 };
 
@@ -50,7 +50,13 @@ export function on<Type extends string, Fn extends (...args: any[]) => unknown>(
   href: HandlerModule<Fn>,
   options?: EventOptions,
 ): ClientEventTuple<Fn, Type> {
-  return options === undefined ? [type, href] : [type, href, options];
+  const moduleHref = href as HandlerModule<AnyHandler>;
+  return (options === undefined
+    ? [type, moduleHref]
+    : [type, moduleHref, options]) as ClientEventTuple<
+      Fn,
+      Type
+    >;
 }
 
 type EventFactory<Type extends string, Ev extends Event> = <
@@ -61,7 +67,7 @@ type EventFactory<Type extends string, Ev extends Event> = <
   options?: EventOptions,
 ) => ClientEventTuple<Handler<This, Ev, Result>, Type>;
 
-const eventFactory = <Type extends string, Ev extends Event>(
+const eventFactory = <Type extends string, Ev extends Event,>(
   type: Type,
 ): EventFactory<Type, Ev> => {
   return function <This = unknown, Result = unknown | Promise<unknown>>(
@@ -101,7 +107,7 @@ type LifecycleFactory<Type extends string> = <
   options?: EventOptions,
 ) => ClientEventTuple<Handler<This, Event, Result>, Type>;
 
-const lifecycleFactory = <Type extends "mount" | "unmount">(
+const lifecycleFactory = <Type extends "mount" | "unmount",>(
   type: Type,
 ): LifecycleFactory<Type> => {
   return function <This = unknown, Result = unknown | Promise<unknown>>(
@@ -132,7 +138,7 @@ type AttributeFactory = <
 
 export const attribute: AttributeFactory = (href, scope) => ({
   __ruwuterAttr: true,
-  href,
+  href: href as HandlerModule<AnyHandler>,
   scope,
 });
 
