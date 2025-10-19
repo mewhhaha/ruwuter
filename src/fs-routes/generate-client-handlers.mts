@@ -1,6 +1,6 @@
 import path from "node:path";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
-import { Dirent } from "fs";
+import { Dirent } from "node:fs";
 
 const CLIENT_FILE_PATTERN = /\.client\.(?:[cm]?ts|tsx|[cm]?js)$/i;
 const IGNORED_DIRS = new Set([
