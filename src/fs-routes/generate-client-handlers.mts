@@ -2,149 +2,150 @@ import path from "node:path";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 
 const CLIENT_FILE_PATTERN = /\.client\.(?:[cm]?ts|tsx|[cm]?js)$/i;
-const SOURCE_FILE_PATTERN = /\.(?:[cm]?ts|tsx|jsx|[cm]?js)$/i;
-const IGNORED_DIRS = new Set(["node_modules", ".git", ".router", "dist", "build"]);
+const IGNORED_DIRS = new Set([
+    "node_modules",
+    ".git",
+    ".router",
+    "dist",
+    "build",
+]);
+const DECLARATION_SUFFIX = "?url&no-inline.d.ts";
 
 type DirEntry = {
-  name: string;
-  path: string;
-  isDirectory: boolean;
+    name: string;
+    path: string;
+    isDirectory: boolean;
 };
 
-const toPosix = (value: string): string => value.replaceAll(path.sep, "/");
-
 const readEntries = async (dir: string): Promise<DirEntry[]> => {
-  const items = await readdir(dir, { withFileTypes: true });
-  return items
-    .filter((entry) => !IGNORED_DIRS.has(entry.name))
-    .map((entry) => ({
-      name: entry.name,
-      path: path.join(dir, entry.name),
-      isDirectory: entry.isDirectory(),
-    }));
+    const items = await readdir(dir, { withFileTypes: true });
+    return items
+        .filter((entry) => !IGNORED_DIRS.has(entry.name))
+        .map((entry) => ({
+            name: entry.name,
+            path: path.join(dir, entry.name),
+            isDirectory: entry.isDirectory(),
+        }));
 };
 
 const walk = async (root: string): Promise<string[]> => {
-  const stack: DirEntry[] = [{ name: "", path: root, isDirectory: true }];
-  const files: string[] = [];
+    const stack: DirEntry[] = [{ name: "", path: root, isDirectory: true }];
+    const files: string[] = [];
 
-  while (stack.length) {
-    const current = stack.pop()!;
-    if (!current.isDirectory) continue;
-    const entries = await readEntries(current.path);
-    for (const entry of entries) {
-      if (entry.isDirectory) {
-        stack.push(entry);
-        continue;
-      }
-      files.push(entry.path);
+    while (stack.length) {
+        const current = stack.pop()!;
+        if (!current.isDirectory) continue;
+        const entries = await readEntries(current.path);
+        for (const entry of entries) {
+            if (entry.isDirectory) {
+                stack.push(entry);
+                continue;
+            }
+            files.push(entry.path);
+        }
     }
-  }
 
-  return files;
+    return files;
 };
 
 const ensureOutputDir = async (outputFile: string): Promise<void> => {
-  const dir = path.dirname(outputFile);
-  await mkdir(dir, { recursive: true });
+    const dir = path.dirname(outputFile);
+    await mkdir(dir, { recursive: true });
 };
 
-const relativeImportPath = (fromDir: string, toFile: string): string => {
-  const rel = toPosix(path.relative(fromDir, toFile));
-  return rel.startsWith(".") ? rel : `./${rel}`;
-};
+const gatherDeclarationFiles = async (root: string): Promise<string[]> => {
+    const stack: string[] = [root];
+    const files: string[] = [];
 
-const makeModuleBlock = (
-  moduleSpecifier: string,
-  importPath: string,
-): string => {
-  return [
-    `declare module ${moduleSpecifier} {`,
-    `  import type { HandlerModule, HandlerAssert } from "@mewhhaha/ruwuter/events";`,
-    `  type Fn = HandlerAssert<typeof import("${importPath}")["default"]>;`,
-    `  const href: HandlerModule<Fn>;`,
-    `  export default href;`,
-    `}`,
-  ].join("\n");
-};
+    while (stack.length) {
+        const current = stack.pop()!;
+        let entries;
+        try {
+            entries = await readdir(current, { withFileTypes: true });
+        } catch {
+            continue;
+        }
 
-export const generateClientHandlerTypes = async (appFolder: string): Promise<void> => {
-  const resolvedAppFolder = path.resolve(appFolder);
-  const routesFolder = path.join(resolvedAppFolder, "routes");
-
-  let allFiles: string[] = [];
-  try {
-    allFiles = await walk(resolvedAppFolder);
-  } catch {
-    await rm(
-      path.join(
-        ".router",
-        "types",
-        path.relative(process.cwd(), resolvedAppFolder) || path.basename(resolvedAppFolder),
-        "+client-handlers.d.ts",
-      ),
-      { force: true },
-    );
-    return;
-  }
-
-  const handlerFiles = allFiles.filter((file) => CLIENT_FILE_PATTERN.test(file));
-  if (handlerFiles.length === 0) {
-    await rm(
-      path.join(
-        ".router",
-        "types",
-        path.relative(process.cwd(), resolvedAppFolder) || path.basename(resolvedAppFolder),
-        "+client-handlers.d.ts",
-      ),
-      { force: true },
-    );
-    return;
-  }
-
-  const sourceFiles = allFiles.filter((file) => SOURCE_FILE_PATTERN.test(file));
-  if (sourceFiles.length === 0) {
-    sourceFiles.push(path.join(resolvedAppFolder, "index.ts"));
-  }
-
-  const relativeAppFolder = path.relative(process.cwd(), resolvedAppFolder) ||
-    path.basename(resolvedAppFolder);
-  const outputFile = path.join(".router", "types", relativeAppFolder, "+client-handlers.d.ts");
-  await ensureOutputDir(outputFile);
-  const outputDir = path.dirname(outputFile);
-
-  const blocks: string[] = [];
-  const seen = new Set<string>();
-
-  for (const handlerAbs of handlerFiles) {
-    const handlerImportPath = relativeImportPath(outputDir, handlerAbs);
-
-    for (const importer of sourceFiles) {
-      const importerDir = path.dirname(importer);
-      const relativeToImporter = relativeImportPath(importerDir, handlerAbs);
-      const baseSpec = toPosix(relativeToImporter);
-
-      const explicit = `${baseSpec}?url`;
-      if (!seen.has(explicit)) {
-        blocks.push(makeModuleBlock(JSON.stringify(explicit), handlerImportPath));
-        seen.add(explicit);
-      }
-
-      const suffixSpec = `\`${baseSpec}?url\${string}\``;
-      if (!seen.has(suffixSpec)) {
-        blocks.push(makeModuleBlock(suffixSpec, handlerImportPath));
-        seen.add(suffixSpec);
-      }
-
-      const reorderedSpec = `\`${baseSpec}?\${string}&url\${string}\``;
-      if (!seen.has(reorderedSpec)) {
-        blocks.push(makeModuleBlock(reorderedSpec, handlerImportPath));
-        seen.add(reorderedSpec);
-      }
+        for (const entry of entries) {
+            const entryPath = path.join(current, entry.name);
+            if (entry.isDirectory()) {
+                stack.push(entryPath);
+                continue;
+            }
+            if (!entry.name.endsWith(DECLARATION_SUFFIX)) continue;
+            files.push(entryPath);
+        }
     }
-  }
 
-  const banner = `// Auto-generated by generateClientHandlerTypes. Do not edit manually.`;
-  const body = blocks.join("\n\n");
-  await writeFile(outputFile, `${banner}\n\n${body}\n`);
+    return files;
+};
+
+const createDeclarationContent = (handlerFileName: string): string => {
+    return [
+        "// Auto-generated by generateClientHandlerTypes. Do not edit manually.",
+        "",
+        'import type { HandlerModule, HandlerAssert } from "@mewhhaha/ruwuter/events";',
+        `import type * as Mod from "./${handlerFileName}";`,
+        "",
+        "type Fn = HandlerAssert<Mod.default>;",
+        "declare const href: HandlerModule<Fn>;",
+        "export default href;",
+        "",
+    ].join("\n");
+};
+
+const removeStaleDeclarations = async (
+    root: string,
+    keep: Set<string>,
+): Promise<void> => {
+    const existing = await gatherDeclarationFiles(root);
+    await Promise.all(
+        existing
+            .filter((file) => !keep.has(path.resolve(file)))
+            .map((file) => rm(file, { force: true })),
+    );
+};
+
+export const generateClientHandlerTypes = async (
+    appFolder: string,
+): Promise<void> => {
+    const resolvedAppFolder = path.resolve(appFolder);
+    const relativeAppFolder =
+        path.relative(process.cwd(), resolvedAppFolder) ||
+        path.basename(resolvedAppFolder);
+    const typeRoot = path.join(".router", "types");
+    const typeAppRoot = path.join(typeRoot, relativeAppFolder);
+
+    let handlerFiles: string[] = [];
+    try {
+        const allFiles = await walk(resolvedAppFolder);
+        handlerFiles = allFiles.filter((file) =>
+            CLIENT_FILE_PATTERN.test(file),
+        );
+    } catch {
+        await removeStaleDeclarations(typeAppRoot, new Set());
+        return;
+    }
+
+    if (handlerFiles.length === 0) {
+        await removeStaleDeclarations(typeAppRoot, new Set());
+        return;
+    }
+
+    const expected = new Set<string>();
+
+    for (const handlerAbs of handlerFiles) {
+        const relativeHandler = path.relative(resolvedAppFolder, handlerAbs);
+        const outputFile = path.join(
+            typeAppRoot,
+            `${relativeHandler}${DECLARATION_SUFFIX}`,
+        );
+        expected.add(path.resolve(outputFile));
+
+        await ensureOutputDir(outputFile);
+        const content = createDeclarationContent(path.basename(handlerAbs));
+        await writeFile(outputFile, content);
+    }
+
+    await removeStaleDeclarations(typeAppRoot, expected);
 };
