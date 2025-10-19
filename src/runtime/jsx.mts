@@ -1,12 +1,18 @@
 import type { Html } from "./node.mts";
 import type { FixiAttributes } from "./fixi.mts";
-import type { Ref as ClientRef } from "../components/client.mts";
+import type { Handler, Ref as ClientRef } from "../components/client.mts";
 import type { ClientAttrDescriptor, ClientEventTuple } from "../events.mts";
 
 /**
  * JSX namespace containing type definitions for JSX elements and attributes.
  */
 export namespace JSX {
+  type BindTarget = Record<string, unknown> | undefined;
+  type BindContext<Bind> = [Bind] extends [undefined] ? undefined : Bind;
+  type HtmlEventBindings<Bind> =
+    | ClientEventTuple<Handler<BindContext<Bind>, any, unknown>>
+    | ClientEventTuple<Handler<BindContext<Bind>, any, unknown>>[];
+
   interface AriaAttributes {
     // ARIA attributes
     "aria-activedescendant"?: string | undefined;
@@ -97,12 +103,14 @@ export namespace JSX {
   }
 
   // typed-html
-  export interface HtmlTag extends FixiAttributes, AriaAttributes {
+  export interface HtmlTag<Bind extends BindTarget = BindTarget>
+    extends FixiAttributes,
+      AriaAttributes {
     // Ruwuter client additions
-    bind?: Record<string, any> | undefined;
-    on?: ClientEventTuple<any, any> | ClientEventTuple<any, any>[] | undefined;
+    bind?: Bind;
+    on?: HtmlEventBindings<Bind> | undefined;
   }
-  export interface HtmlBodyTag {
+  export interface HtmlBodyTag<Bind extends BindTarget = BindTarget> {
     onAfterprint?: undefined | string;
     onBeforeprint?: undefined | string;
     onBeforeonload?: undefined | string;
@@ -123,7 +131,7 @@ export namespace JSX {
     onUndo?: undefined | string;
     onUnload?: undefined | string;
   }
-  export interface HtmlTag {
+  export interface HtmlTag<Bind extends BindTarget = BindTarget> {
     onContextmenu?: undefined | string;
     onKeydown?: undefined | string;
     onKeypress?: undefined | string;
@@ -156,11 +164,11 @@ export namespace JSX {
     onSelect?: undefined | string;
     onSubmit?: undefined | string;
   }
-  export interface HtmlInputTag extends FormEvents {
+  export interface HtmlInputTag<Bind extends BindTarget = BindTarget> extends FormEvents {
     onChange?: undefined | string;
   }
-  export interface HtmlFieldSetTag extends FormEvents {}
-  export interface HtmlFormTag extends FormEvents {}
+  export interface HtmlFieldSetTag<Bind extends BindTarget = BindTarget> extends FormEvents {}
+  export interface HtmlFormTag<Bind extends BindTarget = BindTarget> extends FormEvents {}
   export interface MediaEvents {
     onAbort?: undefined | string;
     onCanplay?: undefined | string;
@@ -186,13 +194,13 @@ export namespace JSX {
     onVolumechange?: undefined | string;
     onWaiting?: undefined | string;
   }
-  export interface HtmlAudioTag extends MediaEvents {}
-  export interface HtmlEmbedTag extends MediaEvents {}
-  export interface HtmlImageTag extends MediaEvents {}
-  export interface HtmlObjectTag extends MediaEvents {}
-  export interface HtmlVideoTag extends MediaEvents {}
+  export interface HtmlAudioTag<Bind extends BindTarget = BindTarget> extends MediaEvents {}
+  export interface HtmlEmbedTag<Bind extends BindTarget = BindTarget> extends MediaEvents {}
+  export interface HtmlImageTag<Bind extends BindTarget = BindTarget> extends MediaEvents {}
+  export interface HtmlObjectTag<Bind extends BindTarget = BindTarget> extends MediaEvents {}
+  export interface HtmlVideoTag<Bind extends BindTarget = BindTarget> extends MediaEvents {}
 
-  export interface HtmlTag {
+  export interface HtmlTag<Bind extends BindTarget = BindTarget> {
     accesskey?: string | undefined;
     class?: string | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
     contenteditable?: string | undefined;
@@ -214,7 +222,7 @@ export namespace JSX {
     children?: HtmlNode;
     dangerouslySetInnerHTML?: { __html: string } | undefined;
   }
-  export interface HtmlAnchorTag extends HtmlTag {
+  export interface HtmlAnchorTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     href?: string | undefined;
     target?: string | undefined;
     download?: string | undefined;
@@ -224,7 +232,7 @@ export namespace JSX {
     hreflang?: string | undefined;
     type?: string | undefined;
   }
-  export interface HtmlAreaTag extends HtmlTag {
+  export interface HtmlAreaTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     alt?: string | undefined;
     coords?: string | undefined;
     shape?: string | undefined;
@@ -236,22 +244,22 @@ export namespace JSX {
     hreflang?: string | undefined;
     type?: string | undefined;
   }
-  export interface HtmlAudioTag extends HtmlTag {
+  export interface HtmlAudioTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     src?: string | undefined;
     autobuffer?: string | undefined;
     autoplay?: string | undefined;
     loop?: string | undefined;
     controls?: string | undefined;
   }
-  export interface BaseTag extends HtmlTag {
+  export interface BaseTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     href?: string | undefined;
     target?: string | undefined;
   }
-  export interface HtmlQuoteTag extends HtmlTag {
+  export interface HtmlQuoteTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     cite?: string | undefined;
   }
-  export interface HtmlBodyTag extends HtmlTag {}
-  export interface HtmlButtonTag extends HtmlTag {
+  export interface HtmlBodyTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
+  export interface HtmlButtonTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     action?: string | undefined;
     autofocus?: string | undefined;
     disabled?: boolean | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
@@ -273,32 +281,32 @@ export namespace JSX {
     type?: string | undefined;
     value?: string | undefined;
   }
-  export interface HtmlDataListTag extends HtmlTag {}
-  export interface HtmlCanvasTag extends HtmlTag {
+  export interface HtmlDataListTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
+  export interface HtmlCanvasTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     width?: string | undefined;
     height?: string | undefined;
   }
-  export interface HtmlTableColTag extends HtmlTag {
+  export interface HtmlTableColTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     span?: string | undefined;
   }
-  export interface HtmlTableSectionTag extends HtmlTag {}
-  export interface HtmlTableRowTag extends HtmlTag {}
-  export interface DataTag extends HtmlTag {
+  export interface HtmlTableSectionTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
+  export interface HtmlTableRowTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
+  export interface DataTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     value?: string | undefined;
   }
-  export interface HtmlEmbedTag extends HtmlTag {
+  export interface HtmlEmbedTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     src?: string | undefined;
     type?: string | undefined;
     width?: string | undefined;
     height?: string | undefined;
     [anything: string]: unknown;
   }
-  export interface HtmlFieldSetTag extends HtmlTag {
+  export interface HtmlFieldSetTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     disabled?: string | undefined;
     form?: string | undefined;
     name?: string | undefined;
   }
-  export interface HtmlFormTag extends HtmlTag {
+  export interface HtmlFormTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     "accept-charset"?: string | undefined;
     action?: string | undefined;
     autocomplete?: string | undefined;
@@ -309,14 +317,14 @@ export namespace JSX {
     target?: string | undefined;
   }
 
-  export interface HtmlDialogTag extends HtmlTag {
+  export interface HtmlDialogTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     open?: boolean | undefined;
   }
 
-  export interface HtmlHtmlTag extends HtmlTag {
+  export interface HtmlHtmlTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     manifest?: string | undefined;
   }
-  export interface HtmlIFrameTag extends HtmlTag {
+  export interface HtmlIFrameTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     src?: string | undefined;
     srcdoc?: string | undefined;
     name?: string | undefined;
@@ -325,7 +333,7 @@ export namespace JSX {
     width?: string | undefined;
     height?: string | undefined;
   }
-  export interface HtmlImageTag extends HtmlTag {
+  export interface HtmlImageTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     alt?: string | undefined;
     src?: string | undefined;
     crossorigin?: string | undefined;
@@ -334,7 +342,7 @@ export namespace JSX {
     width?: string | undefined;
     height?: string | undefined;
   }
-  export interface HtmlInputTag extends HtmlTag {
+  export interface HtmlInputTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     accept?: string | undefined;
     action?: string | undefined;
     alt?: string | undefined;
@@ -366,11 +374,11 @@ export namespace JSX {
     value?: string | undefined;
     width?: string | undefined;
   }
-  export interface HtmlModTag extends HtmlTag {
+  export interface HtmlModTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     cite?: string | undefined;
     datetime?: string | Date | undefined;
   }
-  export interface KeygenTag extends HtmlTag {
+  export interface KeygenTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     autofocus?: string | undefined;
     challenge?: string | undefined;
     disabled?: string | undefined;
@@ -378,14 +386,14 @@ export namespace JSX {
     keytype?: string | undefined;
     name?: string | undefined;
   }
-  export interface HtmlLabelTag extends HtmlTag {
+  export interface HtmlLabelTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     form?: string | undefined;
     for?: string | undefined;
   }
-  export interface HtmlLITag extends HtmlTag {
+  export interface HtmlLITag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     value?: string | number | undefined;
   }
-  export interface HtmlLinkTag extends HtmlTag {
+  export interface HtmlLinkTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     href?: string | undefined;
     crossorigin?: string | undefined;
     rel?: string | undefined;
@@ -395,16 +403,16 @@ export namespace JSX {
     sizes?: string | undefined;
     integrity?: string | undefined;
   }
-  export interface HtmlMapTag extends HtmlTag {
+  export interface HtmlMapTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     name?: string | undefined;
   }
-  export interface HtmlMetaTag extends HtmlTag {
+  export interface HtmlMetaTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     name?: string | undefined;
     httpEquiv?: string | undefined;
     content?: string | undefined;
     charset?: string | undefined;
   }
-  export interface HtmlMeterTag extends HtmlTag {
+  export interface HtmlMeterTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     value?: string | number | undefined;
     min?: string | number | undefined;
     max?: string | number | undefined;
@@ -412,7 +420,7 @@ export namespace JSX {
     high?: string | number | undefined;
     optimum?: string | number | undefined;
   }
-  export interface HtmlObjectTag extends HtmlTag {
+  export interface HtmlObjectTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     data?: string | undefined;
     type?: string | undefined;
     name?: string | undefined;
@@ -421,34 +429,34 @@ export namespace JSX {
     width?: string | undefined;
     height?: string | undefined;
   }
-  export interface HtmlOListTag extends HtmlTag {
+  export interface HtmlOListTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     reversed?: string | undefined;
     start?: string | number | undefined;
   }
-  export interface HtmlOptgroupTag extends HtmlTag {
+  export interface HtmlOptgroupTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     disabled?: string | undefined;
     label?: string | undefined;
   }
-  export interface HtmlOptionTag extends HtmlTag {
+  export interface HtmlOptionTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     disabled?: string | undefined;
     label?: string | undefined;
     selected?: string | undefined;
     value?: string | undefined;
   }
-  export interface HtmlOutputTag extends HtmlTag {
+  export interface HtmlOutputTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     for?: string | undefined;
     form?: string | undefined;
     name?: string | undefined;
   }
-  export interface HtmlParamTag extends HtmlTag {
+  export interface HtmlParamTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     name?: string | undefined;
     value?: string | undefined;
   }
-  export interface HtmlProgressTag extends HtmlTag {
+  export interface HtmlProgressTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     value?: string | number | undefined;
     max?: string | number | undefined;
   }
-  export interface HtmlCommandTag extends HtmlTag {
+  export interface HtmlCommandTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     type?: string | undefined;
     label?: string | undefined;
     icon?: string | undefined;
@@ -457,15 +465,15 @@ export namespace JSX {
     radiogroup?: string | undefined;
     default?: string | undefined;
   }
-  export interface HtmlLegendTag extends HtmlTag {}
-  export interface HtmlBrowserButtonTag extends HtmlTag {
+  export interface HtmlLegendTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
+  export interface HtmlBrowserButtonTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     type?: string | undefined;
   }
-  export interface HtmlMenuTag extends HtmlTag {
+  export interface HtmlMenuTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     type?: string | undefined;
     label?: string | undefined;
   }
-  export interface HtmlScriptTag extends HtmlTag {
+  export interface HtmlScriptTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     src?: string | undefined;
     type?: string | undefined;
     nonce?: string | undefined;
@@ -476,10 +484,10 @@ export namespace JSX {
     integrity?: string | undefined;
     text?: string | undefined;
   }
-  export interface HtmlDetailsTag extends HtmlTag {
+  export interface HtmlDetailsTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     open?: boolean | undefined;
   }
-  export interface HtmlSelectTag extends HtmlTag {
+  export interface HtmlSelectTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     autofocus?: string | undefined;
     disabled?: string | undefined;
     form?: string | undefined;
@@ -488,24 +496,24 @@ export namespace JSX {
     required?: string | undefined;
     size?: string | undefined;
   }
-  export interface HtmlSourceTag extends HtmlTag {
+  export interface HtmlSourceTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     src?: string | undefined;
     type?: string | undefined;
     media?: string | undefined;
   }
-  export interface HtmlStyleTag extends HtmlTag {
+  export interface HtmlStyleTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     media?: string | undefined;
     type?: string | undefined;
     disabled?: string | undefined;
     scoped?: string | undefined;
   }
-  export interface HtmlTableTag extends HtmlTag {}
-  export interface HtmlTableDataCellTag extends HtmlTag {
+  export interface HtmlTableTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
+  export interface HtmlTableDataCellTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     colspan?: string | number | undefined;
     rowspan?: string | number | undefined;
     headers?: string | undefined;
   }
-  export interface HtmlTextAreaTag extends HtmlTag {
+  export interface HtmlTextAreaTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     autofocus?: string | undefined;
     cols?: string | undefined;
     dirname?: string | undefined;
@@ -520,23 +528,23 @@ export namespace JSX {
     rows?: string | undefined;
     wrap?: string | undefined;
   }
-  export interface HtmlTableHeaderCellTag extends HtmlTag {
+  export interface HtmlTableHeaderCellTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     colspan?: string | number | undefined;
     rowspan?: string | number | undefined;
     headers?: string | undefined;
     scope?: string | undefined;
   }
-  export interface HtmlTimeTag extends HtmlTag {
+  export interface HtmlTimeTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     datetime?: string | Date | undefined;
   }
-  export interface HtmlTrackTag extends HtmlTag {
+  export interface HtmlTrackTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     default?: string | undefined;
     kind?: string | undefined;
     label?: string | undefined;
     src?: string | undefined;
     srclang?: string | undefined;
   }
-  export interface HtmlVideoTag extends HtmlTag {
+  export interface HtmlVideoTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     src?: string | undefined;
     poster?: string | undefined;
     autobuffer?: string | undefined;
@@ -546,7 +554,7 @@ export namespace JSX {
     width?: string | undefined;
     height?: string | undefined;
   }
-  export interface HtmlSvgTag extends HtmlTag {
+  export interface HtmlSvgTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     xmlns?: string | undefined;
     fill?: string | undefined;
     viewBox?: string | undefined;
@@ -557,18 +565,18 @@ export namespace JSX {
     height?: number | undefined;
   }
 
-  export interface HtmlFeTurbulenceTag extends HtmlTag {
+  export interface HtmlFeTurbulenceTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     type?: string | undefined;
     baseFrequency?: string | undefined;
     numOctaves?: string | undefined;
   }
 
-  export interface HtmlFeDisplacementMapTag extends HtmlTag {
+  export interface HtmlFeDisplacementMapTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     in?: string | undefined;
     scale?: string | undefined;
   }
 
-  export interface HtmlPathTag extends HtmlTag {
+  export interface HtmlPathTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     "stroke-linecap"?: string | undefined;
     "stroke-linejoin"?: string | undefined;
     d?: string | undefined;

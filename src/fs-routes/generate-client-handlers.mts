@@ -1,5 +1,6 @@
 import path from "node:path";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { Dirent } from "fs";
 
 const CLIENT_FILE_PATTERN = /\.client\.(?:[cm]?ts|tsx|[cm]?js)$/i;
 const IGNORED_DIRS = new Set([
@@ -59,7 +60,7 @@ const gatherDeclarationFiles = async (root: string): Promise<string[]> => {
 
     while (stack.length) {
         const current = stack.pop()!;
-        let entries;
+        let entries: Dirent<string>[];
         try {
             entries = await readdir(current, { withFileTypes: true });
         } catch {
@@ -87,7 +88,7 @@ const createDeclarationContent = (handlerFileName: string): string => {
         'import type { HandlerModule, HandlerAssert } from "@mewhhaha/ruwuter/events";',
         `import type * as Mod from "./${handlerFileName}";`,
         "",
-        "type Fn = HandlerAssert<Mod.default>;",
+        "type Fn = HandlerAssert<typeof Mod.default>;",
         "declare const href: HandlerModule<Fn>;",
         "export default href;",
         "",
