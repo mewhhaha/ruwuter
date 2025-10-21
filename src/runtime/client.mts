@@ -26,6 +26,7 @@ interface RefObject {
   get(): unknown;
   set(next: unknown | ((prev: unknown) => unknown)): void;
   toJSON(): { __ref: true; i: string; v: unknown };
+  toString(): string;
 }
 
 interface RefStore {
@@ -135,6 +136,7 @@ function initializeClientRuntime(): void {
           get: () => values.get(id),
           set: (next) => set(id, next),
           toJSON: () => ({ __ref: true as const, i: id, v: values.get(id) }),
+          toString: () => String(values.get(id)),
         };
         refs.set(id, ref);
       }

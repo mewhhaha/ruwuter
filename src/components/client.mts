@@ -27,6 +27,7 @@ export type Ref<T> = {
   get(): T;
   set(next: T | ((prev: T) => T)): void;
   toJSON(): { __ref: true; i: string; v: T };
+  toString(): string;
 };
 
 /** Creates a new ref with the given initial value. */
@@ -51,6 +52,9 @@ export function ref<T>(initial: T): Ref<T> {
       },
       toJSON() {
         return marker;
+      },
+      toString() {
+        return String(this.get());
       },
     } as Ref<T>;
   });
