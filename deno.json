@@ -1,6 +1,6 @@
 {
     "name": "@mewhhaha/ruwuter",
-    "version": "0.1.18",
+    "version": "0.1.19",
     "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
     "publish": {
         "include": ["deno.json", "README.md", "src"]
@@ -13,8 +13,8 @@
         "./types": "./src/types.mts",
         "./jsx-runtime": "./src/runtime/jsx-runtime.mts",
         "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.mts",
-        "./client.mjs": "./src/runtime/client.mts",
-        "./resolve.mjs": "./src/runtime/resolve.mts",
+        "./client.js": "./src/runtime/client.mts",
+        "./resolve.js": "./src/runtime/resolve.mts",
         "./client": "./src/runtime/client.mts",
         "./resolve": "./src/runtime/resolve.mts"
     },

@@ -329,7 +329,7 @@ export default function Document({ children }: { children: JSX.Element }) {
 }
 ```
 
-When bundling manually (e.g. with Vite), you can import the runtime URLs via the package exports and inject the scripts yourself. The `?url&no-inline` suffix tells Vite to emit dedicated `.mjs` files instead of inlining the runtime.
+When bundling manually (e.g. with Vite), you can import the runtime URLs via the package exports and inject the scripts yourself. The `?url&no-inline` suffix tells Vite to emit dedicated `.js` files instead of inlining the runtime.
 
 ```tsx
 import clientRuntimeUrl from "@mewhhaha/ruwuter/client?url&no-inline";
@@ -347,15 +347,6 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
   );
 }
 ```
-
-For plain HTML output you can reference the emitted files directly:
-
-```html
-<script type="module" src="/_client/runtime/client.mjs"></script>
-<script type="module" src="/_client/runtime/resolve.mjs"></script>
-```
-
-For strict CSP, pass a nonce to both `<Client nonce={cspNonce} />` and `<Resolve nonce={cspNonce} />`, or add the `nonce` attribute to any manual `<script>` tags.
 
 ### Client Interactions and Refs (New)
 
