@@ -8,7 +8,6 @@ A lightweight, fast TypeScript router for Cloudflare Workers with file‑based r
 - 📁 File-based routing — auto‑generated from your file structure, so no scary boilerplate
 - ⚡️ Streaming HTML — first‑class streaming responses for snappy feels
 - 🧩 Custom JSX runtime — no React required (supports dangerouslySetInnerHTML)
-- 🔌 Vite plugin — auto route gen + import.meta fixes, less yak-shaving more yay-shaving
 - ☁️ Workers‑first — optimized for Cloudflare deployments
 - 🧪 Type‑safe — great DX with TypeScript, happy typings happy life
 - 🚀 Fast — minimal overhead, maximum performance, zoom zoom~
