@@ -93,7 +93,7 @@ const generatePatternString = (routePath: string): string => {
 
 const withAssetPattern = (pattern: string): string => {
     if (pattern === "/") {
-        return "/:__asset(.+\\.html)?";
+        return "(/):__asset(.+\\.html)?";
     }
     if (pattern.endsWith("/*")) {
         return pattern;
