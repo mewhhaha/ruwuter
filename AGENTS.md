@@ -33,7 +33,7 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 ## Client Handlers
 
 - Import client handlers as modules and ask for their URL via `?url` (optionally `&no-inline`). The import yields a branded string typed as a handler URL.
-- Use the helpers from `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerUrl)`, `events.attribute(attrUrl, scope)`) to build the tuples consumed by the JSX runtime.
+- Use the helpers from `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerUrl)`) to build the tuples consumed by the JSX runtime.
 - The FS-routes generator writes handler declaration files under `.router/types/**/+client-handlers.d.ts` to ensure default exports satisfy the `(this, event, signal)` contract. Keep them up to date when adding handlers.
 - The router no longer serializes JS handlers; only HTML fragment assets are served for components.
 
@@ -41,7 +41,7 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 
 - Located in `src/runtime/jsx*.mts`.
 - Supports `bind` and `on` props on intrinsic elements.
-- Function-valued attributes are encoded as `data-client-attr-*` and computed by the client runtime via module descriptors returned from `events.attribute(...)`.
+- Function-valued attributes are not supported; only HTML-compatible values plus `bind`/`on` are emitted.
 - Do not re‑introduce inline client function paths; the runtime only emits `t: 'm'` (module) entries.
 
 ## FS‑Routes

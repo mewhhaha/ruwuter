@@ -26,18 +26,6 @@ export type ClientEventTuple<
   | [Type, HandlerModule<Fn>]
   | [Type, HandlerModule<Fn>, EventOptions];
 
-type AttrScope = Record<string, unknown>;
-
-/** Descriptor for function-valued attributes computed on the client. */
-export type ClientAttrDescriptor<
-  Fn extends (...args: any[]) => unknown = AnyHandler,
-  Scope extends AttrScope | undefined = AttrScope,
-> = {
-  readonly __ruwuterAttr: true;
-  href: HandlerModule<Fn>;
-  scope?: Scope;
-};
-
 /**
  * Creates a tuple describing a client-side event handler.
  *
@@ -111,25 +99,5 @@ export const mount: LifecycleFactory<"mount"> = (href, options) => on("mount", h
 
 /** Builds an `unmount` lifecycle tuple. */
 export const unmount: LifecycleFactory<"unmount"> = (href, options) => on("unmount", href, options);
-
-/**
- * Creates an attribute descriptor that points to a client module computing the attribute value.
- * The optional `scope` object is shallow-cloned on the client and used as `this` during updates.
- */
-type AttributeFactory = <
-  This = unknown,
-  Result = unknown | Promise<unknown>,
-  Fn extends Handler<This, Event, Result> = Handler<This, Event, Result>,
-  Scope extends AttrScope | undefined = AttrScope,
->(
-  href: HandlerModule<Fn>,
-  scope?: Scope,
-) => ClientAttrDescriptor<Fn, Scope>;
-
-export const attribute: AttributeFactory = (href, scope) => ({
-  __ruwuterAttr: true,
-  href,
-  scope,
-});
 
 export type { Handler };

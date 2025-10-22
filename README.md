@@ -350,7 +350,7 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 
 ### Client Interactions and Refs (New)
 
-Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their URLs with `?url`, and build tuples like `events.click(handlerHref)` or `events.attribute(attrHref, scope)`. Bound state comes from `bind={...}` and can include shared `ref()` objects.
+Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their URLs with `?url`, and build tuples like `events.click(handlerHref)`. Bound state comes from `bind={...}` and can include shared `ref()` objects.
 
 ```tsx
 // app/click.client.ts
@@ -379,7 +379,6 @@ export default function HomePage() {
 ```
 
 - Lifecycle: `on={[events.mount(mountHref), events.unmount(unmountHref)]}`. `mount` fires after `DOMContentLoaded`; `unmount` fires when the element is removed.
-- Attribute binding: use `hidden={events.attribute(hiddenHref, { show })}`. Attribute handlers run with the provided scope as `this` and re-run whenever watched refs change.
 
 ### Hydration Boundaries (New)
 

@@ -1,7 +1,7 @@
 import type { Html } from "./node.mts";
 import type { FixiAttributes } from "./fixi.mts";
 import type { Handler, Ref as ClientRef } from "../components/client.mts";
-import type { ClientAttrDescriptor, ClientEventTuple } from "../events.mts";
+import type { ClientEventTuple } from "../events.mts";
 
 /**
  * JSX namespace containing type definitions for JSX elements and attributes.
@@ -202,11 +202,11 @@ export namespace JSX {
 
   export interface HtmlTag<Bind extends BindTarget = BindTarget> {
     accesskey?: string | undefined;
-    class?: string | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
+    class?: string | undefined;
     contenteditable?: string | undefined;
     dir?: string | undefined;
-    hidden?: string | boolean | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
-    inert?: string | boolean | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
+    hidden?: string | boolean | undefined;
+    inert?: string | boolean | undefined;
     popover?: "auto" | "hint" | "manual";
     popovertarget?: string | undefined;
     popoveraction?: "close" | "open" | "toggle" | (string & {}) | undefined;
@@ -262,7 +262,7 @@ export namespace JSX {
   export interface HtmlButtonTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     action?: string | undefined;
     autofocus?: string | undefined;
-    disabled?: boolean | ClientAttrDescriptor | ((...args: any[]) => unknown) | undefined;
+    disabled?: boolean | undefined;
     enctype?: string | undefined;
     commandfor?: string | undefined;
     command?:

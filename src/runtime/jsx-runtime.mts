@@ -59,8 +59,7 @@ const voidElements = new Set([
 let HYDRATE_SEQ = 0;
 
 type ModuleEntry = { t: "m"; s: string; x?: string; ev?: string };
-type AttrItem = { n: string; e: ModuleEntry; a: Record<string, unknown> };
-type HydrationPayload = { bind?: unknown; on?: ModuleEntry[]; attrs?: AttrItem[] };
+type HydrationPayload = { bind?: unknown; on?: ModuleEntry[] };
 
 const escapeJsonForScript = (json: string): string => json.replaceAll("</script>", "<\\/script>");
 
@@ -116,43 +115,6 @@ export function jsx(
     }
 
     // Legacy onX handlers removed; use `on` prop instead
-
-    // Attribute binding: function-valued props (e.g., class={fn})
-    // Collect into a hydration payload array so the client can compute + update on ref changes
-    if (value && typeof value === "object") {
-      const descriptor = value as { __ruwuterAttr?: unknown; href?: unknown; scope?: unknown };
-      if (descriptor.__ruwuterAttr === true) {
-        const href = descriptor.href;
-        if (typeof href === "string" && href) {
-          const entry: ModuleEntry = { t: "m", s: href, x: "default" };
-          const args: Record<string, unknown> = Object.create(null);
-          if (descriptor.scope && typeof descriptor.scope === "object") {
-            const scopeRecord = descriptor.scope as Record<string, unknown>;
-            for (const name of Object.keys(scopeRecord)) {
-              args[name] = scopeRecord[name];
-            }
-          }
-          (ensureHydration().attrs ||= []).push({ n: key, e: entry, a: args });
-        }
-        continue;
-      }
-    }
-
-    if (typeof value === "function") {
-      // Legacy support path for pre-module attr handlers that rely on generator-assigned hrefs
-      const href = (value as { href?: unknown }).href;
-      if (typeof href === "string" && href) {
-        const entry: ModuleEntry = { t: "m", s: href, x: "default" };
-        const args: Record<string, unknown> = Object.create(null);
-        const legacyArgs = value as unknown as Record<string, unknown>;
-        for (const k of Object.keys(legacyArgs)) {
-          if (k === "href" || k === "event") continue;
-          args[k] = legacyArgs[k];
-        }
-        (ensureHydration().attrs ||= []).push({ n: key, e: entry, a: args });
-      }
-      continue;
-    }
 
     // Handle dangerouslySetInnerHTML
     if (

@@ -7,16 +7,9 @@ type ModuleEntry = {
   ev?: string;
 };
 
-type AttrEntry = {
-  n: string;
-  e: ModuleEntry;
-  a?: Record<string, unknown>;
-};
-
 type HydrationPayload = {
   bind?: unknown;
   on?: ModuleEntry[];
-  attrs?: AttrEntry[];
 };
 
 type ClientFn = (this: unknown, ev: Event, signal: AbortSignal) => unknown;
@@ -40,8 +33,6 @@ interface ElementContext {
   bind: unknown;
   controllers: Map<string, AbortController>;
   unmount: ModuleEntry[];
-  attrCleanups: Map<string, () => void>;
-  attrScopes: Map<string, Record<string, unknown>>;
 }
 
 type ModuleNamespace = Record<string, unknown>;
@@ -194,8 +185,6 @@ function initializeClientRuntime(): void {
         bind: undefined,
         controllers: new Map<string, AbortController>(),
         unmount: [],
-        attrCleanups: new Map<string, () => void>(),
-        attrScopes: new Map<string, Record<string, unknown>>(),
       };
       contexts.set(el, ctx);
     }
@@ -261,115 +250,6 @@ function initializeClientRuntime(): void {
     });
   }
 
-  function setComputedAttr(el: Element, name: string, value: unknown): void {
-    if (name === "class") {
-      const text = value == null ? "" : String(value);
-      el.setAttribute("class", text);
-      try {
-        if ("className" in el) (el as HTMLElement).className = text;
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-
-    if (name === "hidden" || name === "disabled" || name === "inert") {
-      if (value) el.setAttribute(name, "");
-      else el.removeAttribute(name);
-      return;
-    }
-
-    if (value == null) {
-      el.removeAttribute(name);
-    } else {
-      el.setAttribute(name, String(value));
-    }
-  }
-
-  function isRefObject(value: unknown): value is RefObject {
-    if (!value || typeof value !== "object") return false;
-    const record = value as Partial<RefObject>;
-    return (
-      typeof record.id === "string" &&
-      typeof record.get === "function" &&
-      typeof record.set === "function"
-    );
-  }
-
-  function collectRefs(
-    value: unknown,
-    visit: (ref: RefObject) => void,
-    seen: Set<unknown> = new Set(),
-  ): void {
-    if (!value || typeof value !== "object" || seen.has(value)) return;
-    seen.add(value);
-
-    if (isRefObject(value)) {
-      visit(value);
-      return;
-    }
-
-    if (Array.isArray(value)) {
-      value.forEach((item) => collectRefs(item, visit, seen));
-      return;
-    }
-
-    for (const key of Object.keys(value as Record<string, unknown>)) {
-      collectRefs((value as Record<string, unknown>)[key], visit, seen);
-    }
-  }
-
-  function bindComputedAttr(el: Element, spec: AttrEntry): void {
-    if (!spec || typeof spec.n !== "string" || !spec.e || spec.e.t !== "m") return;
-
-    const ctx = getContext(el);
-    const key = `${spec.n}:${spec.e.s}:${spec.e.x ?? ""}`;
-
-    ctx.attrCleanups.get(key)?.();
-
-    if (!ctx.attrScopes.has(key)) {
-      const args = spec.a && typeof spec.a === "object" ? spec.a : {};
-      ctx.attrScopes.set(key, args as Record<string, unknown>);
-    }
-    const scope = ctx.attrScopes.get(key)!;
-
-    const unsubs = new Set<() => void>();
-    let token = 0;
-
-    const run = async () => {
-      const current = ++token;
-      unsubs.forEach((dispose) => dispose());
-      unsubs.clear();
-
-      const fn = await resolveEntry(spec.e);
-      if (token !== current || !fn) return;
-
-      let result: unknown;
-      try {
-        result = await fn.call(scope, new Event("update"), new AbortController().signal);
-      } catch {
-        return;
-      }
-
-      if (token !== current) return;
-      setComputedAttr(el, spec.n, result);
-
-      collectRefs(scope, (ref) => {
-        const unsubscribe = store.watch(ref.id, () => {
-          void run();
-        });
-        unsubs.add(unsubscribe);
-      });
-    };
-
-    void run();
-
-    ctx.attrCleanups.set(key, () => {
-      unsubs.forEach((dispose) => dispose());
-      unsubs.clear();
-    });
-  }
-
   function hydratePayload(el: Element, payload: HydrationPayload): void {
     if (!payload || typeof payload !== "object") return;
     const ctx = getContext(el);
@@ -379,7 +259,6 @@ function initializeClientRuntime(): void {
     }
 
     payload.on?.forEach((entry) => attachHandler(el, entry));
-    payload.attrs?.forEach((attr) => bindComputedAttr(el, attr));
   }
 
   function findHydrationElement(script: HTMLScriptElement): Element | null {
@@ -442,9 +321,6 @@ function initializeClientRuntime(): void {
       });
       ctx.unmount.length = 0;
     }
-
-    ctx.attrCleanups.forEach((dispose) => dispose());
-    ctx.attrCleanups.clear();
 
     contexts.delete(el);
   }
