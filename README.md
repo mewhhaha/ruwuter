@@ -1,19 +1,21 @@
-# @mewhhaha/ruwuter
+# @mewhhaha/ruwuter (๑˃ᴗ˂)ﻭ
 
-A lightweight, fast TypeScript router for Cloudflare Workers with file‑based routing, streaming HTML, and a custom JSX runtime.
+A lightweight, fast TypeScript router for Cloudflare Workers with file‑based routing, streaming HTML, and a custom JSX runtime. Tiny router, big uwu energy 👉🏻👈🏻 — perfect for Workers fans who like their DX cozy *and* productive.
 
 ## Features
 
-- ✨ Zero dependencies — completely standalone
-- 📁 File-based routing — auto‑generated from your file structure
-- ⚡️ Streaming HTML — first‑class streaming responses
+- ✨ Zero dependencies — completely standalone (sparkly vibes guaranteed)
+- 📁 File-based routing — auto‑generated from your file structure, so no scary boilerplate
+- ⚡️ Streaming HTML — first‑class streaming responses for snappy feels
 - 🧩 Custom JSX runtime — no React required (supports dangerouslySetInnerHTML)
-- 🔌 Vite plugin — auto route gen + import.meta fixes
-- ☁️ Workers‑first — optimized for Cloudflare
-- 🧪 Type‑safe — great DX with TypeScript
-- 🚀 Fast — minimal overhead, maximum performance
+- 🔌 Vite plugin — auto route gen + import.meta fixes, less yak-shaving more yay-shaving
+- ☁️ Workers‑first — optimized for Cloudflare deployments
+- 🧪 Type‑safe — great DX with TypeScript, happy typings happy life
+- 🚀 Fast — minimal overhead, maximum performance, zoom zoom~
 
 ## Quick Start
+
+Ready to vibe with Workers? Follow the comfy checklist below~
 
 ```bash
 # Install @mewhhaha/ruwuter
@@ -286,7 +288,7 @@ export default function Dashboard() {
   - `SuspenseProvider` now appends a single `<Resolve />` after its children, so wrapping your document/body is sufficient for streaming.
   - If you prefer to control placement yourself, use `<SuspenseProvider resolve={false}>` and render `<Resolve />` where you want it. Add `nonce` for strict CSP.
 - Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerHref)`).
-- Function-valued attributes (e.g., `class={fn}` or `hidden={fn}`) are sent in the hydration payload and computed client-side; they re-run automatically when `ref()` values change.
+- Stick to HTML-native attribute values; dynamic state goes through `bind` + client handlers rather than function-valued props.
 
 ### Using Both fixi and Client
 
