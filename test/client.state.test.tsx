@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { type Env, type fragment, Router } from "../src/router.mts";
 import { Client, ref } from "../src/components/client.mts";
-import * as events from "../src/events.mts";
+import { events } from "../src/events.mts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];

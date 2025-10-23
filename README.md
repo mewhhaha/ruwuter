@@ -86,7 +86,7 @@ app/
 ```tsx
 // app/_index.tsx
 import { ref, Client, SuspenseProvider } from "@mewhhaha/ruwuter/components";
-import * as events from "@mewhhaha/ruwuter/events";
+import { events } from "@mewhhaha/ruwuter/events";
 import clickHref from "./click.client.ts?url&no-inline";
 import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
 
@@ -361,7 +361,7 @@ export default function click(this: { count: { set(updater: (v: number) => numbe
 
 // app/_index.tsx
 import { Client, ref } from "@mewhhaha/ruwuter/components";
-import * as events from "@mewhhaha/ruwuter/events";
+import { events } from "@mewhhaha/ruwuter/events";
 import clickHref from "./click.client.ts?url";
 
 export default function HomePage() {

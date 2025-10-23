@@ -2,13 +2,11 @@ import type { Handler } from "./components/client.mts";
 
 type EventOptions = boolean | AddEventListenerOptions;
 
-type AnyHandler = (this: unknown, ev: unknown, signal: AbortSignal) => unknown;
-
 /**
  * Branded string representing a lazily loaded client handler module.
  * The brand carries the handler type so event helpers can preserve `this` and event payload inference.
  */
-export type HandlerModule<Fn extends (...args: any[]) => unknown = AnyHandler> = string & {
+export type HandlerModule<Fn = Handler> = string & {
   readonly __ruwuterHandler?: Fn;
 };
 
@@ -20,84 +18,60 @@ export type HandlerAssert<T> = T extends Handler<infer This, infer Ev, infer Res
 
 /** Tuple representation for a client event binding. */
 export type ClientEventTuple<
-  Fn extends (...args: any[]) => unknown = AnyHandler,
+  Fn = Handler,
   Type extends string = string,
-> =
-  | [Type, HandlerModule<Fn>]
-  | [Type, HandlerModule<Fn>, EventOptions];
+> = [Type, HandlerModule<Fn>, EventOptions?];
 
-/**
- * Creates a tuple describing a client-side event handler.
- *
- * @param type - DOM event type (e.g. "click")
- * @param href - URL of the handler module
- * @param options - Optional event listener options (`capture`, `once`, etc.)
- */
-export function on<Type extends string, Fn extends (...args: any[]) => unknown>(
-  type: Type,
-  href: HandlerModule<Fn>,
-  options?: EventOptions,
-): ClientEventTuple<Fn, Type> {
-  return options === undefined ? [type, href] : [type, href, options];
-}
+/** Recursive structure for composing multiple client event tuples. */
+export type ClientEventList<
+  Fn = Handler,
+  Type extends string = string,
+> = ClientEventTuple<Fn, Type> | readonly ClientEventList<Fn, Type>[];
 
-type EventFactory<Type extends string, Ev extends Event> = <
+type EventHelper<Type extends string, Ev extends Event> = <
   This = unknown,
   Result = unknown | Promise<unknown>,
-  Fn extends Handler<This, Ev, Result> = Handler<This, Ev, Result>,
 >(
-  href: HandlerModule<Fn>,
+  href: HandlerModule<Handler<This, Ev, Result>>,
   options?: EventOptions,
-) => ClientEventTuple<Fn, Type>;
-function eventFactory<Type extends string, Ev extends Event>(
-  type: Type,
-): EventFactory<Type, Ev> {
-  function factory<
-    This = unknown,
-    Result = unknown | Promise<unknown>,
-    Fn extends Handler<This, Ev, Result> = Handler<This, Ev, Result>,
-  >(
-    href: HandlerModule<Fn>,
-    options?: EventOptions,
-  ): ClientEventTuple<Fn, Type> {
-    return on<Type, Fn>(type, href, options);
+) => ClientEventTuple<Handler<This, Ev, Result>, Type>;
+
+type LifecycleEventMap = {
+  mount: Event;
+  unmount: Event;
+};
+
+type GlobalEventMap = GlobalEventHandlersEventMap & LifecycleEventMap;
+
+type EventHelperRegistry =
+  & {
+    [Type in keyof GlobalEventMap]: EventHelper<Type, GlobalEventMap[Type]>;
   }
-  return factory as EventFactory<Type, Ev>;
-}
+  & Record<string, EventHelper<string, Event>>;
 
-/** Builds a `click` event tuple. */
-export const click: EventFactory<"click", MouseEvent> = eventFactory<"click", MouseEvent>("click");
-
-/** Builds a `submit` event tuple. */
-export const submit: EventFactory<"submit", SubmitEvent> = eventFactory<"submit", SubmitEvent>(
-  "submit",
-);
-
-/** Builds an `input` event tuple. */
-export const input: EventFactory<"input", InputEvent> = eventFactory<"input", InputEvent>("input");
-
-/** Builds a `change` event tuple. */
-export const change: EventFactory<"change", Event> = eventFactory<"change", Event>("change");
-
-/** Builds a `focus` event tuple. */
-export const focus: EventFactory<"focus", FocusEvent> = eventFactory<"focus", FocusEvent>("focus");
-
-/** Builds a `blur` event tuple. */
-export const blur: EventFactory<"blur", FocusEvent> = eventFactory<"blur", FocusEvent>("blur");
-
-type LifecycleFactory<Type extends string> = <
-  This = unknown,
-  Result = unknown | Promise<unknown>,
-  Fn extends Handler<This, Event, Result> = Handler<This, Event, Result>,
->(
-  href: HandlerModule<Fn>,
-  options?: EventOptions,
-) => ClientEventTuple<Fn, Type>;
-
-/** Builds a `mount` lifecycle tuple. */
-export const mount: LifecycleFactory<"mount"> = (href, options) => on("mount", href, options);
-
-/** Builds an `unmount` lifecycle tuple. */
-export const unmount: LifecycleFactory<"unmount"> = (href, options) => on("unmount", href, options);
+/** Dynamic registry of event helpers backed by the DOM event map. */
+export const events = new Proxy<Record<string, EventHelper<string, Event>>>(
+  Object.create(null),
+  {
+    get(target, prop: PropertyKey, receiver) {
+      if (typeof prop !== "string") {
+        return Reflect.get(target, prop, receiver);
+      }
+      const cached = target[prop];
+      if (cached !== undefined) {
+        return cached;
+      }
+      const created = ((
+        href: HandlerModule,
+        options?: EventOptions,
+      ) => options === undefined ? [prop, href] : [prop, href, options]) as EventHelper<
+        string,
+        Event
+      >;
+      target[prop] = created;
+      return created;
+    },
+  },
+) as EventHelperRegistry;
 
 export type { Handler };

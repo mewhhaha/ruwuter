@@ -1,5 +1,6 @@
 import path from "node:path";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import process from "node:process";
 
 const unescapedDotRegex = /(?<!\[)\.(?![^[]*\])/g;
 const tsRegex = /\.(m)?ts(x)?$/;

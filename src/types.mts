@@ -20,7 +20,7 @@
  */
 
 import type { Env } from "./router.mts";
-import { type JSX } from "./runtime/jsx.mts";
+import type { JSX } from "./runtime/jsx.mts";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 
 /**

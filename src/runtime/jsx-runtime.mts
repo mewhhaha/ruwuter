@@ -100,16 +100,26 @@ export function jsx(
 
     // Event handlers: expect tuple descriptors [eventType, href, options?]
     if (key === "on" && Array.isArray(value)) {
-      const base = value as unknown[];
-      const tuples = Array.isArray(base[0]) ? base : [base];
       const items: ModuleEntry[] = [];
-      for (const tuple of tuples) {
-        if (!Array.isArray(tuple) || tuple.length < 2) continue;
-        const [ev, href] = tuple as [unknown, unknown, unknown];
-        if (typeof ev !== "string" || ev.length === 0) continue;
-        if (typeof href !== "string" || href.length === 0) continue;
-        items.push({ t: "m", s: href, x: "default", ev });
-      }
+      const toModuleEntry = (tuple: readonly unknown[]): ModuleEntry | null => {
+        if (tuple.length < 2) return null;
+        const [ev, href] = tuple;
+        if (typeof ev !== "string" || ev.length === 0) return null;
+        if (typeof href !== "string" || href.length === 0) return null;
+        return { t: "m", s: href, x: "default", ev };
+      };
+      const visit = (node: unknown): void => {
+        if (!Array.isArray(node)) return;
+        const entry = toModuleEntry(node);
+        if (entry) {
+          items.push(entry);
+          return;
+        }
+        for (const part of node) {
+          visit(part);
+        }
+      };
+      visit(value);
       if (items.length) ensureHydration().on = items;
       continue;
     }

@@ -1,7 +1,7 @@
 import type { Html } from "./node.mts";
 import type { FixiAttributes } from "./fixi.mts";
 import type { Handler, Ref as ClientRef } from "../components/client.mts";
-import type { ClientEventTuple } from "../events.mts";
+import type { ClientEventList } from "../events.mts";
 
 /**
  * JSX namespace containing type definitions for JSX elements and attributes.
@@ -9,9 +9,7 @@ import type { ClientEventTuple } from "../events.mts";
 export namespace JSX {
   type BindTarget = Record<string, unknown> | undefined;
   type BindContext<Bind> = [Bind] extends [undefined] ? undefined : Bind;
-  type HtmlEventBindings<Bind> =
-    | ClientEventTuple<Handler<BindContext<Bind>, any, unknown>>
-    | ClientEventTuple<Handler<BindContext<Bind>, any, unknown>>[];
+  type HtmlEventBindings<Bind> = ClientEventList<Handler<BindContext<Bind>, any, unknown>>;
 
   interface AriaAttributes {
     // ARIA attributes
@@ -104,8 +102,7 @@ export namespace JSX {
 
   // typed-html
   export interface HtmlTag<Bind extends BindTarget = BindTarget>
-    extends FixiAttributes,
-      AriaAttributes {
+    extends FixiAttributes, AriaAttributes {
     // Ruwuter client additions
     bind?: Bind;
     on?: HtmlEventBindings<Bind> | undefined;
@@ -289,7 +286,8 @@ export namespace JSX {
   export interface HtmlTableColTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     span?: string | undefined;
   }
-  export interface HtmlTableSectionTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
+  export interface HtmlTableSectionTag<Bind extends BindTarget = BindTarget>
+    extends HtmlTag<Bind> {}
   export interface HtmlTableRowTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
   export interface DataTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
     value?: string | undefined;
@@ -466,7 +464,8 @@ export namespace JSX {
     default?: string | undefined;
   }
   export interface HtmlLegendTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
-  export interface HtmlBrowserButtonTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
+  export interface HtmlBrowserButtonTag<Bind extends BindTarget = BindTarget>
+    extends HtmlTag<Bind> {
     type?: string | undefined;
   }
   export interface HtmlMenuTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
@@ -508,7 +507,8 @@ export namespace JSX {
     scoped?: string | undefined;
   }
   export interface HtmlTableTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {}
-  export interface HtmlTableDataCellTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
+  export interface HtmlTableDataCellTag<Bind extends BindTarget = BindTarget>
+    extends HtmlTag<Bind> {
     colspan?: string | number | undefined;
     rowspan?: string | number | undefined;
     headers?: string | undefined;
@@ -528,7 +528,8 @@ export namespace JSX {
     rows?: string | undefined;
     wrap?: string | undefined;
   }
-  export interface HtmlTableHeaderCellTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
+  export interface HtmlTableHeaderCellTag<Bind extends BindTarget = BindTarget>
+    extends HtmlTag<Bind> {
     colspan?: string | number | undefined;
     rowspan?: string | number | undefined;
     headers?: string | undefined;
@@ -571,7 +572,8 @@ export namespace JSX {
     numOctaves?: string | undefined;
   }
 
-  export interface HtmlFeDisplacementMapTag<Bind extends BindTarget = BindTarget> extends HtmlTag<Bind> {
+  export interface HtmlFeDisplacementMapTag<Bind extends BindTarget = BindTarget>
+    extends HtmlTag<Bind> {
     in?: string | undefined;
     scale?: string | undefined;
   }

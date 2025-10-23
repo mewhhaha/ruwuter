@@ -3,7 +3,7 @@ import "./setup.ts";
 import { DOMParser } from "@b-fuze/deno-dom";
 import { type Env, type fragment, Router } from "../src/router.mts";
 import { Client } from "../src/components/client.mts";
-import * as events from "../src/events.mts";
+import { events } from "../src/events.mts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 
 const makeCtx = () => {
