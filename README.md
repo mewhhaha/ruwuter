@@ -132,6 +132,44 @@ export default function click(this: { msg: { get(): string } }, _ev: Event, _sig
 }
 ```
 
+### 4. Generate the router and type helpers
+
+The generator returns the route table and declaration artifacts so you can decide where to write them.
+
+#### CLI
+
+```bash
+node src/fs-routes/routes.ts ./app
+```
+
+This writes `./app/routes.ts` plus the declaration helpers under `.router/types/<app>/`.
+
+#### Programmatic
+
+```ts
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { generate } from "@mewhhaha/ruwuter/fs-routes";
+
+async function writeFsRoutes(appFolder: string) {
+  const { router, types } = await generate(appFolder);
+
+  // router → the generated route table (e.g. "./app/routes.ts")
+  // types  → parameter + client handler declarations in ".router/types/**"
+  const files = [...router, ...types];
+
+  await Promise.all(
+    files.map(async ({ path: outputPath, contents }) => {
+      const absolutePath = path.resolve(outputPath);
+      await mkdir(path.dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, contents);
+    }),
+  );
+}
+```
+
+Call this whenever your file-system routes change (during builds, watch mode, etc.).
+
 ## Examples
 
 ### Basic Route with Loader
@@ -414,8 +452,9 @@ A plugin for auto-generating routes on build and updates, and also fixing the im
 
 ```tsx
 import type { PluginOption } from "vite";
-import { generate } from "@mewhhaha/ruwuter/fs-routes";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { generate } from "@mewhhaha/ruwuter/fs-routes";
 
 export interface RuwuterPluginOptions {
   /**
@@ -436,14 +475,30 @@ export interface RuwuterPluginOptions {
  */
 export const ruwuter = (options: RuwuterPluginOptions = {}): PluginOption => {
   const { appFolder = "./app", fixImportMeta = true } = options;
+  const writeGeneratedFiles = async () => {
+    const { router, types } = await generate(appFolder);
+    const files = [...router, ...types]; // router => "./app/routes.ts", types => ".router/types/**"
+
+    await Promise.all(
+      files.map(async ({ path: outputPath, contents }) => {
+        const absolutePath = path.resolve(outputPath);
+        await mkdir(path.dirname(absolutePath), { recursive: true });
+        await writeFile(absolutePath, contents);
+      }),
+    );
+  };
 
   return {
     name: "vite-plugin-ruwuter",
 
     // Development: Watch for route changes
+    async buildStart() {
+      await writeGeneratedFiles();
+    },
+
     configureServer(server) {
       // Generate routes on server start
-      generate(appFolder);
+      void writeGeneratedFiles();
 
       // Watch for file changes and regenerate routes
       server.watcher.on("all", (event, file) => {
@@ -455,7 +510,7 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): PluginOption => {
         const resolvedFilePath = path.resolve(file);
 
         if (resolvedFilePath.startsWith(resolvedAppPath)) {
-          generate(appFolder);
+          void writeGeneratedFiles();
         }
       });
     },

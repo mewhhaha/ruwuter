@@ -1,6 +1,6 @@
-export * from "./client.mts";
-export * from "./context.mts";
-export * from "./suspense.mts";
+export * from "./client.ts";
+export * from "./context.ts";
+export * from "./suspense.ts";
 /**
  * @module
  *

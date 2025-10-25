@@ -19,8 +19,8 @@
  * ```
  */
 
-import type { Env } from "./router.mts";
-import type { JSX } from "./runtime/jsx.mts";
+import type { Env } from "./router.ts";
+import type { JSX } from "./runtime/jsx.ts";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 
 /**

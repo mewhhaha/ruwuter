@@ -4,7 +4,7 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 
 ## Architecture Overview
 
-- Entry points live under `src/` with TypeScript `.mts` modules using `moduleResolution: NodeNext`.
+- Entry points live under `src/` with TypeScript `.ts` modules using `moduleResolution: NodeNext`.
 - The router and JSX runtime are isomorphic, but the “client runtime” is a small, browser‑only JS module injected in the HTML.
 - File‑system routes live in your application (e.g. `app/`) and are processed by `src/fs-routes` to generate a static route table.
 
@@ -39,7 +39,7 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 
 ## JSX Runtime Contracts
 
-- Located in `src/runtime/jsx*.mts`.
+- Located in `src/runtime/jsx*.ts`.
 - Supports `bind` and `on` props on intrinsic elements.
 - Function-valued attributes are not supported; only HTML-compatible values plus `bind`/`on` are emitted.
 - Do not re‑introduce inline client function paths; the runtime only emits `t: 'm'` (module) entries.
@@ -47,15 +47,15 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 ## FS‑Routes
 
 - Generator modules in `src/fs-routes/`:
-  - `generate-router.mts` and `generate-types.mts`.
-  - CLI entry: `src/fs-routes/routes.mts` (shebang runner).
+  - `generate-router.ts` and `generate-types.ts`.
+  - CLI entry: `src/fs-routes/routes.ts` (shebang runner).
 - How to run generation for an app folder:
-  - CLI: `node src/fs-routes/routes.mts ./app`
+  - CLI: `node src/fs-routes/routes.ts ./app`
   - Programmatic: `import { generate } from "@mewhhaha/ruwuter/fs-routes"; await generate('./app');`
 
 ## Types and Lint
 
-- TypeScript config: `tsconfig.json` (NodeNext). Prefer `.mts` over `.mjs`.
+- TypeScript config: `tsconfig.json` (NodeNext). Prefer `.ts` over `.mjs`.
 - Raw imports: use `?raw` and keep `src/types.raw.d.ts` in sync so `tsc` recognizes them.
 - The client runtime JS is type‑checked via `// @ts-check` and JSDoc.
 - Linting uses `oxlint`. Ensure the tree is clean before finishing work.
@@ -75,7 +75,7 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 - Keep changes minimal and focused. Do not reformat unrelated files.
 - Avoid adding new dependencies; prefer Web/ESNext APIs.
 - Favor clarity over cleverness; keep the client runtime small and direct.
-- Preserve public APIs in `src/client.mts`, `src/router.mts`, and runtime files unless the change is intentional and documented.
+- Preserve public APIs in `src/client.ts`, `src/router.ts`, and runtime files unless the change is intentional and documented.
 
 ## What Not To Do
 
@@ -87,6 +87,6 @@ This file gives guidance to agents (and contributors) working in this repo. Scop
 
 - [ ] tsc is clean
 - [ ] oxlint is clean
-- [ ] Any new `.client.*` handler has a generated declaration entry (run `node src/fs-routes/routes.mts ./app`)
+- [ ] Any new `.client.*` handler has a generated declaration entry (run `node src/fs-routes/routes.ts ./app`)
 - [ ] README examples stay in sync with behavior
 - [ ] No legacy client paths or APIs reintroduced

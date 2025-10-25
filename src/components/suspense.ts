@@ -4,7 +4,7 @@
  * Suspense components for progressive rendering in Ruwuter applications.
  */
 
-import { createContext } from "./context.mts";
+import { createContext } from "./context.ts";
 import { Fragment, into, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
 
 type SuspenseRegistry = Map<string, Promise<[id: string, html: string]>>;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.mts";
-import { Suspense, SuspenseProvider } from "../src/components/suspense.mts";
+import { Router, type Env, type fragment } from "../src/router.ts";
+import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

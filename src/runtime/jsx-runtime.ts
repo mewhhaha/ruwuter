@@ -20,12 +20,12 @@
  * ```
  */
 
-import { type Html, into, isHtml } from "./node.mts";
-import { withComponentFrame } from "./hooks.mts";
-import "./typed.mts";
-import type { JSX } from "./typed.mts";
-export type * from "./typed.mts";
-export { type JSX } from "./jsx.mts";
+import { type Html, into, isHtml } from "./node.ts";
+import { withComponentFrame } from "./hooks.ts";
+import "./typed.ts";
+import type { JSX } from "./typed.ts";
+export type * from "./typed.ts";
+export { type JSX } from "./jsx.ts";
 /**
  * Converts various inputs into an Html instance for streaming.
  * @see {@link into}

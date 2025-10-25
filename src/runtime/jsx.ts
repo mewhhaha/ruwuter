@@ -1,7 +1,7 @@
-import type { Html } from "./node.mts";
-import type { FixiAttributes } from "./fixi.mts";
-import type { Handler, Ref as ClientRef } from "../components/client.mts";
-import type { ClientEventList } from "../events.mts";
+import type { Html } from "./node.ts";
+import type { FixiAttributes } from "./fixi.ts";
+import type { Handler, Ref as ClientRef } from "../components/client.ts";
+import type { ClientEventList } from "../events.ts";
 
 /**
  * JSX namespace containing type definitions for JSX elements and attributes.

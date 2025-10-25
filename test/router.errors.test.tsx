@@ -1,5 +1,5 @@
 import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.mts";
+import { Router, type Env, type fragment } from "../src/router.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];

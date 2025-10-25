@@ -1,9 +1,9 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import "./setup.ts";
 import { DOMParser } from "@b-fuze/deno-dom";
-import { type Env, type fragment, Router } from "../src/router.mts";
-import { Client } from "../src/components/client.mts";
-import { events } from "../src/events.mts";
+import { type Env, type fragment, Router } from "../src/router.ts";
+import { Client } from "../src/components/client.ts";
+import { events } from "../src/events.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 
 const makeCtx = () => {

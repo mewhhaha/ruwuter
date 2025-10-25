@@ -1,6 +1,7 @@
 import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path/posix";
-import { bySpecificity } from "./sort.mts";
+import { bySpecificity } from "./sort.ts";
+import type { GeneratedFile } from "./types.ts";
 
 const unescapedDotRegex = /(?<!\[)\.(?![^[]*\])/g;
 
@@ -101,7 +102,9 @@ const withAssetPattern = (pattern: string): string => {
     return `${pattern}/:__asset(.+\\.html)?`;
 };
 
-export const generateRouter = async (appFolder: string): Promise<void> => {
+export const generateRouter = async (
+    appFolder: string,
+): Promise<GeneratedFile[]> => {
     const routesFolder = path.join(appFolder, "routes");
 
     const files = await readdir(routesFolder);
@@ -182,5 +185,7 @@ ${routeVars}
 export const routes: route[] = [${routeItems}];
 `;
 
-    await writeFile(path.join(appFolder, "routes.mts"), file);
+    const outputPath = path.join(appFolder, "routes.ts");
+    await writeFile(outputPath, file);
+    return [{ path: outputPath, contents: file }];
 };

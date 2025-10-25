@@ -1,7 +1,7 @@
 import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env } from "../src/router.mts";
-import type { fragment } from "../src/router.mts";
-import { into } from "../src/runtime/node.mts";
+import { Router, type Env } from "../src/router.ts";
+import type { fragment } from "../src/router.ts";
+import { into } from "../src/runtime/node.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];

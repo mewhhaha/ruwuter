@@ -8,8 +8,8 @@
  * - `Handler` type used by the client events helpers
  */
 
-import { type Html, into } from "../runtime/node.mts";
-import { useHook } from "../runtime/hooks.mts";
+import { type Html, into } from "../runtime/node.ts";
+import { useHook } from "../runtime/hooks.ts";
 const CLIENT_RUNTIME_MODULE = "@mewhhaha/ruwuter/client";
 
 /** Client handler signature for browser-dispatched events. */

@@ -1,4 +1,4 @@
-import type { Handler } from "./components/client.mts";
+import type { Handler } from "./components/client.ts";
 
 type EventOptions = boolean | AddEventListenerOptions;
 
@@ -64,10 +64,12 @@ export const events = new Proxy<Record<string, EventHelper<string, Event>>>(
       const created = ((
         href: HandlerModule,
         options?: EventOptions,
-      ) => options === undefined ? [prop, href] : [prop, href, options]) as EventHelper<
+      ) => {
+        href = href instanceof URL ? href.pathname : href
+        return options === undefined ? [prop, href] : [prop, href, options]) as EventHelper<
         string,
         Event
-      >;
+      >;}
       target[prop] = created;
       return created;
     },

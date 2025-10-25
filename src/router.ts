@@ -20,14 +20,14 @@
  * ```
  */
 
-import type { JSX } from "./runtime/jsx.mts";
-import { type Html, into, isHtml } from "./runtime/node.mts";
+import type { JSX } from "./runtime/jsx.ts";
+import { type Html, into, isHtml } from "./runtime/node.ts";
 // SuspenseProvider must be applied by the consumer in their layout/document.
-import { bindContext, runWithContextStore } from "./components/context.mts";
-import { runWithHooksStore } from "./runtime/hooks.mts";
+import { bindContext, runWithContextStore } from "./components/context.ts";
+import { runWithHooksStore } from "./runtime/hooks.ts";
 
-export type { Html } from "./runtime/node.mts";
-export type { JSX } from "./runtime/jsx.mts";
+export type { Html } from "./runtime/node.ts";
+export type { JSX } from "./runtime/jsx.ts";
 
 /**
  * Renders an Html value to a string.

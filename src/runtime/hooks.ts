@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { into } from "./node.mts";
+import { into } from "./node.ts";
 import type { JSX } from "@mewhhaha/ruwuter/jsx-runtime";
 
 type HookFrame = { index: number; values: unknown[] };
