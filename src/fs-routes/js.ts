@@ -25,6 +25,6 @@ import type { GenerateResult } from "./types.ts";
  */
 export const generate = async (appFolder: string): Promise<GenerateResult> => {
   const router = generateRouter(appFolder);
-  const types = generateTypes(appFolder)
+  const types = generateTypes(appFolder);
   return { router: await router, types: await types };
 };

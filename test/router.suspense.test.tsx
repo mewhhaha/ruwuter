@@ -1,5 +1,5 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.ts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, type fragment, Router } from "../src/router.ts";
 import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -189,9 +189,7 @@ describe("Suspense streaming", () => {
     expect(first.buffer).not.toContain("INNER-FALLBACK");
     expect(first.buffer).not.toContain("INNER-READY");
 
-    const second = await readUntil(reader, (t) =>
-      t.includes('id="outer-slot"'),
-    );
+    const second = await readUntil(reader, (t) => t.includes('id="outer-slot"'));
     expect(second.buffer).toContain('id="outer-slot"');
     expect(second.buffer).not.toContain("INNER-READY");
 
@@ -270,4 +268,3 @@ describe("Suspense streaming", () => {
     expect(full).toContain("LEAF-READY");
   });
 });
-

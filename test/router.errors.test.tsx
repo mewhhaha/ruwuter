@@ -1,5 +1,5 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.ts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, type fragment, Router } from "../src/router.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -155,4 +155,3 @@ describe("Thrown Response handling", () => {
     expect(text).toContain("Not Found");
   });
 });
-

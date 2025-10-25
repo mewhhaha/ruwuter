@@ -1,6 +1,8 @@
 # @mewhhaha/ruwuter (๑˃ᴗ˂)ﻭ
 
-A lightweight, fast TypeScript router for Cloudflare Workers with file‑based routing, streaming HTML, and a custom JSX runtime. Tiny router, big uwu energy 👉🏻👈🏻 — perfect for Workers fans who like their DX cozy *and* productive.
+A lightweight, fast TypeScript router for Cloudflare Workers with file‑based routing, streaming
+HTML, and a custom JSX runtime. Tiny router, big uwu energy 👉🏻👈🏻 — perfect for Workers fans who like
+their DX cozy _and_ productive.
 
 ## Features
 
@@ -24,11 +26,13 @@ pnpm add @mewhhaha/ruwuter
 pnpm add -D vite @cloudflare/vite-plugin wrangler
 ```
 
-> Cloudflare setup: enable the Workers Node compatibility flag (`nodejs_compat`, or at least `nodejs_als`) so `AsyncLocalStorage` is available.
+> Cloudflare setup: enable the Workers Node compatibility flag (`nodejs_compat`, or at least
+> `nodejs_als`) so `AsyncLocalStorage` is available.
 
 ### Context
 
-Ruwuter provides a lightweight context API with React‑like ergonomics, backed by Cloudflare’s `AsyncLocalStorage` under the hood.
+Ruwuter provides a lightweight context API with React‑like ergonomics, backed by Cloudflare’s
+`AsyncLocalStorage` under the hood.
 
 ```tsx
 import { createContext } from "@mewhhaha/ruwuter/context";
@@ -36,9 +40,7 @@ import { createContext } from "@mewhhaha/ruwuter/context";
 export const ThemeContext = createContext("light");
 
 export function ThemeProvider({ value, children }) {
-  return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
@@ -85,7 +87,7 @@ app/
 
 ```tsx
 // app/_index.tsx
-import { ref, Client, SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import { Client, ref, SuspenseProvider } from "@mewhhaha/ruwuter/components";
 import { events } from "@mewhhaha/ruwuter/events";
 import clickHref from "./click.client.ts?url&no-inline";
 import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
@@ -93,36 +95,37 @@ import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
 export default function HomePage() {
   const greeting = ref("hai~");
   return (
-      <html>
-        <head>
-          <title>Welcome to @mewhhaha/ruwuter</title>
-          {/* Include fixi for hypermedia-style interactions */}
-          <script
-            src="https://cdn.jsdelivr.net/gh/bigskysoftware/fixi@0.9.0/fixi.js"
-            crossorigin="anonymous"
-            integrity="sha256-0957yKwrGW4niRASx0/UxJxBY/xBhYK63vDCnTF7hH4="
-          ></script>
-          <Client />
-          <script type="module" src={resolveUrl}></script>
-        </head>
-        <body>
-          <SuspenseProvider>
-            <div class="container">
-              <h1>Hello, World!</h1>
-              <p>Welcome to your new @mewhhaha/ruwuter app.</p>
-              {/* Fixi example (server-driven) */}
-              <button fx-action="/api/click" fx-method="post" fx-target="#result">
-                Click me (fixi)
-              </button>
-              <div id="result"></div>
-              {/* Client example using URL-based handler modules. */}
-              <button bind={{ msg: greeting }} on={events.click(clickHref)}>
-                Click me (client)
-              </button>
-            </div>
-          </SuspenseProvider>
-        </body>
-      </html>
+    <html>
+      <head>
+        <title>Welcome to @mewhhaha/ruwuter</title>
+        {/* Include fixi for hypermedia-style interactions */}
+        <script
+          src="https://cdn.jsdelivr.net/gh/bigskysoftware/fixi@0.9.0/fixi.js"
+          crossorigin="anonymous"
+          integrity="sha256-0957yKwrGW4niRASx0/UxJxBY/xBhYK63vDCnTF7hH4="
+        >
+        </script>
+        <Client />
+        <script type="module" src={resolveUrl}></script>
+      </head>
+      <body>
+        <SuspenseProvider>
+          <div class="container">
+            <h1>Hello, World!</h1>
+            <p>Welcome to your new @mewhhaha/ruwuter app.</p>
+            {/* Fixi example (server-driven) */}
+            <button fx-action="/api/click" fx-method="post" fx-target="#result">
+              Click me (fixi)
+            </button>
+            <div id="result"></div>
+            {/* Client example using URL-based handler modules. */}
+            <button bind={{ msg: greeting }} on={events.click(clickHref)}>
+              Click me (client)
+            </button>
+          </div>
+        </SuspenseProvider>
+      </body>
+    </html>
   );
 }
 
@@ -134,7 +137,8 @@ export default function click(this: { msg: { get(): string } }, _ev: Event, _sig
 
 ### 4. Generate the router and type helpers
 
-The generator returns the route table and declaration artifacts so you can decide where to write them.
+The generator returns the route table and declaration artifacts so you can decide where to write
+them.
 
 #### CLI
 
@@ -186,9 +190,7 @@ export default function UsersPage({ users }) {
     <div>
       <h1>Users</h1>
       <ul>
-        {users.map((user) => (
-          <li key={user.id}>{user.name}</li>
-        ))}
+        {users.map((user) => <li key={user.id}>{user.name}</li>)}
       </ul>
     </div>
   );
@@ -294,7 +296,7 @@ export async function loader({ request }) {
 
 ```tsx
 // app/dashboard.tsx
-import { Suspense, Resolve, SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import { Resolve, Suspense, SuspenseProvider } from "@mewhhaha/ruwuter/components";
 
 async function SlowData() {
   const data = await fetch("https://api.slow-endpoint.com/data");
@@ -322,10 +324,14 @@ export default function Dashboard() {
 
 - Router does not wrap Suspense. To enable streaming Suspense:
   - Wrap your root HTML with `SuspenseProvider`.
-  - `SuspenseProvider` now appends a single `<Resolve />` after its children, so wrapping your document/body is sufficient for streaming.
-  - If you prefer to control placement yourself, use `<SuspenseProvider resolve={false}>` and render `<Resolve />` where you want it. Add `nonce` for strict CSP.
-- Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerHref)`).
-- Stick to HTML-native attribute values; dynamic state goes through `bind` + client handlers rather than function-valued props.
+  - `SuspenseProvider` now appends a single `<Resolve />` after its children, so wrapping your
+    document/body is sufficient for streaming.
+  - If you prefer to control placement yourself, use `<SuspenseProvider resolve={false}>` and render
+    `<Resolve />` where you want it. Add `nonce` for strict CSP.
+- Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be
+  wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerHref)`).
+- Stick to HTML-native attribute values; dynamic state goes through `bind` + client handlers rather
+  than function-valued props.
 
 ### Using Both fixi and Client
 
@@ -343,13 +349,17 @@ fixi and the Client runtime solve different problems and work great together:
 
 - Combine them
   - Use fixi for networking and server-rendered HTML; use Client for local UI polish.
-  - If you attach both fixi and a client handler tuple via `on={...}`, default browser behavior continues unless you call `ev.preventDefault()` inside your client handler. Prefer sibling/wrapper elements, or let the client handler perform the fetch and DOM update itself.
-  - Keep client handlers small and self-contained; place them in sidecar `*.client.ts` files and import their URLs with `?url`.
+  - If you attach both fixi and a client handler tuple via `on={...}`, default browser behavior
+    continues unless you call `ev.preventDefault()` inside your client handler. Prefer
+    sibling/wrapper elements, or let the client handler perform the fetch and DOM update itself.
+  - Keep client handlers small and self-contained; place them in sidecar `*.client.ts` files and
+    import their URLs with `?url`.
   - For strict CSP, use `<Client nonce={cspNonce} />`.
 
 ### Shipping the Client Runtime
 
-Include the runtime so client handlers hydrate in the browser. The convenience components exported from `@mewhhaha/ruwuter/components` will emit the correct module scripts for you:
+Include the runtime so client handlers hydrate in the browser. The convenience components exported
+from `@mewhhaha/ruwuter/components` will emit the correct module scripts for you:
 
 ```tsx
 import { Client, Resolve, SuspenseProvider } from "@mewhhaha/ruwuter/components";
@@ -368,7 +378,9 @@ export default function Document({ children }: { children: JSX.Element }) {
 }
 ```
 
-When bundling manually (e.g. with Vite), you can import the runtime URLs via the package exports and inject the scripts yourself. The `?url&no-inline` suffix tells Vite to emit dedicated `.js` files instead of inlining the runtime.
+When bundling manually (e.g. with Vite), you can import the runtime URLs via the package exports and
+inject the scripts yourself. The `?url&no-inline` suffix tells Vite to emit dedicated `.js` files
+instead of inlining the runtime.
 
 ```tsx
 import clientRuntimeUrl from "@mewhhaha/ruwuter/client?url&no-inline";
@@ -389,11 +401,17 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 
 ### Client Interactions and Refs (New)
 
-Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their URLs with `?url`, and build tuples like `events.click(handlerHref)`. Bound state comes from `bind={...}` and can include shared `ref()` objects.
+Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples
+produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their
+URLs with `?url`, and build tuples like `events.click(handlerHref)`. Bound state comes from
+`bind={...}` and can include shared `ref()` objects.
 
 ```tsx
 // app/click.client.ts
-export default function click(this: { count: { set(updater: (v: number) => number): void } }, _ev: Event) {
+export default function click(
+  this: { count: { set(updater: (v: number) => number): void } },
+  _ev: Event,
+) {
   this.count.set((v) => v + 1);
 }
 
@@ -417,15 +435,16 @@ export default function HomePage() {
 }
 ```
 
-- Lifecycle: `on={[events.mount(mountHref), events.unmount(unmountHref)]}`. `mount` fires after `DOMContentLoaded`; `unmount` fires when the element is removed.
+- Lifecycle: `on={[events.mount(mountHref), events.unmount(unmountHref)]}`. `mount` fires after
+  `DOMContentLoaded`; `unmount` fires when the element is removed.
 
 ### Hydration Boundaries (New)
 
-Instead of data attributes per handler, Ruwuter emits one comment boundary per element and a single JSON payload:
+Instead of data attributes per handler, Ruwuter emits one comment boundary per element and a single
+JSON payload:
 
 ```html
-<!--rw:h:h_0--><button>+1</button
-><!--/rw:h:h_0-->
+<!--rw:h:h_0--><button>+1</button><!--/rw:h:h_0-->
 <script type="application/json" data-rw-h="h_0">
   {
     "bind": { "count": { "__ref": true, "i": "r1", "v": 0 } },
@@ -442,13 +461,15 @@ Instead of data attributes per handler, Ruwuter emits one comment boundary per e
 ```
 
 - Handlers: module `{t:"m",s:"<href>",x:"default",ev}`.
-- Refs: `{ "__ref": true, i: "r1", v: 0 }` revive to `{ id, get(), set() }` and are shared across all boundaries.
+- Refs: `{ "__ref": true, i: "r1", v: 0 }` revive to `{ id, get(), set() }` and are shared across
+  all boundaries.
 
 ---
 
 \n## Vite plugin Tips
 
-A plugin for auto-generating routes on build and updates, and also fixing the import.meta.url references in the build output.
+A plugin for auto-generating routes on build and updates, and also fixing the import.meta.url
+references in the build output.
 
 ```tsx
 import type { PluginOption } from "vite";

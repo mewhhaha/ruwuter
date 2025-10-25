@@ -57,20 +57,13 @@ export const events = new Proxy<Record<string, EventHelper<string, Event>>>(
       if (typeof prop !== "string") {
         return Reflect.get(target, prop, receiver);
       }
-      const cached = target[prop];
-      if (cached !== undefined) {
-        return cached;
-      }
-      const created = ((
-        href: HandlerModule,
+      const created = (
+        href: HandlerModule | string | URL,
         options?: EventOptions,
       ) => {
-        href = href instanceof URL ? href.pathname : href
-        return options === undefined ? [prop, href] : [prop, href, options]) as EventHelper<
-        string,
-        Event
-      >;}
-      target[prop] = created;
+        const pathname: string = href instanceof URL ? href.pathname : href.toString();
+        return [prop, pathname, options] as unknown as EventHelper<string, Event>
+      };
       return created;
     },
   },

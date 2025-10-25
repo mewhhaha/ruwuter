@@ -1,5 +1,5 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env } from "../src/router.ts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, Router } from "../src/router.ts";
 import type { fragment } from "../src/router.ts";
 import { into } from "../src/runtime/node.ts";
 
@@ -158,4 +158,3 @@ describe("Not found", () => {
     expect(res.status).toBe(404);
   });
 });
-

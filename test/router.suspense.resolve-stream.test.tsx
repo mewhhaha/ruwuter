@@ -1,5 +1,5 @@
-import { describe, it, expect } from "../test-support/deno_vitest_shim.ts";
-import { Router, type Env, type fragment } from "../src/router.ts";
+import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { type Env, type fragment, Router } from "../src/router.ts";
 import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -81,7 +81,7 @@ describe("Resolve streams resolved suspense chunks", () => {
     }
 
     // Expect Resolve emitted a template targeting the fallback element
-    
+
     expect(full).toMatch(/<template\s+data-rw-target=\"suspense-[^"]+\"/);
     // Resolved HTML must be present
     expect(full).toContain("READY");
@@ -92,5 +92,3 @@ describe("Resolve streams resolved suspense chunks", () => {
     expect(iResolved).toBeGreaterThan(iFallback);
   });
 });
-
-

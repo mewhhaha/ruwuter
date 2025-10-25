@@ -11,8 +11,7 @@ if (typeof (globalThis as any).URLPattern === "undefined") {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     const mod = await import("urlpattern-polyfill");
-    const URLPatternCtor =
-      (mod as any).URLPattern ?? (globalThis as any).URLPattern;
+    const URLPatternCtor = (mod as any).URLPattern ?? (globalThis as any).URLPattern;
     if (URLPatternCtor) {
       Object.defineProperty(globalThis, "URLPattern", {
         value: URLPatternCtor,
