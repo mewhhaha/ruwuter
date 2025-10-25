@@ -25,7 +25,7 @@ describe("Ref hydration and on boundary", () => {
           default: () => (
             <html>
               <body>
-                <button id="btn" bind={{ count, by: 1 }} on={events.click(clickHref)}>
+                <button id="btn" on={[{ count, by: 1 }, events.click(clickHref)]}>
                   X
                 </button>
                 <Client />

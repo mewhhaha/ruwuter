@@ -20,8 +20,8 @@ repository.
 - Must support:
   - `on={...}` handlers loaded on demand via ESM `import()` using module hrefs (see “Client
     Handlers” below).
-  - `bind={...}` context passed as `this` for handlers.
-  - Function‑valued attributes (e.g., `class`, `hidden`, `disabled`, `inert`) computed client‑side
+  - Optional leading bind values inside the `on` list that are passed as `this` for handlers.
+  - Function-valued attributes (e.g., `class`, `hidden`, `disabled`, `inert`) computed client-side
     and recomputed when bound refs change.
   - `mount`/`unmount` lifecycle events.
   - Proper `AbortSignal` passing to handlers:
@@ -53,8 +53,8 @@ repository.
 ## JSX Runtime Contracts
 
 - Located in `src/runtime/jsx*.ts`.
-- Supports `bind` and `on` props on intrinsic elements.
-- Function-valued attributes are not supported; only HTML-compatible values plus `bind`/`on` are
+- Supports `on` props on intrinsic elements with optional bound context as the first list entry.
+- Function-valued attributes are not supported; only HTML-compatible values plus `on` are
   emitted.
 - Do not re‑introduce inline client function paths; the runtime only emits `t: 'm'` (module)
   entries.

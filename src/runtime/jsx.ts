@@ -104,7 +104,6 @@ export namespace JSX {
   export interface HtmlTag<Bind extends BindTarget = BindTarget>
     extends FixiAttributes, AriaAttributes {
     // Ruwuter client additions
-    bind?: Bind;
     on?: HtmlEventBindings<Bind> | undefined;
   }
   export interface HtmlBodyTag<Bind extends BindTarget = BindTarget> {

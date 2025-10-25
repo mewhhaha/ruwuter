@@ -22,9 +22,9 @@ describe("Client interactions (no bundler)", () => {
         id: "root",
         mod: {
           default: () => (
-            <html>
+              <html>
               <body>
-                <button id="b" bind={{ by: 2 }} on={events.click(clickHref)}>
+                <button id="b" on={[{ by: 2 }, events.click(clickHref)]}>
                   0
                 </button>
                 <Client />

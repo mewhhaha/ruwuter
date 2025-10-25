@@ -6,6 +6,8 @@ export interface ClientEventInit extends AddEventListenerOptions {
 
 export type EventOptions = boolean | ClientEventInit;
 
+type BindContext<Bind> = [Bind] extends [undefined] ? undefined : Bind;
+
 /**
  * Branded string representing a lazily loaded client handler module.
  * The brand carries the handler type so event helpers can preserve `this` and event payload inference.
@@ -26,11 +28,41 @@ export type ClientEventTuple<
   Type extends string = string,
 > = [Type, HandlerModule<Fn>, EventOptions?];
 
-/** Recursive structure for composing multiple client event tuples. */
+type HandlerBind<Fn> = Fn extends Handler<infer This, any, any> ? BindContext<This>
+  : undefined;
+
+type PrevDepth<D extends number> =
+  D extends 0 ? 0
+    : D extends 1 ? 0
+    : D extends 2 ? 1
+    : D extends 3 ? 2
+    : D extends 4 ? 3
+    : D extends 5 ? 4
+    : D extends 6 ? 5
+    : D extends 7 ? 6
+    : D extends 8 ? 7
+    : D extends 9 ? 8
+    : D extends 10 ? 9
+    : 10;
+
+type ClientEventListRecursive<
+  Fn,
+  Type extends string,
+  Depth extends number,
+> =
+  Depth extends 0 ? ClientEventTuple<Fn, Type>
+    : ClientEventTuple<Fn, Type>
+      | readonly ClientEventListRecursive<Fn, Type, PrevDepth<Depth>>[]
+      | readonly [
+        HandlerBind<Fn>,
+        ...readonly ClientEventListRecursive<Fn, Type, PrevDepth<Depth>>[],
+      ];
+
 export type ClientEventList<
   Fn = Handler,
   Type extends string = string,
-> = ClientEventTuple<Fn, Type> | readonly ClientEventList<Fn, Type>[];
+> = ClientEventListRecursive<Fn, Type, 6>;
+
 
 type EventHelper<Type extends string, Ev extends Event> = <
   This = unknown,

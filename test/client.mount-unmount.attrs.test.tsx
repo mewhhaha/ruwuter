@@ -26,7 +26,7 @@ describe("mount/unmount via unified on", () => {
           default: () => (
             <html>
               <body>
-                <div id="n" bind={{ count }} on={[events.mount(mountHref)]} />
+                <div id="n" on={[{ count }, events.mount(mountHref)]} />
                 <div id="u" on={[events.unmount(unmountHref)]} />
                 <Client />
               </body>

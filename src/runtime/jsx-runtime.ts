@@ -122,15 +122,15 @@ export function jsx(
   };
 
   for (const [key, value] of Object.entries(props)) {
-    // Explicit state binding for event handlers via `bind` prop
-    if (key === "bind") {
-      ensureHydration().bind = value;
-      continue;
-    }
-
     // Event handlers: expect tuple descriptors [eventType, href, options?]
     if (key === "on" && Array.isArray(value)) {
       const items: ModuleEntry[] = [];
+      let bindCaptured = false;
+      const captureBind = (candidate: unknown) => {
+        if (bindCaptured) return;
+        ensureHydration().bind = candidate;
+        bindCaptured = true;
+      };
       const toModuleEntry = (tuple: readonly unknown[]): ModuleEntry | null => {
         if (tuple.length < 2) return null;
         const [ev, href, opts] = tuple;
@@ -141,18 +141,27 @@ export function jsx(
         if (normalized) entry.opt = normalized;
         return entry;
       };
-      const visit = (node: unknown): void => {
+      const isEventTuple = (tuple: readonly unknown[]): boolean =>
+        tuple.length >= 2 && typeof tuple[0] === "string" && typeof tuple[1] === "string";
+      const visit = (node: unknown, allowBind: boolean): void => {
         if (!Array.isArray(node)) return;
-        const entry = toModuleEntry(node);
-        if (entry) {
-          items.push(entry);
+        if (isEventTuple(node)) {
+          const entry = toModuleEntry(node);
+          if (entry) {
+            items.push(entry);
+          }
           return;
         }
-        for (const part of node) {
-          visit(part);
+        let startIndex = 0;
+        if (allowBind && node.length > 0 && !Array.isArray(node[0])) {
+          captureBind(node[0]);
+          startIndex = 1;
+        }
+        for (let index = startIndex; index < node.length; index++) {
+          visit(node[index], true);
         }
       };
-      visit(value);
+      visit(value, true);
       if (items.length) ensureHydration().on = items;
       continue;
     }

@@ -119,7 +119,7 @@ export default function HomePage() {
             </button>
             <div id="result"></div>
             {/* Client example using URL-based handler modules. */}
-            <button bind={{ msg: greeting }} on={events.click(clickHref)}>
+            <button on={[{ msg: greeting }, events.click(clickHref)]}>
               Click me (client)
             </button>
           </div>
@@ -346,7 +346,8 @@ export default function Dashboard() {
     `<Resolve />` where you want it. Add `nonce` for strict CSP.
 - Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be
   wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerHref)`).
-- Stick to HTML-native attribute values; dynamic state goes through `bind` + client handlers rather
+- Stick to HTML-native attribute values; dynamic state flows through the `on` event list (optionally
+  prefixed with your bound state) plus client handlers rather
   than function-valued props.
 
 ### Using Both fixi and Client
@@ -420,8 +421,9 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 
 Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples
 produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their
-URLs with `?url`, and build tuples like `events.click(handlerHref)`. Bound state comes from
-`bind={...}` and can include shared `ref()` objects.
+URLs with `?url`, and build tuples like `events.click(handlerHref)`. To bind handler context, start
+the event list with the object (or ref) you want as `this`. Those values can include shared `ref()`
+objects.
 
 ```tsx
 // app/click.client.ts
@@ -442,7 +444,7 @@ export default function HomePage() {
   return (
     <html>
       <body>
-        <button bind={{ count }} on={events.click(clickHref)}>
+        <button on={[{ count }, events.click(clickHref)]}>
           +1
         </button>
         <Client />

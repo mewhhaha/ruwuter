@@ -27,7 +27,7 @@ describe("Ref sharing", () => {
           default: () => (
             <html>
               <body>
-                <button id="btn" bind={{ count }} on={events.click(clickHref)}>
+                <button id="btn" on={[{ count }, events.click(clickHref)]}>
                   {count}
                 </button>
                 <Client />

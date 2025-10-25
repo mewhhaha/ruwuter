@@ -157,7 +157,7 @@ describe("Client runtime DOM behaviour", () => {
             default: () => (
               <html>
                 <body>
-                  <div id="m" bind={{ touched: false }} on={[events.mount(mountHref)]}></div>
+                  <div id="m" on={[{ touched: false }, events.mount(mountHref)]}></div>
                   <div id="u" on={[events.unmount(unmountHref)]}></div>
                   <Client />
                 </body>
