@@ -22,6 +22,7 @@
 
 import { type Html, into, isHtml } from "./node.ts";
 import { withComponentFrame } from "./hooks.ts";
+import type { EventOptions } from "../events.ts";
 import "./typed.ts";
 import type { JSX } from "./typed.ts";
 export type * from "./typed.ts";
@@ -58,10 +59,39 @@ const voidElements = new Set([
 // Sequence for JSON hydration boundaries for `on` handlers
 let HYDRATE_SEQ = 0;
 
-type ModuleEntry = { t: "m"; s: string; x?: string; ev?: string };
+type EventListenerOptions = {
+  capture?: boolean;
+  once?: boolean;
+  passive?: boolean;
+  preventDefault?: boolean;
+};
+
+type ModuleEntry = { t: "m"; s: string; x?: string; ev?: string; opt?: EventListenerOptions };
 type HydrationPayload = { bind?: unknown; on?: ModuleEntry[] };
 
 const escapeJsonForScript = (json: string): string => json.replaceAll("</script>", "<\\/script>");
+
+const normalizeEventOptions = (
+  options: EventOptions | undefined,
+): EventListenerOptions | undefined => {
+  if (options === undefined || options === null) {
+    return undefined;
+  }
+  if (typeof options === "boolean") {
+    return options ? { capture: true } : undefined;
+  }
+  if (typeof options !== "object") {
+    return undefined;
+  }
+  const normalized: EventListenerOptions = {};
+  if ("capture" in options && options.capture === true) normalized.capture = true;
+  if ("once" in options && options.once === true) normalized.once = true;
+  if ("passive" in options && options.passive === true) normalized.passive = true;
+  if ("preventDefault" in options && options.preventDefault === true) {
+    normalized.preventDefault = true;
+  }
+  return Object.keys(normalized).length ? normalized : undefined;
+};
 
 /**
  * Core JSX factory function that creates HTML elements or calls component functions.
@@ -103,10 +133,13 @@ export function jsx(
       const items: ModuleEntry[] = [];
       const toModuleEntry = (tuple: readonly unknown[]): ModuleEntry | null => {
         if (tuple.length < 2) return null;
-        const [ev, href] = tuple;
+        const [ev, href, opts] = tuple;
         if (typeof ev !== "string" || ev.length === 0) return null;
         if (typeof href !== "string" || href.length === 0) return null;
-        return { t: "m", s: href, x: "default", ev };
+        const entry: ModuleEntry = { t: "m", s: href, x: "default", ev };
+        const normalized = normalizeEventOptions(opts as EventOptions | undefined);
+        if (normalized) entry.opt = normalized;
+        return entry;
       };
       const visit = (node: unknown): void => {
         if (!Array.isArray(node)) return;
@@ -275,6 +308,6 @@ export function jsxs(
   // deno-lint-ignore no-explicit-any
   tag: string | ((props: any) => JSX.Element),
   props: { children?: unknown } & Record<string, unknown>,
-): JSX.Element {
+): Html {
   return jsx(tag, props);
 }

@@ -1,10 +1,18 @@
 type RefListener = () => void;
 
+type EventListenerOptions = {
+  capture?: boolean;
+  once?: boolean;
+  passive?: boolean;
+  preventDefault?: boolean;
+};
+
 type ModuleEntry = {
   t: "m";
   s: string;
   x?: string;
   ev?: string;
+  opt?: EventListenerOptions;
 };
 
 type HydrationPayload = {
@@ -244,10 +252,20 @@ function initializeClientRuntime(): void {
       ctx.unmount.push(entry);
       return;
     }
-
+    const listenerOptions = entry.opt
+      ? {
+        capture: entry.opt.capture,
+        once: entry.opt.once,
+        passive: entry.opt.passive,
+      }
+      : undefined;
+    const preventDefault = entry.opt?.preventDefault === true && entry.opt.passive !== true;
     el.addEventListener(type, (event) => {
+      if (preventDefault && event.cancelable) {
+        event.preventDefault();
+      }
       void invokeEntry(el, entry, type, event);
-    });
+    }, listenerOptions);
   }
 
   function hydratePayload(el: Element, payload: HydrationPayload): void {

@@ -97,4 +97,46 @@ describe("Unified on-prop", () => {
     expect(sources).toContain(focusHref);
     expect(sources.length).toBe(2);
   });
+
+  it("serializes preventDefault option for client handlers", async () => {
+    const clickHref = "./handlers/click.client.js";
+    const pattern = new URLPattern({ pathname: "/" });
+    const fragments: fragment[] = [
+      {
+        id: "root",
+        mod: {
+          default: () => (
+            <html>
+              <body>
+                <a id="with-prevent" href="/somewhere" on={events.click(clickHref, { preventDefault: true })}>
+                  tap
+                </a>
+                <Client />
+              </body>
+            </html>
+          ),
+        },
+      },
+    ];
+
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(
+      new Request("https://example.com/"),
+      {} as Env,
+      ctx,
+    );
+    const html = await res.text();
+    const payload = [...html.matchAll(
+      /<script type="application\/json" data-hydrate="h_\d+">([\s\S]*?)<\/script>/g,
+    )]
+      .map(([, json]) => JSON.parse(json))
+      .find((data) =>
+        Array.isArray(data.on) &&
+        data.on.some((entry: any) => entry?.s === clickHref)
+      );
+    expect(payload != null).toBe(true);
+    const entry = (payload!.on as any[]).find((value: any) => value?.s === clickHref);
+    expect(entry?.opt?.preventDefault).toBe(true);
+  });
 });

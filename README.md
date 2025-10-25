@@ -349,8 +349,9 @@ fixi and the Client runtime solve different problems and work great together:
 
 - Combine them
   - Use fixi for networking and server-rendered HTML; use Client for local UI polish.
-  - If you attach both fixi and a client handler tuple via `on={...}`, default browser behavior
-    continues unless you call `ev.preventDefault()` inside your client handler. Prefer
+- If you attach both fixi and a client handler tuple via `on={...}`, default browser behavior
+  continues unless you opt in with `events.click(handlerHref, { preventDefault: true })` (or call
+  `ev.preventDefault()` inside your client handler). Prefer
     sibling/wrapper elements, or let the client handler perform the fetch and DOM update itself.
   - Keep client handlers small and self-contained; place them in sidecar `*.client.ts` files and
     import their URLs with `?url`.
@@ -437,6 +438,8 @@ export default function HomePage() {
 
 - Lifecycle: `on={[events.mount(mountHref), events.unmount(unmountHref)]}`. `mount` fires after
   `DOMContentLoaded`; `unmount` fires when the element is removed.
+- Add event options as the third tuple entry, e.g. `events.click(clickHref, { preventDefault: true })`
+  to cancel default browser behavior before the handler module finishes loading.
 
 ### Hydration Boundaries (New)
 

@@ -1,6 +1,10 @@
 import type { Handler } from "./components/client.ts";
 
-type EventOptions = boolean | AddEventListenerOptions;
+export interface ClientEventInit extends AddEventListenerOptions {
+  preventDefault?: boolean;
+}
+
+export type EventOptions = boolean | ClientEventInit;
 
 /**
  * Branded string representing a lazily loaded client handler module.
