@@ -17,21 +17,21 @@ const encoder = new TextEncoder();
  */
 export type Html = {
   [N]: true;
-  text: AsyncGenerator<string>;
+  generator: AsyncGenerator<string>;
   toPromise: () => Promise<string>;
   toReadableStream: () => ReadableStream<Uint8Array>;
 };
 
 async function toPromise(this: Html): Promise<string> {
   let result = "";
-  for await (const chunk of this.text) {
+  for await (const chunk of this.generator) {
     result += chunk;
   }
   return result;
 }
 
 function toReadableStream(this: Html): ReadableStream<Uint8Array> {
-  const generator = this.text;
+  const generator = this.generator;
 
   return new ReadableStream({
     async start(controller) {
@@ -86,7 +86,7 @@ const toGenerator = (value: unknown): AsyncGenerator<string> => {
     }
 
     if (isHtml(value)) {
-      yield* value.text;
+      yield* value.generator;
       return;
     }
 
@@ -132,7 +132,7 @@ export const into = (value: unknown): Html => {
 
   return {
     [N]: true,
-    text: toGenerator(value),
+    generator: toGenerator(value),
     toPromise,
     toReadableStream,
   };

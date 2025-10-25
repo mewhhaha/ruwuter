@@ -116,7 +116,7 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
     return into(
       (async function* () {
         try {
-          yield* content.text;
+          yield* content.generator;
         } finally {
           release();
         }

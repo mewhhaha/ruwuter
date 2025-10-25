@@ -47,7 +47,7 @@ export function withComponentFrame(
     return into(
       (async function* () {
         try {
-          yield* html.text;
+          yield* html.generator;
         } finally {
           release();
         }

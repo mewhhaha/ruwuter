@@ -170,7 +170,7 @@ export function jsx(
         return;
       }
       if (isHtml(child)) {
-        yield* child.text;
+        yield* child.generator;
         return;
       }
       if (Array.isArray(child)) {
@@ -182,7 +182,7 @@ export function jsx(
 
       if (typeof child === "function") {
         // Treat function children as mini-components for hook scoping
-        yield* into(withComponentFrame(() => child())).text;
+        yield* into(withComponentFrame(() => child())).generator;
         return;
       }
 

@@ -57,7 +57,7 @@ export const Suspense = ({
       registry.set(id, promise);
 
       // Emit fallback wrapper immediately
-      yield* into(jsx(As, { id, ...props, children: fallback })).text;
+      yield* into(jsx(As, { id, ...props, children: fallback })).generator;
     })(),
   );
 };

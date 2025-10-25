@@ -584,7 +584,7 @@ export namespace JSX {
     d?: string | undefined;
   }
 
-  export type Element = Html | Promise<Html>;
+  export type Element = Html;
 
   export type HtmlNode =
     | Element
