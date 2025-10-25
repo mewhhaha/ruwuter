@@ -1,4 +1,4 @@
-import { readdir, writeFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path/posix";
 import { bySpecificity } from "./sort.ts";
 import type { GeneratedFile } from "./types.ts";
@@ -188,6 +188,5 @@ export const routes: route[] = [${routeItems}];
 `;
 
   const outputPath = path.join(appFolder, "routes.ts");
-  await writeFile(outputPath, file);
   return [{ path: outputPath, contents: file }];
 };

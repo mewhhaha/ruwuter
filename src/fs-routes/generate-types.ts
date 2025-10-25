@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import process from "node:process";
 import type { GeneratedFile } from "./types.ts";
 
@@ -21,10 +21,6 @@ export const generateTypes = async (
   try {
     files = await readdir(routesFolder);
   } catch {
-    await rm(path.join(".router", "types", path.relative(process.cwd(), resolvedAppFolder)), {
-      recursive: true,
-      force: true,
-    });
     return [];
   }
 
@@ -33,8 +29,6 @@ export const generateTypes = async (
   const typesRoot = path.join(".router", "types", relativeAppFolder);
   const routesTypesRoot = path.join(typesRoot, "routes");
 
-  await rm(typesRoot, { recursive: true, force: true });
-  await mkdir(routesTypesRoot, { recursive: true });
   const outputs: GeneratedFile[] = [];
 
   // First, extract all route parameters
@@ -124,20 +118,16 @@ export const generateTypes = async (
     const basePath = routesTypesRoot;
     if (isDirectory) {
       const targetDir = path.join(basePath, file);
-      await mkdir(targetDir, { recursive: true });
       const outputPath = path.join(targetDir, "+types.route.d.ts");
-      await writeFile(outputPath, template);
       outputs.push({ path: outputPath, contents: template });
     } else {
       const outputPath = path.join(basePath, `+types.${file.replace(tsRegex, ".ts")}`);
-      await writeFile(outputPath, template);
       outputs.push({ path: outputPath, contents: template });
     }
   }
 
   const rootTemplate = createTemplate("document.tsx", "");
   const rootOutputPath = path.join(typesRoot, "+types.document.ts");
-  await writeFile(rootOutputPath, rootTemplate);
   outputs.push({ path: rootOutputPath, contents: rootTemplate });
 
   return outputs;
