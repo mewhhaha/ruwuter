@@ -52,6 +52,49 @@ interface GlobalClientWindow extends Window {
   };
 }
 
+interface SyntheticEventFactory {
+  <E extends Event>(event: E): E;
+  [Symbol.hasInstance](value: unknown): boolean;
+}
+
+const syntheticEventInstances = new WeakSet<Event>();
+const syntheticEventCache = new WeakMap<Event, Event>();
+
+const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
+  if (syntheticEventCache.has(event)) {
+    return syntheticEventCache.get(event)!;
+  }
+
+  const currentTarget = event.currentTarget ?? null;
+  const srcElement =
+    ("srcElement" in event ? (event as Event & { srcElement?: EventTarget | null }).srcElement : undefined) ??
+    currentTarget;
+  const eventPhase = event.eventPhase;
+  const composedPath = typeof event.composedPath === "function"
+    ? event.composedPath()
+    : undefined;
+
+  const proxy = new Proxy(event, {
+    get(target, prop, receiver) {
+      if (prop === "currentTarget") return currentTarget;
+      if (prop === "srcElement") return srcElement;
+      if (prop === "eventPhase") return eventPhase;
+      if (prop === "composedPath") {
+        return () => composedPath ? composedPath.slice() : [];
+      }
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+
+  syntheticEventCache.set(event, proxy);
+  syntheticEventInstances.add(proxy);
+  return proxy;
+}) as SyntheticEventFactory;
+
+SyntheticEvent[Symbol.hasInstance] = (value: unknown): boolean =>
+  typeof value === "object" && value !== null && syntheticEventInstances.has(value as Event);
+
 const hasWindow = typeof window !== "undefined";
 
 function initializeClientRuntime(): void {
@@ -264,7 +307,8 @@ function initializeClientRuntime(): void {
       if (preventDefault && event.cancelable) {
         event.preventDefault();
       }
-      void invokeEntry(el, entry, type, event);
+      const synthetic = SyntheticEvent(event);
+      void invokeEntry(el, entry, type, synthetic);
     }, listenerOptions);
   }
 
