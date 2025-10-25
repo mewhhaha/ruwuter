@@ -135,6 +135,21 @@ export default function click(this: { msg: { get(): string } }, _ev: Event, _sig
 }
 ```
 
+## Client Events
+
+Client handler modules load on demand, so the first interaction usually crosses an async boundary
+while the module is importing. Native DOM events reset `currentTarget`, `srcElement`, and dispatch
+internals (like `eventPhase` and `composedPath()`) once the synchronous listener stack unwinds. That
+made the first click see `event.currentTarget === null` even though subsequent clicks behaved.
+
+To keep those values stable we wrap each event in a lightweight synthetic proxy before invoking your
+handler. The proxy captures the unstable fields at the top of the listener and forwards every other
+property access straight to the underlying event. Methods like `preventDefault()` still mutate the
+real event, and `instanceof Event` stays true.
+
+Handler signatures remain `(event: Event, signal: AbortSignal)`. You can rely on
+`event.currentTarget`/`event.srcElement` even if the handler awaits between import and execution.
+
 ### 4. Generate the router and type helpers
 
 The generator returns the route table and declaration artifacts so you can decide where to write

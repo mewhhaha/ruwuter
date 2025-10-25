@@ -54,10 +54,8 @@ interface GlobalClientWindow extends Window {
 
 interface SyntheticEventFactory {
   <E extends Event>(event: E): E;
-  [Symbol.hasInstance](value: unknown): boolean;
 }
 
-const syntheticEventInstances = new WeakSet<Event>();
 const syntheticEventCache = new WeakMap<Event, Event>();
 
 const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
@@ -88,12 +86,8 @@ const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
   });
 
   syntheticEventCache.set(event, proxy);
-  syntheticEventInstances.add(proxy);
   return proxy;
 }) as SyntheticEventFactory;
-
-SyntheticEvent[Symbol.hasInstance] = (value: unknown): boolean =>
-  typeof value === "object" && value !== null && syntheticEventInstances.has(value as Event);
 
 const hasWindow = typeof window !== "undefined";
 
