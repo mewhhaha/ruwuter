@@ -145,7 +145,8 @@ made the first click see `event.currentTarget === null` even though subsequent c
 To keep those values stable we wrap each event in a lightweight synthetic proxy before invoking your
 handler. The proxy captures the unstable fields at the top of the listener and forwards every other
 property access straight to the underlying event. Methods like `preventDefault()` still mutate the
-real event, and `instanceof Event` stays true.
+real event, and `instanceof Event` stays true. We also pin properties such as `currentTarget`,
+`relatedTarget`, `srcElement`, and `eventPhase` so they survive async gaps.
 
 Handler signatures remain `(event: Event, signal: AbortSignal)`. You can rely on
 `event.currentTarget`/`event.srcElement` even if the handler awaits between import and execution.

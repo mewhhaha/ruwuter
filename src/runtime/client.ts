@@ -68,6 +68,10 @@ const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
     ("srcElement" in event ? (event as Event & { srcElement?: EventTarget | null }).srcElement : undefined) ??
     currentTarget;
   const eventPhase = event.eventPhase;
+  const hasRelatedTarget = "relatedTarget" in event;
+  const relatedTarget = hasRelatedTarget
+    ? (event as Event & { relatedTarget?: EventTarget | null }).relatedTarget
+    : undefined;
   const composedPath = typeof event.composedPath === "function"
     ? event.composedPath()
     : undefined;
@@ -77,6 +81,7 @@ const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
       if (prop === "currentTarget") return currentTarget;
       if (prop === "srcElement") return srcElement;
       if (prop === "eventPhase") return eventPhase;
+      if (prop === "relatedTarget" && hasRelatedTarget) return relatedTarget;
       if (prop === "composedPath") {
         return () => composedPath ? composedPath.slice() : [];
       }
