@@ -131,7 +131,7 @@ export const events = <
 >(
   bind: T,
   ...fns: Fns
-) => {
+): [T, ...Fns] & ClientEventList => {
   return [bind, ...fns] as [T, ...Fns] & ClientEventList;
 };
 
