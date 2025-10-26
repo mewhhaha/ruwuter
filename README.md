@@ -88,7 +88,7 @@ app/
 ```tsx
 // app/_index.tsx
 import { Client, ref, SuspenseProvider } from "@mewhhaha/ruwuter/components";
-import { events } from "@mewhhaha/ruwuter/events";
+import { event, events } from "@mewhhaha/ruwuter/events";
 import clickHref from "./click.client.ts?url&no-inline";
 import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
 
@@ -119,7 +119,7 @@ export default function HomePage() {
             </button>
             <div id="result"></div>
             {/* Client example using URL-based handler modules. */}
-            <button on={[{ msg: greeting }, events.click(clickHref)]}>
+            <button on={events({ msg: greeting }, event.click(clickHref))}>
               Click me (client)
             </button>
           </div>
@@ -345,7 +345,7 @@ export default function Dashboard() {
   - If you prefer to control placement yourself, use `<SuspenseProvider resolve={false}>` and render
     `<Resolve />` where you want it. Add `nonce` for strict CSP.
 - Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be
-  wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerHref)`).
+  wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `event.click(handlerHref)`).
 - Stick to HTML-native attribute values; dynamic state flows through the `on` event list (optionally
   prefixed with your bound state) plus client handlers rather
   than function-valued props.
@@ -367,7 +367,7 @@ fixi and the Client runtime solve different problems and work great together:
 - Combine them
   - Use fixi for networking and server-rendered HTML; use Client for local UI polish.
 - If you attach both fixi and a client handler tuple via `on={...}`, default browser behavior
-  continues unless you opt in with `events.click(handlerHref, { preventDefault: true })` (or call
+  continues unless you opt in with `event.click(handlerHref, { preventDefault: true })` (or call
   `ev.preventDefault()` inside your client handler). Prefer
     sibling/wrapper elements, or let the client handler perform the fetch and DOM update itself.
   - Keep client handlers small and self-contained; place them in sidecar `*.client.ts` files and
@@ -421,8 +421,8 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 
 Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples
 produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their
-URLs with `?url`, and build tuples like `events.click(handlerHref)`. To bind handler context, start
-the event list with the object (or ref) you want as `this`. Those values can include shared `ref()`
+URLs with `?url`, and build tuples like `event.click(handlerHref)`. Use the `events(bind, ...)`
+helper to prepend the object (or ref) you want as `this`. Those values can include shared `ref()`
 objects.
 
 ```tsx
@@ -436,7 +436,7 @@ export default function click(
 
 // app/_index.tsx
 import { Client, ref } from "@mewhhaha/ruwuter/components";
-import { events } from "@mewhhaha/ruwuter/events";
+import { event, events } from "@mewhhaha/ruwuter/events";
 import clickHref from "./click.client.ts?url";
 
 export default function HomePage() {
@@ -444,7 +444,7 @@ export default function HomePage() {
   return (
     <html>
       <body>
-        <button on={[{ count }, events.click(clickHref)]}>
+        <button on={events({ count }, event.click(clickHref))}>
           +1
         </button>
         <Client />
@@ -454,9 +454,9 @@ export default function HomePage() {
 }
 ```
 
-- Lifecycle: `on={[events.mount(mountHref), events.unmount(unmountHref)]}`. `mount` fires after
+- Lifecycle: `on={[event.mount(mountHref), event.unmount(unmountHref)]}`. `mount` fires after
   `DOMContentLoaded`; `unmount` fires when the element is removed.
-- Add event options as the third tuple entry, e.g. `events.click(clickHref, { preventDefault: true })`
+- Add event options as the third tuple entry, e.g. `event.click(clickHref, { preventDefault: true })`
   to cancel default browser behavior before the handler module finishes loading.
 
 ### Hydration Boundaries (New)

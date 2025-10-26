@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client } from "../src/components/client.ts";
-import { events } from "../src/events.ts";
+import { event, events } from "../src/events.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -24,7 +24,7 @@ describe("Client interactions (no bundler)", () => {
           default: () => (
               <html>
               <body>
-                <button id="b" on={[{ by: 2 }, events.click(clickHref)]}>
+                <button id="b" on={events({ by: 2 }, event.click(clickHref))}>
                   0
                 </button>
                 <Client />

@@ -43,8 +43,8 @@ repository.
 
 - Import client handlers as modules and ask for their URL via `?url` (optionally `&no-inline`). The
   import yields a branded string typed as a handler URL.
-- Use the helpers from `@mewhhaha/ruwuter/events` (e.g. `events.click(handlerUrl)`) to build the
-  tuples consumed by the JSX runtime.
+- Use the helpers from `@mewhhaha/ruwuter/events` (e.g. `event.click(handlerUrl)`) to build the
+  tuples consumed by the JSX runtime. Use `events(bind, ...)` when you need to attach `this`.
 - The FS-routes generator writes handler declaration files under
   `.router/types/**/+client-handlers.d.ts` to ensure default exports satisfy the
   `(this, event, signal)` contract. Keep them up to date when adding handlers.

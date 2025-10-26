@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client, ref } from "../src/components/client.ts";
-import { events } from "../src/events.ts";
+import { event, events } from "../src/events.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -25,7 +25,7 @@ describe("Ref hydration and on boundary", () => {
           default: () => (
             <html>
               <body>
-                <button id="btn" on={[{ count, by: 1 }, events.click(clickHref)]}>
+                <button id="btn" on={events({ count, by: 1 }, event.click(clickHref))}>
                   X
                 </button>
                 <Client />

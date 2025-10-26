@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client } from "../src/components/client.ts";
-import { events } from "../src/events.ts";
+import { event } from "../src/events.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -23,7 +23,7 @@ describe("Unified on-prop", () => {
           default: () => (
             <html>
               <body>
-                <button id="c" on={events.click(clickHref)}>
+                <button id="c" on={event.click(clickHref)}>
                   0
                 </button>
                 <Client />
@@ -50,8 +50,8 @@ describe("Unified on-prop", () => {
     const clickHref = "./handlers/click.client.js";
     const focusHref = "./handlers/focus.client.js";
     const nestedHandlers = [
-      events.click(clickHref),
-      [events.focus(focusHref)],
+      event.click(clickHref),
+      [event.focus(focusHref)],
     ] as const;
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -108,7 +108,7 @@ describe("Unified on-prop", () => {
           default: () => (
             <html>
               <body>
-                <a id="with-prevent" href="/somewhere" on={events.click(clickHref, { preventDefault: true })}>
+                <a id="with-prevent" href="/somewhere" on={event.click(clickHref, { preventDefault: true })}>
                   tap
                 </a>
                 <Client />

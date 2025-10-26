@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client, ref } from "../src/components/client.ts";
-import { events } from "../src/events.ts";
+import { event, events } from "../src/events.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -26,8 +26,8 @@ describe("mount/unmount via unified on", () => {
           default: () => (
             <html>
               <body>
-                <div id="n" on={[{ count }, events.mount(mountHref)]} />
-                <div id="u" on={[events.unmount(unmountHref)]} />
+                <div id="n" on={events({ count }, event.mount(mountHref))} />
+                <div id="u" on={[event.unmount(unmountHref)]} />
                 <Client />
               </body>
             </html>

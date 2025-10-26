@@ -3,7 +3,7 @@ import "./setup.ts";
 import { DOMParser } from "@b-fuze/deno-dom";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client } from "../src/components/client.ts";
-import { events } from "../src/events.ts";
+import { event, events } from "../src/events.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 
 const makeCtx = () => {
@@ -157,8 +157,8 @@ describe("Client runtime DOM behaviour", () => {
             default: () => (
               <html>
                 <body>
-                  <div id="m" on={[{ touched: false }, events.mount(mountHref)]}></div>
-                  <div id="u" on={[events.unmount(unmountHref)]}></div>
+                  <div id="m" on={events({ touched: false }, event.mount(mountHref))}></div>
+                  <div id="u" on={[event.unmount(unmountHref)]}></div>
                   <Client />
                 </body>
               </html>

@@ -7,7 +7,7 @@ import type { ClientEventList } from "../events.ts";
  * JSX namespace containing type definitions for JSX elements and attributes.
  */
 export namespace JSX {
-  type HtmlEventBindings = ClientEventList<Handler>;
+  type HtmlEventBindings = ClientEventList<Handler<any, any, any>>;
 
   interface AriaAttributes {
     // ARIA attributes

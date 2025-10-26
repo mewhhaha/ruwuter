@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client, ref } from "../src/components/client.ts";
-import { events } from "../src/events.ts";
+import { event, events } from "../src/events.ts";
 
 const makeCtx = () => {
   const pending: Promise<any>[] = [];
@@ -27,7 +27,7 @@ describe("Ref sharing", () => {
           default: () => (
             <html>
               <body>
-                <button id="btn" on={[{ count }, events.click(clickHref)]}>
+                <button id="btn" on={events({ count }, event.click(clickHref))}>
                   {count}
                 </button>
                 <Client />
