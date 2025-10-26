@@ -104,7 +104,7 @@ type EventHelperRegistry =
   & Record<string, EventHelper<string, Event>>;
 
 /** Dynamic registry of event helpers backed by the DOM event map. */
-const eventHelpers = new Proxy<Record<string, EventHelper<string, Event>>>(
+export const event: EventHelperRegistry = new Proxy<Record<string, EventHelper<string, Event>>>(
   Object.create(null),
   {
     get(target, prop: PropertyKey, receiver) {
@@ -123,7 +123,6 @@ const eventHelpers = new Proxy<Record<string, EventHelper<string, Event>>>(
   },
 ) as EventHelperRegistry;
 
-export const event = eventHelpers;
 
 export const events = <
   const Fns extends readonly ClientEventList<any, string>[],
