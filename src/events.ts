@@ -16,6 +16,33 @@ export type HandlerModule<Fn = Handler> = (string | URL) & {
   readonly __ruwuterHandler?: Fn;
 };
 
+/** Reference to a client handler, optionally rewritten by bundlers to a module URL. */
+export type HandlerReference<Fn = Handler> = HandlerModule<Fn> | Fn;
+
+type OverrideEventProperty<
+  E extends Event,
+  K extends keyof E,
+  V,
+> = (Omit<E, K> & { readonly [P in K]: V }) & Event;
+
+type OverrideOptionalEventProperty<
+  E extends Event,
+  K extends PropertyKey,
+  V,
+> = K extends keyof E ? OverrideEventProperty<E, Extract<K, keyof E>, V> : E;
+
+type WithCurrentTarget<E extends Event, Target extends Element> =
+  OverrideEventProperty<E, "currentTarget", Target>;
+
+type WithRelatedTarget<E extends Event, Related> = [Related] extends [never] ? E
+  : OverrideOptionalEventProperty<E, "relatedTarget", Related>;
+
+export type TargetedEvent<
+  E extends Event,
+  CurrentTarget extends Element = Element,
+  RelatedTarget = E extends { relatedTarget: infer Related } ? Related : never,
+> = WithRelatedTarget<WithCurrentTarget<E, CurrentTarget>, RelatedTarget>;
+
 /** Ensures the default export conforms to the expected handler signature. */
 export type HandlerAssert<T> = T extends Handler<infer This, infer Ev, infer Result>
   ? Ev extends Event ? Handler<This, Ev, Result>
@@ -26,7 +53,7 @@ export type HandlerAssert<T> = T extends Handler<infer This, infer Ev, infer Res
 export type EventTuple<
   Fn = Handler,
   Type extends string = string,
-> = [Type, HandlerModule<Fn>, EventOptions?];
+> = [Type, HandlerReference<Fn>, EventOptions?];
 
 type HandlerBind<Fn> = Fn extends Handler<infer This, any, any> ? BindContext<This>
   : undefined;
@@ -83,12 +110,13 @@ type IntersectionOrUnknown<U> = [U] extends [never] ? unknown : UnionToIntersect
 
 
 type EventHelper<Type extends string, Ev extends Event> = <
+  Target extends Element = Element,
   This = unknown,
   Result = unknown | Promise<unknown>,
 >(
-  href: HandlerModule<Handler<This, Ev, Result>>,
+  href: HandlerReference<Handler<This, TargetedEvent<Ev, Target>, Result>>,
   options?: EventOptions,
-) => EventTuple<Handler<This, Ev, Result>, Type>;
+) => EventTuple<Handler<This, TargetedEvent<Ev, Target>, Result>, Type>;
 
 type LifecycleEventMap = {
   mount: Event;
@@ -111,13 +139,18 @@ export const event: EventHelperRegistry = new Proxy<Record<string, EventHelper<s
       if (typeof prop !== "string") {
         return Reflect.get(target, prop, receiver);
       }
-      const created = (
-        href: HandlerModule | string | URL,
+      const created = ((
+        href: HandlerModule | Handler | string | URL,
         options?: EventOptions,
       ) => {
+        if (typeof href === "function") {
+          throw new TypeError(
+            `Client event helpers require a module URL; received a function for "${prop}".`,
+          );
+        }
         const pathname: string = href instanceof URL ? href.pathname : href.toString();
-        return [prop, pathname, options] as unknown as EventHelper<string, Event>;
-      };
+        return [prop, pathname, options] as unknown as EventTuple<Handler, string>;
+      }) as EventHelper<string, Event>;
       return created;
     },
   },
@@ -133,5 +166,44 @@ export const events = <
 ): [T, ...Fns] & ClientEventList => {
   return [bind, ...fns] as [T, ...Fns] & ClientEventList;
 };
+
+export type ClientEvent<Type extends keyof GlobalEventMap, CurrentTarget extends Element = Element> =
+  TargetedEvent<GlobalEventMap[Type], CurrentTarget>;
+export type UIEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.UIEvent, CurrentTarget>;
+export type MouseEvent<
+  CurrentTarget extends Element = Element,
+  RelatedTarget = globalThis.MouseEvent["relatedTarget"],
+> = TargetedEvent<globalThis.MouseEvent, CurrentTarget, RelatedTarget>;
+export type PointerEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.PointerEvent, CurrentTarget>;
+export type KeyboardEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.KeyboardEvent, CurrentTarget>;
+export type FocusEvent<
+  CurrentTarget extends Element = Element,
+  RelatedTarget = globalThis.FocusEvent["relatedTarget"],
+> = TargetedEvent<globalThis.FocusEvent, CurrentTarget, RelatedTarget>;
+export type DragEvent<
+  CurrentTarget extends Element = Element,
+  RelatedTarget = globalThis.DragEvent["relatedTarget"],
+> = TargetedEvent<globalThis.DragEvent, CurrentTarget, RelatedTarget>;
+export type WheelEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.WheelEvent, CurrentTarget>;
+export type TouchEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.TouchEvent, CurrentTarget>;
+export type ClipboardEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.ClipboardEvent, CurrentTarget>;
+export type InputEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.InputEvent, CurrentTarget>;
+export type CompositionEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.CompositionEvent, CurrentTarget>;
+export type AnimationEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.AnimationEvent, CurrentTarget>;
+export type TransitionEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.TransitionEvent, CurrentTarget>;
+export type SubmitEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.SubmitEvent, CurrentTarget>;
+export type FormDataEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<globalThis.FormDataEvent, CurrentTarget>;
 
 export type { Handler };
