@@ -87,12 +87,18 @@ const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
   const toggleOldState = hasToggleState ? toggleCandidate.oldState : undefined;
   const toggleSource = hasToggleState ? toggleCandidate.source ?? null : undefined;
 
+  const hasSubmitter = "submitter" in event;
+  const submitter = hasSubmitter
+    ? (event as Event & { submitter?: Element | null }).submitter ?? null
+    : undefined;
+
   const proxy = new Proxy(event, {
     get(target, prop, receiver) {
       if (prop === "currentTarget") return currentTarget;
       if (prop === "srcElement") return srcElement;
       if (prop === "eventPhase") return eventPhase;
       if (prop === "relatedTarget" && hasRelatedTarget) return relatedTarget;
+      if (prop === "submitter" && hasSubmitter) return submitter;
       if (prop === "composedPath") {
         return () => composedPath ? composedPath.slice() : [];
       }
@@ -101,7 +107,7 @@ const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
         if (prop === "oldState") return toggleOldState;
         if (prop === "source") return toggleSource;
       }
-      const value = Reflect.get(target, prop, receiver);
+      const value = Reflect.get(target, prop);
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
