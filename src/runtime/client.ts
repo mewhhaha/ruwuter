@@ -52,18 +52,22 @@ interface GlobalClientWindow extends Window {
   };
 }
 
+interface SyntheticEventInit {
+  currentTarget?: EventTarget | null;
+}
+
 interface SyntheticEventFactory {
-  <E extends Event>(event: E): E;
+  <E extends Event>(event: E, init?: SyntheticEventInit): E;
 }
 
 const syntheticEventCache = new WeakMap<Event, Event>();
 
-const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
-  if (syntheticEventCache.has(event)) {
+const SyntheticEvent: SyntheticEventFactory = ((event: Event, init?: SyntheticEventInit) => {
+  if (!init && syntheticEventCache.has(event)) {
     return syntheticEventCache.get(event)!;
   }
 
-  const currentTarget = event.currentTarget ?? null;
+  const currentTarget = init?.currentTarget ?? event.currentTarget ?? null;
   const srcElement =
     ("srcElement" in event ? (event as Event & { srcElement?: EventTarget | null }).srcElement : undefined) ??
     currentTarget;
@@ -112,7 +116,9 @@ const SyntheticEvent: SyntheticEventFactory = ((event: Event) => {
     },
   });
 
-  syntheticEventCache.set(event, proxy);
+  if (!init) {
+    syntheticEventCache.set(event, proxy);
+  }
   return proxy;
 }) as SyntheticEventFactory;
 
@@ -285,8 +291,12 @@ function initializeClientRuntime(): void {
       controllers.set(type, controller);
     }
 
+    const eventForHandler = type === "mount" || type === "unmount"
+      ? SyntheticEvent(ev, { currentTarget: el })
+      : ev;
+
     try {
-      await fn.call(ctx.bind ?? el, ev, controller.signal);
+      await fn.call(ctx.bind ?? el, eventForHandler, controller.signal);
     } catch (err) {
       if (
         controller.signal.aborted ||
