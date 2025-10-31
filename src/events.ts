@@ -118,12 +118,30 @@ type EventHelper<Type extends string, Ev extends Event> = <
   options?: EventOptions,
 ) => EventTuple<Handler<This, TargetedEvent<Ev, Target>, Result>, Type>;
 
+type PopoverToggleEvent =
+  (typeof globalThis extends { ToggleEvent: { prototype: infer Prototype } }
+    ? Prototype extends Event ? Prototype
+    : Event
+    : Event) & {
+      readonly newState: string;
+      readonly oldState: string;
+      readonly source: Element | null;
+    };
+
+type ToggleEventOverrides = {
+  beforetoggle: PopoverToggleEvent;
+  toggle: PopoverToggleEvent;
+};
+
 type LifecycleEventMap = {
   mount: Event;
   unmount: Event;
 };
 
-type GlobalEventMap = GlobalEventHandlersEventMap & LifecycleEventMap;
+type GlobalEventMap =
+  Omit<GlobalEventHandlersEventMap, keyof ToggleEventOverrides> &
+    ToggleEventOverrides &
+    LifecycleEventMap;
 
 type EventHelperRegistry =
   & {
@@ -205,5 +223,7 @@ export type SubmitEvent<CurrentTarget extends Element = Element> =
   TargetedEvent<globalThis.SubmitEvent, CurrentTarget>;
 export type FormDataEvent<CurrentTarget extends Element = Element> =
   TargetedEvent<globalThis.FormDataEvent, CurrentTarget>;
+export type ToggleEvent<CurrentTarget extends Element = Element> =
+  TargetedEvent<PopoverToggleEvent, CurrentTarget>;
 
 export type { Handler };
