@@ -1,3 +1,23 @@
+type TrustedHTMLValue = typeof globalThis extends {
+  TrustedHTML: { prototype: infer T };
+} ? T
+  : string & { __trusted_html_brand?: never };
+
+type TrustedTypePolicyValue = typeof globalThis extends {
+  TrustedTypePolicy: { prototype: infer P };
+} ? P
+  : { createHTML(value: string): TrustedHTMLValue };
+
+type TrustedTypePolicyFactoryValue = typeof globalThis extends {
+  trustedTypes: infer F;
+} ? F
+  : {
+    createPolicy(
+      name: string,
+      rules: { createHTML?: (value: string) => string },
+    ): TrustedTypePolicyValue;
+  };
+
 export type SwapTarget = Element | string | { current?: Element | null | undefined };
 export type SwapModeHandler = (context: { target: Element; text: string }) => void | Promise<void>;
 export type SwapMode = SwapModeHandler | string;
@@ -7,6 +27,7 @@ export type SwapInput =
   | URL
   | Response
   | string
+  | TrustedHTMLValue
   | { text?: () => Promise<string> }
   | null
   | undefined;
@@ -14,7 +35,7 @@ export type SwapInput =
 export type SwapOptions = {
   target: SwapTarget;
   swap?: SwapMode;
-  text?: string;
+  text?: string | TrustedHTMLValue;
   init?: RequestInit;
 };
 
@@ -49,9 +70,19 @@ const resolveElement = (ref: SwapTarget): Element => {
   throw new TypeError("swap: unsupported element reference provided.");
 };
 
-const resolveText = async (input: SwapInput, provided?: string): Promise<string> => {
+const resolveText = async (
+  input: SwapInput,
+  provided?: string | TrustedHTMLValue,
+): Promise<string | TrustedHTMLValue> => {
   if (provided !== undefined) return provided;
   if (typeof input === "string") return input;
+  if (typeof globalThis === "object" && "TrustedHTML" in globalThis) {
+    const ctor =
+      (globalThis as { TrustedHTML?: { new (...args: never[]): TrustedHTMLValue } }).TrustedHTML;
+    if (ctor && input instanceof ctor) {
+      return input;
+    }
+  }
   if (isResponseLike(input)) return await input.text();
   if (input && typeof (input as { text?: () => Promise<string> }).text === "function") {
     return await (input as { text: () => Promise<string> }).text();
@@ -59,27 +90,43 @@ const resolveText = async (input: SwapInput, provided?: string): Promise<string>
   return String(input ?? "");
 };
 
+const createTrustedHTML = (() => {
+  let policy: TrustedTypePolicyValue | null = null;
+  return (html: string | TrustedHTMLValue): string | TrustedHTMLValue => {
+    if (typeof html !== "string") return html;
+    const trustedTypes = typeof window !== "undefined"
+      ? (window as { trustedTypes?: TrustedTypePolicyFactoryValue }).trustedTypes
+      : undefined;
+    if (!trustedTypes) return html;
+    policy ??= trustedTypes.createPolicy("ruwuter#swap", {
+      createHTML: (value) => value,
+    });
+    return policy.createHTML(html);
+  };
+})();
+
 const applySwap = async (
   target: Element,
   swapMode: SwapMode,
-  text: string,
+  domValue: string | TrustedHTMLValue,
+  textForHandler: string,
 ): Promise<void> => {
   if (typeof swapMode === "function") {
-    await swapMode({ target, text });
+    await swapMode({ target, text: textForHandler });
     return;
   }
 
   const mode = swapMode ?? "innerHTML";
 
   if (/(before|after)(begin|end)/.test(mode)) {
-    target.insertAdjacentHTML(mode as InsertPosition, text);
+    target.insertAdjacentHTML(mode as InsertPosition, String(domValue));
     return;
   }
 
   if (mode in target) {
     try {
-      // @ts-expect-error - dynamic property assignment
-      target[mode] = text;
+      // @ts-expect-error - dynamic property assignment + Trusted Types
+      target[mode] = domValue;
       return;
     } catch {
       // fallthrough to error
@@ -97,30 +144,33 @@ export const swap = async (
   const swapMode = options.swap ?? "innerHTML";
 
   let response: Response | null = null;
-  let text: string;
+  let rawHtml: string | TrustedHTMLValue;
 
   if (options.text !== undefined) {
-    text = options.text;
+    rawHtml = options.text;
   } else if (isResponseLike(input)) {
     response = input;
-    text = await response.text();
+    rawHtml = await response.text();
   } else if (
     typeof input === "string" ||
     isRequestLike(input) ||
     hasUrl(input)
   ) {
     response = await fetch(input as RequestInfo, options.init);
-    text = await response.text();
+    rawHtml = await response.text();
   } else {
-    text = await resolveText(input);
+    rawHtml = await resolveText(input);
   }
 
-  await applySwap(target, swapMode, text);
+  const domValue = createTrustedHTML(rawHtml);
+  const textForHandler = typeof rawHtml === "string" ? rawHtml : String(rawHtml);
+
+  await applySwap(target, swapMode, domValue, textForHandler);
 
   return {
     target,
     swap: swapMode,
-    text,
+    text: textForHandler,
     response,
   };
 };

@@ -296,8 +296,17 @@ export default function Document({ children }: { children: unknown }) {
 }
 ```
 
-When you attach `swap` globally, augment your types (e.g. add
-`swap?: typeof import("@mewhhaha/ruwuter/swap").swap` to `Window` in a `.d.ts`).
+And augment your global types so `window.swap` is recognised:
+
+```ts
+// globals.d.ts
+declare global {
+  interface Window {
+    swap?: typeof import("@mewhhaha/ruwuter/swap").swap;
+  }
+}
+export {};
+```
 
 ## Examples
 
