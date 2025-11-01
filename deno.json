@@ -1,6 +1,6 @@
 {
     "name": "@mewhhaha/ruwuter",
-    "version": "0.1.36",
+    "version": "0.1.37",
     "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
     "publish": {
         "include": ["deno.json", "README.md", "src"]
@@ -15,8 +15,7 @@
         "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.ts",
         "./client.js": "./src/runtime/client.ts",
         "./resolve.js": "./src/runtime/resolve.ts",
-        "./client": "./src/runtime/client.ts",
-        "./resolve": "./src/runtime/resolve.ts"
+        "./swap.js": "./src/runtime/swap.ts"
     },
     "bin": {
         "fs-routes": "./src/fs-routes/routes.ts"
@@ -59,6 +58,7 @@
         "@mewhhaha/ruwuter/jsx-runtime": "./src/runtime/jsx-runtime.ts",
         "@mewhhaha/ruwuter/jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.ts",
         "@mewhhaha/ruwuter/events": "./src/events.ts",
+        "@mewhhaha/ruwuter/swap": "./src/runtime/swap.ts",
         "urlpattern-polyfill": "npm:urlpattern-polyfill@^10.1.0"
     }
 }

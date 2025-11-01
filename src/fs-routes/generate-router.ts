@@ -92,14 +92,16 @@ const generatePatternString = (routePath: string): string => {
   return pattern;
 };
 
+const COMPONENT_SEGMENT = "[A-Z][A-Za-z0-9_$]*\\.html";
+
 const withAssetPattern = (pattern: string): string => {
   if (pattern === "/") {
-    return "(/):__asset(.+\\.html)?";
+    return `(/):__asset(${COMPONENT_SEGMENT})?`;
   }
   if (pattern.endsWith("/*")) {
     return pattern;
   }
-  return `${pattern}/:__asset(.+\\.html)?`;
+  return `${pattern}/:__asset(${COMPONENT_SEGMENT})?`;
 };
 
 export const generateRouter = async (

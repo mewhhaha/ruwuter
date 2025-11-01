@@ -120,22 +120,6 @@ function isFunction<Fn extends (...args: unknown[]) => unknown>(
   return typeof value === "function";
 }
 
-const hasReadableStream = (
-  value: unknown,
-): value is { toReadableStream: () => ReadableStream<Uint8Array> } => {
-  if (!value || typeof value !== "object") return false;
-  const method = Reflect.get(value, "toReadableStream");
-  return typeof method === "function";
-};
-
-const hasToPromise = (
-  value: unknown,
-): value is { toPromise: () => Promise<string> } => {
-  if (!value || typeof value !== "object") return false;
-  const method = Reflect.get(value, "toPromise");
-  return typeof method === "function";
-};
-
 /**
  * Router interface with a handle method for processing requests.
  */
@@ -169,24 +153,12 @@ const streamHtml = (value: Html): Response => {
   });
 };
 
-const stringHtml = (body: string): Response => {
-  return new Response(body, {
-    status: 200,
-    headers: HTML_HEADERS,
-  });
-};
-
-const assetPattern = /^f(\d+)-([^./]+)\.html$/;
-
-const parseAssetRequest = (
-  asset: string,
-): { exportName: string; fragmentIndex: number } | undefined => {
-  const match = assetPattern.exec(asset);
-  if (!match) return undefined;
-  const fragmentIndex = Number.parseInt(match[1], 10);
-  if (Number.isNaN(fragmentIndex)) return undefined;
-  const exportName = match[2];
-  return { exportName, fragmentIndex };
+const resolveComponentName = (asset: string): string | undefined => {
+  if (!asset.endsWith(".html")) return undefined;
+  const base = asset.slice(0, -5);
+  if (!base) return undefined;
+  if (!/^[A-Z][A-Za-z0-9_$]*$/.test(base)) return undefined;
+  return base;
 };
 
 const toParams = (
@@ -217,32 +189,6 @@ function getExportFunction<Fn extends (...args: any[]) => unknown>(
   return isFunction<Fn>(candidate) ? candidate : undefined;
 }
 
-const resolveAssetLoader = (
-  component: ComponentWithLoader,
-  mod: mod,
-): loader | undefined => {
-  if (isFunction<loader>(component.loader)) return component.loader;
-  if (isFunction<loader>(mod.loader)) return mod.loader;
-  return undefined;
-};
-
-const normalizeRendered = async (rendered: unknown): Promise<Response> => {
-  if (rendered instanceof Response) return rendered;
-  if (isHtml(rendered)) return streamHtml(rendered);
-  if (hasReadableStream(rendered)) {
-    return new Response(rendered.toReadableStream(), {
-      status: 200,
-      headers: HTML_HEADERS,
-    });
-  }
-  if (hasToPromise(rendered)) {
-    const body = await rendered.toPromise();
-    return stringHtml(body);
-  }
-  const body = rendered == null ? "" : typeof rendered === "string" ? rendered : String(rendered);
-  return stringHtml(body);
-};
-
 const serveHtmlAsset = async (
   mod: mod,
   exportName: string,
@@ -251,7 +197,11 @@ const serveHtmlAsset = async (
   const component = getExportFunction<ComponentWithLoader>(mod, exportName);
   if (!component) return undefined;
 
-  const loader = resolveAssetLoader(component, mod);
+  const loader = isFunction<loader>(component.loader)
+    ? component.loader
+    : isFunction<loader>(mod.loader)
+    ? mod.loader
+    : undefined;
 
   let loaderData: unknown;
   if (loader) {
@@ -266,7 +216,13 @@ const serveHtmlAsset = async (
     request: ctx.request,
   });
 
-  return await normalizeRendered(rendered);
+  if (rendered instanceof Response) return rendered;
+  if (!isHtml(rendered)) {
+    throw new TypeError(
+      `Component export "${exportName}" must return Html or Response when requested via __asset.`,
+    );
+  }
+  return streamHtml(rendered);
 };
 
 const serveAsset = async (
@@ -274,21 +230,20 @@ const serveAsset = async (
   asset: string,
   ctx: ctx,
 ): Promise<Response> => {
-  const parsed = parseAssetRequest(asset);
-  if (!parsed) return new Response(null, { status: 404 });
+  const exportName = resolveComponentName(asset);
+  if (!exportName) return new Response(null, { status: 404 });
 
-  const fi = parsed.fragmentIndex;
-  if (fi < 0 || fi >= fragments.length) return new Response(null, { status: 404 });
-  const fragment = fragments[fi];
-  if (!fragment) return new Response(null, { status: 404 });
+  for (let index = fragments.length - 1; index >= 0; index--) {
+    const fragment = fragments[index];
+    if (!fragment) continue;
+    const response = await serveHtmlAsset(fragment.mod, exportName, ctx);
+    if (response) return response;
+  }
 
-  const { mod } = fragment;
-
-  const htmlResponse = await serveHtmlAsset(mod, parsed.exportName, ctx);
-  return htmlResponse ?? new Response(null, { status: 404 });
+  return new Response(null, { status: 404 });
 };
 
-const runWithStores = async (fn: () => Promise<Response>) => {
+const runWithStores = (fn: () => Promise<Response>) => {
   return runWithHooksStore(() => runWithContextStore(fn));
 };
 

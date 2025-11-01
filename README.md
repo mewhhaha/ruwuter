@@ -156,7 +156,8 @@ Handler signatures remain `(event: Event, signal: AbortSignal)`. You can rely on
 ## Element refs
 
 All intrinsic JSX elements now accept a `ref` prop that points at a `Ref<HTMLElement | null>`. Use
-`ref(null)` (from `@mewhhaha/ruwuter/components`) to create the container and pass it to the element:
+`ref(null)` (from `@mewhhaha/ruwuter/components`) to create the container and pass it to the
+element:
 
 ```tsx
 import { Client, ref } from "@mewhhaha/ruwuter/components";
@@ -186,7 +187,7 @@ markup:
 ```html
 <button>Focus me later</button>
 <script type="application/json" data-hydrate="h_7">
-  {"ref":{"__ref":true,"i":"r_0nlm88cjmni","v":null}}
+  { "ref": { "__ref": true, "i": "r_0nlm88cjmni", "v": null } }
 </script>
 ```
 
@@ -230,6 +231,57 @@ async function writeFsRoutes(appFolder: string) {
 ```
 
 Call this whenever your file-system routes change (during builds, watch mode, etc.).
+
+## Fragment assets
+
+Components exported from a route module are exposed at predictable URLs. Each named export must
+begin with an uppercase letter, so `export function Hello()` becomes `/products/Hello.html` and
+`export const ProductCard` resolves to `/products/ProductCard.html`.
+
+When you need a component fragment in response to an interaction, build that URL on the server and
+pass it down so the client can fetch and inject the markup:
+
+```tsx
+// app/routes/products.tsx
+import { event, events } from "@mewhhaha/ruwuter/events";
+
+export async function loader({ request }) {
+  const url = new URL(request.url);
+  return { helloUrl: `${url.pathname}/Hello.html` };
+}
+
+export default function Products({ loaderData: { helloUrl } }) {
+  return (
+    <>
+      <button
+        on={events(
+          { helloUrl },
+          event.click("./handlers/add-hello.client.ts?url&no-inline", {
+            preventDefault: true,
+          }),
+        )}
+      >
+        Add Hello
+      </button>
+      <ul id="items"></ul>
+    </>
+  );
+}
+
+// app/routes/handlers/add-hello.client.ts
+"use client";
+
+export default async function addHello(this: { helloUrl: string }) {
+  const response = await fetch(this.helloUrl, { method: "POST" });
+  const html = await response.text();
+  const target = document.querySelector("#items");
+  if (!target) throw new Error("Target element not found");
+  target.insertAdjacentHTML("beforeend", html);
+}
+```
+
+> Tip: Prefer `import "@mewhhaha/ruwuter/swap";` in your document if you want the `window.swap()`
+> helper instead of manual `fetch` + `insertAdjacentHTML` logic.
 
 ## Examples
 
@@ -388,8 +440,7 @@ export default function Dashboard() {
 - Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be
   wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `event.click(handlerHref)`).
 - Stick to HTML-native attribute values; dynamic state flows through the `on` event list (optionally
-  prefixed with your bound state) plus client handlers rather
-  than function-valued props.
+  prefixed with your bound state) plus client handlers rather than function-valued props.
 
 ### Using Both fixi and Client
 
@@ -409,8 +460,8 @@ fixi and the Client runtime solve different problems and work great together:
   - Use fixi for networking and server-rendered HTML; use Client for local UI polish.
 - If you attach both fixi and a client handler tuple via `on={...}`, default browser behavior
   continues unless you opt in with `event.click(handlerHref, { preventDefault: true })` (or call
-  `ev.preventDefault()` inside your client handler). Prefer
-    sibling/wrapper elements, or let the client handler perform the fetch and DOM update itself.
+  `ev.preventDefault()` inside your client handler). Prefer sibling/wrapper elements, or let the
+  client handler perform the fetch and DOM update itself.
   - Keep client handlers small and self-contained; place them in sidecar `*.client.ts` files and
     import their URLs with `?url`.
   - For strict CSP, use `<Client nonce={cspNonce} />`.
@@ -497,8 +548,9 @@ export default function HomePage() {
 
 - Lifecycle: `on={[event.mount(mountHref), event.unmount(unmountHref)]}`. `mount` fires after
   `DOMContentLoaded`; `unmount` fires when the element is removed.
-- Add event options as the third tuple entry, e.g. `event.click(clickHref, { preventDefault: true })`
-  to cancel default browser behavior before the handler module finishes loading.
+- Add event options as the third tuple entry, e.g.
+  `event.click(clickHref, { preventDefault: true })` to cancel default browser behavior before the
+  handler module finishes loading.
 
 ### Hydration Boundaries (New)
 
