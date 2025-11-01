@@ -1,8 +1,8 @@
-type SwapTarget = Element | string | { current?: Element | null | undefined };
-type SwapModeHandler = (context: { target: Element; text: string }) => void | Promise<void>;
-type SwapMode = SwapModeHandler | string;
+export type SwapTarget = Element | string | { current?: Element | null | undefined };
+export type SwapModeHandler = (context: { target: Element; text: string }) => void | Promise<void>;
+export type SwapMode = SwapModeHandler | string;
 
-type SwapInput =
+export type SwapInput =
   | RequestInfo
   | URL
   | Response
@@ -11,30 +11,19 @@ type SwapInput =
   | null
   | undefined;
 
-type SwapOptions = {
+export type SwapOptions = {
   target: SwapTarget;
   swap?: SwapMode;
   text?: string;
   init?: RequestInit;
 };
 
-type SwapResult = {
+export type SwapResult = {
   target: Element;
   swap: SwapMode;
   text: string;
   response: Response | null;
 };
-
-declare global {
-  interface Window {
-    swap?: (
-      input: SwapInput,
-      options: SwapOptions,
-    ) => Promise<SwapResult>;
-  }
-}
-
-const hasWindow = typeof window !== "undefined";
 
 const isResponseLike = (input: unknown): input is Response => input instanceof Response;
 const isRequestLike = (input: unknown): input is Request => input instanceof Request;
@@ -100,9 +89,9 @@ const applySwap = async (
   throw new Error(`swap: unsupported swap mode "${mode}".`);
 };
 
-const swapImpl = async (
+export const swap = async (
   input: SwapInput,
-  options: SwapOptions = { target: "" as unknown as SwapTarget },
+  options: SwapOptions,
 ): Promise<SwapResult> => {
   const target = resolveElement(options.target);
   const swapMode = options.swap ?? "innerHTML";
@@ -136,13 +125,16 @@ const swapImpl = async (
   };
 };
 
-const attachSwapToWindow = (global: Window & typeof globalThis) => {
-  if (global.swap) return;
-  global.swap = swapImpl;
+export const installSwap = (
+  global: { swap?: typeof swap },
+): void => {
+  if (!global.swap) {
+    global.swap = swap;
+  }
 };
 
-if (hasWindow) {
-  attachSwapToWindow(window as Window & typeof globalThis);
-}
+const hasWindow = typeof window !== "undefined";
 
-export {};
+if (hasWindow) {
+  installSwap(window as { swap?: typeof swap });
+}

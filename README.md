@@ -272,16 +272,32 @@ export default function Products({ loaderData: { helloUrl } }) {
 "use client";
 
 export default async function addHello(this: { helloUrl: string }) {
-  const response = await fetch(this.helloUrl, { method: "POST" });
-  const html = await response.text();
-  const target = document.querySelector("#items");
-  if (!target) throw new Error("Target element not found");
-  target.insertAdjacentHTML("beforeend", html);
+  await window.swap?.(fetch(this.helloUrl, { method: "POST" }), {
+    target: "#items",
+    swap: "beforeend",
+  });
 }
 ```
 
-> Tip: Prefer `import "@mewhhaha/ruwuter/swap";` in your document if you want the `window.swap()`
-> helper instead of manual `fetch` + `insertAdjacentHTML` logic.
+Load the helper once via a script tag (mirrors how the client runtime is loaded):
+
+```tsx
+import swapModule from "@mewhhaha/ruwuter/swap.js?url&no-inline";
+
+export default function Document({ children }: { children: unknown }) {
+  return (
+    <html>
+      <head>
+        <script type="module" src={swapModule}></script>
+      </head>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+When you attach `swap` globally, augment your types (e.g. add
+`swap?: typeof import("@mewhhaha/ruwuter/swap").swap` to `Window` in a `.d.ts`).
 
 ## Examples
 
