@@ -2,7 +2,7 @@ import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import "./setup.ts";
 import { DOMParser } from "@b-fuze/deno-dom";
 import { type Env, type fragment, Router } from "../src/router.ts";
-import { Client } from "../src/components/client.ts";
+import { Client, ref } from "../src/components/client.ts";
 import { event, events } from "../src/events.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 
@@ -204,4 +204,57 @@ describe("Client runtime DOM behaviour", () => {
       }
     },
   );
+
+  it("hydrates ref props and clears them on unmount", async () => {
+    const buttonRef = ref<HTMLButtonElement | null>(null);
+
+    const pattern = new URLPattern({ pathname: "/" });
+    const fragments: fragment[] = [
+      {
+        id: "root",
+        mod: {
+          default: () => (
+            <html>
+              <body>
+                <button id="target" ref={buttonRef}>ref target</button>
+                <Client />
+              </body>
+            </html>
+          ),
+        },
+      },
+    ];
+
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(
+      new Request("https://example.com/"),
+      {} as Env,
+      ctx,
+    );
+    const html = await res.text();
+
+    const { window, doc, patchRemove, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+
+      doc.dispatchEvent(new Event("DOMContentLoaded"));
+
+      const btn = doc.getElementById("target") as HTMLButtonElement | null;
+      if (!btn) throw new Error("expected target button to exist");
+      await waitFor(() => {
+        const store = window.__ruwuter?.store;
+        return typeof store?.get === "function" && store.get(buttonRef.id) === btn;
+      }, 1000);
+      expect(window.__ruwuter?.store?.get(buttonRef.id)).toBe(btn);
+
+      patchRemove(btn as any);
+      btn.remove();
+
+      await waitFor(() => window.__ruwuter?.store?.get(buttonRef.id) === null, 1000);
+      expect(window.__ruwuter?.store?.get(buttonRef.id)).toBe(null);
+    } finally {
+      cleanup();
+    }
+  });
 });

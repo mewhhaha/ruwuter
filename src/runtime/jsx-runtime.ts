@@ -22,7 +22,8 @@
 
 import { type Html, into, isHtml } from "./node.ts";
 import { withComponentFrame } from "./hooks.ts";
-import type { EventOptions } from "../events.ts";
+import type { EventOptions } from "@mewhhaha/ruwuter/events";
+import type { Ref as ClientRef } from "../components/client.ts";
 import "./typed.ts";
 import type { JSX } from "./typed.ts";
 export type * from "./typed.ts";
@@ -67,7 +68,11 @@ type EventListenerOptions = {
 };
 
 type ModuleEntry = { t: "m"; s: string; x?: string; ev?: string; opt?: EventListenerOptions };
-type HydrationPayload = { bind?: unknown; on?: ModuleEntry[] };
+type HydrationPayload = {
+  bind?: unknown;
+  on?: ModuleEntry[];
+  ref?: ClientRef<unknown>;
+};
 
 const escapeJsonForScript = (json: string): string => json.replaceAll("</script>", "<\\/script>");
 
@@ -122,6 +127,20 @@ export function jsx(
   };
 
   for (const [key, value] of Object.entries(props)) {
+    if (key === "ref") {
+      if (
+        value &&
+        typeof value === "object" &&
+        "set" in value &&
+        typeof (value as ClientRef<unknown>).set === "function" &&
+        "get" in value &&
+        typeof (value as ClientRef<unknown>).get === "function"
+      ) {
+        ensureHydration().ref = value as ClientRef<unknown>;
+      }
+      continue;
+    }
+
     // Event handlers: expect tuple descriptors [eventType, href, options?]
     if (key === "on" && Array.isArray(value)) {
       const items: ModuleEntry[] = [];

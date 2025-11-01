@@ -18,6 +18,7 @@ type ModuleEntry = {
 type HydrationPayload = {
   bind?: unknown;
   on?: ModuleEntry[];
+  ref?: RefObject;
 };
 
 type ClientFn = (this: unknown, ev: Event, signal: AbortSignal) => unknown;
@@ -41,6 +42,7 @@ interface ElementContext {
   bind: unknown;
   controllers: Map<string, AbortController>;
   unmount: ModuleEntry[];
+  refs: RefObject[];
 }
 
 type ModuleNamespace = Record<string, unknown>;
@@ -56,36 +58,34 @@ interface SyntheticEventInit {
   currentTarget?: EventTarget | null;
 }
 
-interface SyntheticEventFactory {
-  <E extends Event>(event: E, init?: SyntheticEventInit): E;
-}
-
 const syntheticEventCache = new WeakMap<Event, Event>();
 
-const SyntheticEvent: SyntheticEventFactory = ((event: Event, init?: SyntheticEventInit) => {
+function synthesizeEvent<E extends Event>(
+  event: E,
+  init?: SyntheticEventInit,
+) {
   if (!init && syntheticEventCache.has(event)) {
-    return syntheticEventCache.get(event)!;
+    return syntheticEventCache.get(event)! as E;
   }
 
   const currentTarget = init?.currentTarget ?? event.currentTarget ?? null;
   const srcElement =
-    ("srcElement" in event ? (event as Event & { srcElement?: EventTarget | null }).srcElement : undefined) ??
-    currentTarget;
+    ("srcElement" in event
+      ? (event as Event & { srcElement?: EventTarget | null }).srcElement
+      : undefined) ??
+      currentTarget;
   const eventPhase = event.eventPhase;
   const hasRelatedTarget = "relatedTarget" in event;
   const relatedTarget = hasRelatedTarget
     ? (event as Event & { relatedTarget?: EventTarget | null }).relatedTarget
     : undefined;
-  const composedPath = typeof event.composedPath === "function"
-    ? event.composedPath()
-    : undefined;
+  const composedPath = typeof event.composedPath === "function" ? event.composedPath() : undefined;
   const toggleCandidate = event as Event & {
     newState?: string;
     oldState?: string;
     source?: Element | null;
   };
-  const hasToggleState =
-    typeof toggleCandidate.newState === "string" ||
+  const hasToggleState = typeof toggleCandidate.newState === "string" ||
     typeof toggleCandidate.oldState === "string";
   const toggleNewState = hasToggleState ? toggleCandidate.newState : undefined;
   const toggleOldState = hasToggleState ? toggleCandidate.oldState : undefined;
@@ -97,7 +97,7 @@ const SyntheticEvent: SyntheticEventFactory = ((event: Event, init?: SyntheticEv
     : undefined;
 
   const proxy = new Proxy(event, {
-    get(target, prop, receiver) {
+    get(target, prop, _receiver) {
       if (prop === "currentTarget") return currentTarget;
       if (prop === "srcElement") return srcElement;
       if (prop === "eventPhase") return eventPhase;
@@ -119,8 +119,8 @@ const SyntheticEvent: SyntheticEventFactory = ((event: Event, init?: SyntheticEv
   if (!init) {
     syntheticEventCache.set(event, proxy);
   }
-  return proxy;
-}) as SyntheticEventFactory;
+  return proxy as E;
+}
 
 const hasWindow = typeof window !== "undefined";
 
@@ -263,6 +263,7 @@ function initializeClientRuntime(): void {
         bind: undefined,
         controllers: new Map<string, AbortController>(),
         unmount: [],
+        refs: [],
       };
       contexts.set(el, ctx);
     }
@@ -292,7 +293,7 @@ function initializeClientRuntime(): void {
     }
 
     const eventForHandler = type === "mount" || type === "unmount"
-      ? SyntheticEvent(ev, { currentTarget: el })
+      ? synthesizeEvent(ev, { currentTarget: el })
       : ev;
 
     try {
@@ -338,7 +339,7 @@ function initializeClientRuntime(): void {
       if (preventDefault && event.cancelable) {
         event.preventDefault();
       }
-      const synthetic = SyntheticEvent(event);
+      const synthetic = synthesizeEvent(event);
       void invokeEntry(el, entry, type, synthetic);
     }, listenerOptions);
   }
@@ -349,6 +350,18 @@ function initializeClientRuntime(): void {
 
     if ("bind" in payload) {
       ctx.bind = payload.bind;
+    }
+
+    if (payload.ref) {
+      const refs = ctx.refs;
+      if (!refs.includes(payload.ref)) {
+        refs.push(payload.ref);
+      }
+      try {
+        payload.ref.set(el);
+      } catch {
+        /* ignore ref assignment errors */
+      }
     }
 
     payload.on?.forEach((entry) => attachHandler(el, entry));
@@ -413,6 +426,19 @@ function initializeClientRuntime(): void {
         void invokeEntry(el, entry, "unmount", new Event("unmount"));
       });
       ctx.unmount.length = 0;
+    }
+
+    if (ctx.refs.length) {
+      ctx.refs.forEach((ref) => {
+        try {
+          if (ref.get() === el) {
+            ref.set(null);
+          }
+        } catch {
+          /* ignore ref assignment errors */
+        }
+      });
+      ctx.refs.length = 0;
     }
 
     contexts.delete(el);

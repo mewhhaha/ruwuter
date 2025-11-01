@@ -3,6 +3,16 @@ import type { FixiAttributes } from "./fixi.ts";
 import type { Handler, Ref as ClientRef } from "../components/client.ts";
 import type { ClientEventList } from "../events.ts";
 
+type ElementForTag<Tag extends string> = Tag extends keyof HTMLElementTagNameMap
+  ? HTMLElementTagNameMap[Tag]
+  : Tag extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[Tag]
+  : Tag extends keyof MathMLElementTagNameMap ? MathMLElementTagNameMap[Tag]
+  : globalThis.Element;
+
+type WithRef<Name extends string, Props> = Props & {
+  ref?: ClientRef<ElementForTag<Name> | null> | undefined;
+};
+
 /**
  * JSX namespace containing type definitions for JSX elements and attributes.
  */
@@ -99,8 +109,7 @@ export namespace JSX {
   }
 
   // typed-html
-  export interface HtmlTag
-    extends FixiAttributes, AriaAttributes {
+  export interface HtmlTag extends FixiAttributes, AriaAttributes {
     // Ruwuter client additions
     on?: HtmlEventBindings | undefined;
   }
@@ -283,8 +292,7 @@ export namespace JSX {
   export interface HtmlTableColTag extends HtmlTag {
     span?: string | undefined;
   }
-  export interface HtmlTableSectionTag
-    extends HtmlTag {}
+  export interface HtmlTableSectionTag extends HtmlTag {}
   export interface HtmlTableRowTag extends HtmlTag {}
   export interface DataTag extends HtmlTag {
     value?: string | undefined;
@@ -461,8 +469,7 @@ export namespace JSX {
     default?: string | undefined;
   }
   export interface HtmlLegendTag extends HtmlTag {}
-  export interface HtmlBrowserButtonTag
-    extends HtmlTag {
+  export interface HtmlBrowserButtonTag extends HtmlTag {
     type?: string | undefined;
   }
   export interface HtmlMenuTag extends HtmlTag {
@@ -504,8 +511,7 @@ export namespace JSX {
     scoped?: string | undefined;
   }
   export interface HtmlTableTag extends HtmlTag {}
-  export interface HtmlTableDataCellTag
-    extends HtmlTag {
+  export interface HtmlTableDataCellTag extends HtmlTag {
     colspan?: string | number | undefined;
     rowspan?: string | number | undefined;
     headers?: string | undefined;
@@ -525,8 +531,7 @@ export namespace JSX {
     rows?: string | undefined;
     wrap?: string | undefined;
   }
-  export interface HtmlTableHeaderCellTag
-    extends HtmlTag {
+  export interface HtmlTableHeaderCellTag extends HtmlTag {
     colspan?: string | number | undefined;
     rowspan?: string | number | undefined;
     headers?: string | undefined;
@@ -569,8 +574,7 @@ export namespace JSX {
     numOctaves?: string | undefined;
   }
 
-  export interface HtmlFeDisplacementMapTag
-    extends HtmlTag {
+  export interface HtmlFeDisplacementMapTag extends HtmlTag {
     in?: string | undefined;
     scale?: string | undefined;
   }
@@ -597,125 +601,125 @@ export namespace JSX {
     children?: HtmlNode;
   }
   export interface IntrinsicElements {
-    a: HtmlAnchorTag;
-    abbr: HtmlTag;
-    address: HtmlTag;
-    area: HtmlAreaTag;
-    article: HtmlTag;
-    aside: HtmlTag;
-    audio: HtmlAudioTag;
-    b: HtmlTag;
-    bb: HtmlBrowserButtonTag;
-    base: BaseTag;
-    bdi: HtmlTag;
-    bdo: HtmlTag;
-    blockquote: HtmlQuoteTag;
-    body: HtmlBodyTag;
-    br: HtmlTag;
-    button: HtmlButtonTag;
-    canvas: HtmlCanvasTag;
-    caption: HtmlTag;
-    cite: HtmlTag;
-    code: HtmlTag;
-    col: HtmlTableColTag;
-    colgroup: HtmlTableColTag;
-    commands: HtmlCommandTag;
-    data: DataTag;
-    datalist: HtmlDataListTag;
-    dd: HtmlTag;
-    del: HtmlModTag;
-    details: HtmlDetailsTag;
-    summary: HtmlTag;
-    dfn: HtmlTag;
-    div: HtmlTag;
-    dl: HtmlTag;
-    dt: HtmlTag;
-    em: HtmlTag;
-    embed: HtmlEmbedTag;
-    fieldset: HtmlFieldSetTag;
-    figcaption: HtmlTag;
-    figure: HtmlTag;
-    footer: HtmlTag;
-    form: HtmlFormTag;
-    dialog: HtmlDialogTag;
-    h1: HtmlTag;
-    h2: HtmlTag;
-    h3: HtmlTag;
-    h4: HtmlTag;
-    h5: HtmlTag;
-    h6: HtmlTag;
-    head: HtmlTag;
-    header: HtmlTag;
-    hr: HtmlTag;
-    html: HtmlHtmlTag;
-    i: HtmlTag;
-    iframe: HtmlIFrameTag;
-    img: HtmlImageTag;
-    input: HtmlInputTag;
-    ins: HtmlModTag;
-    kbd: HtmlTag;
-    keygen: KeygenTag;
-    label: HtmlLabelTag;
-    legend: HtmlLegendTag;
-    hgroup: HtmlTag;
-    li: HtmlLITag;
-    link: HtmlLinkTag;
-    main: HtmlTag;
-    map: HtmlMapTag;
-    mark: HtmlTag;
-    menu: HtmlMenuTag;
-    meta: HtmlMetaTag;
-    meter: HtmlMeterTag;
-    nav: HtmlTag;
-    noscript: HtmlTag;
-    object: HtmlObjectTag;
-    ol: HtmlOListTag;
-    optgroup: HtmlOptgroupTag;
-    option: HtmlOptionTag;
-    output: HtmlOutputTag;
-    p: HtmlTag;
-    param: HtmlParamTag;
-    pre: HtmlTag;
-    progress: HtmlProgressTag;
-    q: HtmlQuoteTag;
-    rb: HtmlTag;
-    rp: HtmlTag;
-    rt: HtmlTag;
-    rtc: HtmlTag;
-    ruby: HtmlTag;
-    s: HtmlTag;
-    samp: HtmlTag;
-    script: HtmlScriptTag;
-    section: HtmlTag;
-    select: HtmlSelectTag;
-    small: HtmlTag;
-    source: HtmlSourceTag;
-    span: HtmlTag;
-    strong: HtmlTag;
-    style: HtmlStyleTag;
-    sub: HtmlTag;
-    sup: HtmlTag;
-    table: HtmlTableTag;
-    tbody: HtmlTag;
-    td: HtmlTableDataCellTag;
-    template: HtmlTag;
-    textarea: HtmlTextAreaTag;
-    tfoot: HtmlTableSectionTag;
-    th: HtmlTableHeaderCellTag;
-    thead: HtmlTableSectionTag;
-    time: HtmlTimeTag;
-    title: HtmlTag;
-    tr: HtmlTableRowTag;
-    track: HtmlTrackTag;
-    u: HtmlTag;
-    ul: HtmlTag;
-    var: HtmlTag;
-    video: HtmlVideoTag;
-    wbr: HtmlTag;
-    svg: HtmlSvgTag;
-    path: HtmlPathTag;
-    filter: HtmlSvgTag;
-    feTurbulence: HtmlFeTurbulenceTag;
-    feDisplacementMap: HtmlFeDisplacementMapTag;
+    a: WithRef<"a", HtmlAnchorTag>;
+    abbr: WithRef<"abbr", HtmlTag>;
+    address: WithRef<"address", HtmlTag>;
+    area: WithRef<"area", HtmlAreaTag>;
+    article: WithRef<"article", HtmlTag>;
+    aside: WithRef<"aside", HtmlTag>;
+    audio: WithRef<"audio", HtmlAudioTag>;
+    b: WithRef<"b", HtmlTag>;
+    bb: WithRef<"bb", HtmlBrowserButtonTag>;
+    base: WithRef<"base", BaseTag>;
+    bdi: WithRef<"bdi", HtmlTag>;
+    bdo: WithRef<"bdo", HtmlTag>;
+    blockquote: WithRef<"blockquote", HtmlQuoteTag>;
+    body: WithRef<"body", HtmlBodyTag>;
+    br: WithRef<"br", HtmlTag>;
+    button: WithRef<"button", HtmlButtonTag>;
+    canvas: WithRef<"canvas", HtmlCanvasTag>;
+    caption: WithRef<"caption", HtmlTag>;
+    cite: WithRef<"cite", HtmlTag>;
+    code: WithRef<"code", HtmlTag>;
+    col: WithRef<"col", HtmlTableColTag>;
+    colgroup: WithRef<"colgroup", HtmlTableColTag>;
+    commands: WithRef<"commands", HtmlCommandTag>;
+    data: WithRef<"data", DataTag>;
+    datalist: WithRef<"datalist", HtmlDataListTag>;
+    dd: WithRef<"dd", HtmlTag>;
+    del: WithRef<"del", HtmlModTag>;
+    details: WithRef<"details", HtmlDetailsTag>;
+    summary: WithRef<"summary", HtmlTag>;
+    dfn: WithRef<"dfn", HtmlTag>;
+    div: WithRef<"div", HtmlTag>;
+    dl: WithRef<"dl", HtmlTag>;
+    dt: WithRef<"dt", HtmlTag>;
+    em: WithRef<"em", HtmlTag>;
+    embed: WithRef<"embed", HtmlEmbedTag>;
+    fieldset: WithRef<"fieldset", HtmlFieldSetTag>;
+    figcaption: WithRef<"figcaption", HtmlTag>;
+    figure: WithRef<"figure", HtmlTag>;
+    footer: WithRef<"footer", HtmlTag>;
+    form: WithRef<"form", HtmlFormTag>;
+    dialog: WithRef<"dialog", HtmlDialogTag>;
+    h1: WithRef<"h1", HtmlTag>;
+    h2: WithRef<"h2", HtmlTag>;
+    h3: WithRef<"h3", HtmlTag>;
+    h4: WithRef<"h4", HtmlTag>;
+    h5: WithRef<"h5", HtmlTag>;
+    h6: WithRef<"h6", HtmlTag>;
+    head: WithRef<"head", HtmlTag>;
+    header: WithRef<"header", HtmlTag>;
+    hr: WithRef<"hr", HtmlTag>;
+    html: WithRef<"html", HtmlHtmlTag>;
+    i: WithRef<"i", HtmlTag>;
+    iframe: WithRef<"iframe", HtmlIFrameTag>;
+    img: WithRef<"img", HtmlImageTag>;
+    input: WithRef<"input", HtmlInputTag>;
+    ins: WithRef<"ins", HtmlModTag>;
+    kbd: WithRef<"kbd", HtmlTag>;
+    keygen: WithRef<"keygen", KeygenTag>;
+    label: WithRef<"label", HtmlLabelTag>;
+    legend: WithRef<"legend", HtmlLegendTag>;
+    hgroup: WithRef<"hgroup", HtmlTag>;
+    li: WithRef<"li", HtmlLITag>;
+    link: WithRef<"link", HtmlLinkTag>;
+    main: WithRef<"main", HtmlTag>;
+    map: WithRef<"map", HtmlMapTag>;
+    mark: WithRef<"mark", HtmlTag>;
+    menu: WithRef<"menu", HtmlMenuTag>;
+    meta: WithRef<"meta", HtmlMetaTag>;
+    meter: WithRef<"meter", HtmlMeterTag>;
+    nav: WithRef<"nav", HtmlTag>;
+    noscript: WithRef<"noscript", HtmlTag>;
+    object: WithRef<"object", HtmlObjectTag>;
+    ol: WithRef<"ol", HtmlOListTag>;
+    optgroup: WithRef<"optgroup", HtmlOptgroupTag>;
+    option: WithRef<"option", HtmlOptionTag>;
+    output: WithRef<"output", HtmlOutputTag>;
+    p: WithRef<"p", HtmlTag>;
+    param: WithRef<"param", HtmlParamTag>;
+    pre: WithRef<"pre", HtmlTag>;
+    progress: WithRef<"progress", HtmlProgressTag>;
+    q: WithRef<"q", HtmlQuoteTag>;
+    rb: WithRef<"rb", HtmlTag>;
+    rp: WithRef<"rp", HtmlTag>;
+    rt: WithRef<"rt", HtmlTag>;
+    rtc: WithRef<"rtc", HtmlTag>;
+    ruby: WithRef<"ruby", HtmlTag>;
+    s: WithRef<"s", HtmlTag>;
+    samp: WithRef<"samp", HtmlTag>;
+    script: WithRef<"script", HtmlScriptTag>;
+    section: WithRef<"section", HtmlTag>;
+    select: WithRef<"select", HtmlSelectTag>;
+    small: WithRef<"small", HtmlTag>;
+    source: WithRef<"source", HtmlSourceTag>;
+    span: WithRef<"span", HtmlTag>;
+    strong: WithRef<"strong", HtmlTag>;
+    style: WithRef<"style", HtmlStyleTag>;
+    sub: WithRef<"sub", HtmlTag>;
+    sup: WithRef<"sup", HtmlTag>;
+    table: WithRef<"table", HtmlTableTag>;
+    tbody: WithRef<"tbody", HtmlTag>;
+    td: WithRef<"td", HtmlTableDataCellTag>;
+    template: WithRef<"template", HtmlTag>;
+    textarea: WithRef<"textarea", HtmlTextAreaTag>;
+    tfoot: WithRef<"tfoot", HtmlTableSectionTag>;
+    th: WithRef<"th", HtmlTableHeaderCellTag>;
+    thead: WithRef<"thead", HtmlTableSectionTag>;
+    time: WithRef<"time", HtmlTimeTag>;
+    title: WithRef<"title", HtmlTag>;
+    tr: WithRef<"tr", HtmlTableRowTag>;
+    track: WithRef<"track", HtmlTrackTag>;
+    u: WithRef<"u", HtmlTag>;
+    ul: WithRef<"ul", HtmlTag>;
+    var: WithRef<"var", HtmlTag>;
+    video: WithRef<"video", HtmlVideoTag>;
+    wbr: WithRef<"wbr", HtmlTag>;
+    svg: WithRef<"svg", HtmlSvgTag>;
+    path: WithRef<"path", HtmlPathTag>;
+    filter: WithRef<"filter", HtmlSvgTag>;
+    feTurbulence: WithRef<"feTurbulence", HtmlFeTurbulenceTag>;
+    feDisplacementMap: WithRef<"feDisplacementMap", HtmlFeDisplacementMapTag>;
   }
 }

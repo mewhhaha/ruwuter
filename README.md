@@ -153,6 +153,47 @@ Handler signatures remain `(event: Event, signal: AbortSignal)`. You can rely on
 
 ### 4. Generate the router and type helpers
 
+## Element refs
+
+All intrinsic JSX elements now accept a `ref` prop that points at a `Ref<HTMLElement | null>`. Use
+`ref(null)` (from `@mewhhaha/ruwuter/components`) to create the container and pass it to the element:
+
+```tsx
+import { Client, ref } from "@mewhhaha/ruwuter/components";
+
+const buttonRef = ref<HTMLButtonElement | null>(null);
+
+export default function Page() {
+  return (
+    <html>
+      <body>
+        <button ref={buttonRef}>Focus me later</button>
+        <Client />
+      </body>
+    </html>
+  );
+}
+```
+
+During hydration the client runtime writes the live DOM node into the ref, so calling
+`buttonRef.get()` (or watching it through `store.watch`) yields the hydrated element. When the
+element is removed, the runtime automatically clears the ref back to `null`, keeping the value in
+sync with the DOM lifecycle.
+
+On the server the ref becomes part of the per-element hydration payload that sits next to your
+markup:
+
+```html
+<button>Focus me later</button>
+<script type="application/json" data-hydrate="h_7">
+  {"ref":{"__ref":true,"i":"r_0nlm88cjmni","v":null}}
+</script>
+```
+
+The payload uses the same ref marker format as other client-side bindings (`__ref`, `i`, `v`). At
+hydrate-time the client runtime revives that marker, points it at the rendered element, and later
+resets the value to `null` when the DOM node unmounts.
+
 The generator returns the route table and declaration artifacts so you can decide where to write
 them.
 
