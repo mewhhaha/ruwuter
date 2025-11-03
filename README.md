@@ -238,6 +238,51 @@ Components exported from a route module are exposed at predictable URLs. Each na
 begin with an uppercase letter, so `export function Hello()` becomes `/products/Hello.html` and
 `export const ProductCard` resolves to `/products/ProductCard.html`.
 
+Use the `fragment` helper to opt-in explicit fragments. It marks the component as routable and
+passes the request context (`request`, `params`, and the `[env, ctx]` tuple) straight into your
+render function. Fragments can be async—await inside and return JSX when you’re done, and they’re
+responsible for loading their own data.
+
+```tsx
+// app/routes/products.tsx
+import { fragment, type FragmentArgs } from "@mewhhaha/ruwuter";
+import type { Route } from "./+types.products.ts";
+
+import { getProduct, getProductInsights } from "../lib/data.ts";
+
+export async function loader({ params }: Route.LoaderArgs) {
+  return { product: await getProduct(params.slug) };
+}
+
+export const Sidebar = fragment(async ({ params, request }: FragmentArgs) => {
+  const insights = await getProductInsights(params.slug);
+  const url = new URL(request.url);
+
+  return (
+    <aside>
+      <h2>{insights.name}</h2>
+      <p>{insights.summary}</p>
+      <p>Served from {url.hostname}</p>
+    </aside>
+  );
+});
+
+export default function Products({ loaderData, children }: Route.ComponentProps) {
+  return (
+    <html>
+      <body>
+        <Sidebar />
+        <section>{children}</section>
+        <article>
+          <h1>{loaderData.product.name}</h1>
+          <p>{loaderData.product.description}</p>
+        </article>
+      </body>
+    </html>
+  );
+}
+```
+
 When you need a component fragment in response to an interaction, build that URL on the server and
 pass it down so the client can fetch and inject the markup:
 

@@ -23,7 +23,7 @@
 import type { JSX } from "./runtime/jsx.ts";
 import { type Html, into, isHtml } from "./runtime/node.ts";
 // SuspenseProvider must be applied by the consumer in their layout/document.
-import { bindContext, runWithContextStore } from "./components/context.ts";
+import { bindContext, createContext, runWithContextStore } from "./components/context.ts";
 import { runWithHooksStore } from "./runtime/hooks.ts";
 
 export type { Html } from "./runtime/node.ts";
@@ -110,9 +110,79 @@ export type fragment = { id: string; mod: mod; params?: string[] };
  */
 export type route = [pattern: URLPattern, fragments: fragment[]];
 
-type ComponentWithLoader = ((args: Record<string, unknown>) => unknown) & {
-  loader?: loader;
+const FRAGMENT_MARK = Symbol.for("ruwuter.fragment");
+const fragmentContext = createContext<ctx | undefined>(undefined);
+
+export type FragmentArgs = ctx & {
+  children?: JSX.Element;
 };
+
+type FragmentProps = Partial<ctx> & {
+  children?: JSX.Element;
+} & Record<string, unknown>;
+
+type FragmentComponent = ((props: FragmentProps) => JSX.Element | Promise<JSX.Element | string>) & {
+  [FRAGMENT_MARK]: true;
+};
+
+const isFragmentComponent = (value: unknown): value is FragmentComponent => {
+  return isFunction(value) && (value as FragmentComponent)[FRAGMENT_MARK] === true;
+};
+
+const hasExplicitContext = (props: Partial<ctx>): props is ctx => {
+  const { request, params, context } = props;
+  if (!(request instanceof Request)) return false;
+  if (!params || typeof params !== "object") return false;
+  if (!context) return false;
+  if (!Array.isArray(context) || context.length !== 2) return false;
+  return true;
+};
+
+export function fragment(
+  render: (args: FragmentArgs & Record<string, unknown>) => JSX.Element | Promise<JSX.Element | string>,
+): FragmentComponent {
+  const component = ((
+    props: FragmentProps,
+  ): JSX.Element | Promise<JSX.Element | string> => {
+    const {
+      request: maybeRequest,
+      params: maybeParams,
+      context: maybeContext,
+      children,
+      ...extra
+    } = props;
+
+    let activeCtx = fragmentContext.use();
+    if (!activeCtx) {
+      const candidate: Partial<ctx> = {
+        request: maybeRequest,
+        params: maybeParams,
+        context: maybeContext,
+      };
+      if (hasExplicitContext(candidate)) {
+        activeCtx = candidate;
+      }
+    }
+
+    if (!activeCtx) {
+      throw new TypeError("fragment() components must be rendered within Router.handle or provided with explicit context.");
+    }
+    return render({
+      ...activeCtx,
+      ...extra,
+      children,
+    });
+  }) as FragmentComponent;
+
+  Object.defineProperty(component, FRAGMENT_MARK, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+
+  return component;
+}
 
 function isFunction<Fn extends (...args: unknown[]) => unknown>(
   value: unknown,
@@ -194,26 +264,21 @@ const serveHtmlAsset = async (
   exportName: string,
   ctx: ctx,
 ): Promise<Response | undefined> => {
-  const component = getExportFunction<ComponentWithLoader>(mod, exportName);
-  if (!component) return undefined;
+  const candidate = getExportFunction<FragmentComponent>(mod, exportName);
+  if (!candidate || !isFragmentComponent(candidate)) return undefined;
+  const component = candidate;
 
-  const loader = isFunction<loader>(component.loader)
-    ? component.loader
-    : isFunction<loader>(mod.loader)
-    ? mod.loader
-    : undefined;
+  const loader = isFunction<loader>(mod.loader) ? mod.loader : undefined;
 
-  let loaderData: unknown;
   if (loader) {
     const result = await loader(ctx);
     if (result instanceof Response) return result;
-    loaderData = result;
   }
 
   const rendered = await component({
-    loaderData,
     params: ctx.params,
     request: ctx.request,
+    context: ctx.context,
   });
 
   if (rendered instanceof Response) return rendered;
@@ -279,41 +344,43 @@ export const Router = (routes: route[]): router => {
         context: args,
       };
 
-      if (assetName !== undefined) {
-        return await serveAsset(fragments, assetName, ctx);
-      }
-
-      if (request.headers.has("fx-request")) {
-        fragments = fragments.slice(1);
-      }
-
-      try {
-        const leaf = fragments[fragments.length - 1]?.mod;
-
-        if (request.method === "GET" && leaf?.default) {
-          return await routeResponse(fragments, ctx);
+      return fragmentContext.withValue(ctx, async () => {
+        if (assetName !== undefined) {
+          return await serveAsset(fragments, assetName, ctx);
         }
 
-        if (request.method === "GET" && leaf?.loader) {
-          return await dataResponse(leaf.loader, ctx);
-        }
+        const activeFragments = request.headers.has("fx-request")
+          ? fragments.slice(1)
+          : fragments;
 
-        if (request.method !== "GET" && leaf?.action) {
-          return await dataResponse(leaf.action, ctx);
-        }
+        try {
+          const leaf = activeFragments[activeFragments.length - 1]?.mod;
 
-        return new Response(null, { status: 404 });
-      } catch (e) {
-        if (e instanceof Response) {
-          return e;
-        }
+          if (request.method === "GET" && leaf?.default) {
+            return await routeResponse(activeFragments, ctx);
+          }
 
-        if (e instanceof Error) {
-          console.error(e.message);
-        }
+          if (request.method === "GET" && leaf?.loader) {
+            return await dataResponse(leaf.loader, ctx);
+          }
 
-        return new Response(null, { status: 500 });
-      }
+          if (request.method !== "GET" && leaf?.action) {
+            return await dataResponse(leaf.action, ctx);
+          }
+
+          return new Response(null, { status: 404 });
+        } catch (e) {
+          if (e instanceof Response) {
+            return e;
+          }
+
+          if (e instanceof Error) {
+            console.error(e.message);
+          }
+
+          return new Response(null, { status: 500 });
+        }
+      });
     });
   };
 
@@ -358,7 +425,14 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
       if (!Component) continue;
 
       const loaderData = loaders[index];
-      const result = await Component({ loaderData, children: acc });
+      const result = await (isFragmentComponent(Component)
+        ? Component({
+          children: acc,
+          request: ctx.request,
+          params: ctx.params,
+          context: ctx.context,
+        })
+        : Component({ loaderData, children: acc }));
 
       if (result instanceof Response) {
         throw result;
