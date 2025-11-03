@@ -538,8 +538,9 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 
 Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples
 produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their
-URLs with `?url`, and build tuples like `event.click(handlerHref)`. Use the `events(bind, ...)`
-helper to prepend the object (or ref) you want as `this`. Those values can include shared `ref()`
+URLs with `?url`, and build tuples like `event.click(handlerHref)`. Use `events(bind, event.click(...))`
+(or the builder form `events(bind, on => on.click(...))` when composing dynamically) to prepend the
+object (or ref) you want as `this`. Those values can include shared `ref()`
 objects.
 
 ```tsx

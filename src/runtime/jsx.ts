@@ -17,7 +17,7 @@ type WithRef<Name extends string, Props> = Props & {
  * JSX namespace containing type definitions for JSX elements and attributes.
  */
 export namespace JSX {
-  type HtmlEventBindings = ClientEventList<Handler<any, any, any>>;
+  type HtmlEventBindings = ClientEventList<any>;
 
   interface AriaAttributes {
     // ARIA attributes

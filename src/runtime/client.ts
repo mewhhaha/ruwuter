@@ -124,6 +124,12 @@ function synthesizeEvent<E extends Event>(
 
 const hasWindow = typeof window !== "undefined";
 
+function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const name = (error as { name?: unknown }).name;
+  return typeof name === "string" && name === "AbortError";
+}
+
 function initializeClientRuntime(): void {
   if (!hasWindow) return;
   const globalWindow = window as GlobalClientWindow;
@@ -299,10 +305,7 @@ function initializeClientRuntime(): void {
     try {
       await fn.call(ctx.bind ?? el, eventForHandler, controller.signal);
     } catch (err) {
-      if (
-        controller.signal.aborted ||
-        (err instanceof Error && err.name === "AbortError")
-      ) {
+      if (controller.signal.aborted || isAbortError(err)) {
         return;
       }
       console.error(err);
