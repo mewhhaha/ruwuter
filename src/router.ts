@@ -121,12 +121,14 @@ type FragmentProps = Partial<ctx> & {
   children?: JSX.Element;
 } & Record<string, unknown>;
 
-type FragmentComponent = ((props: FragmentProps) => JSX.Element | Promise<JSX.Element | string>) & {
-  [FRAGMENT_MARK]: true;
-};
+type FragmentBrand = { readonly __ruwuterFragment?: true };
+type FragmentRuntimeBrand = { [FRAGMENT_MARK]?: true };
+
+type FragmentComponent = ((props: FragmentProps) => JSX.Element | Promise<JSX.Element | string>) &
+  FragmentBrand;
 
 const isFragmentComponent = (value: unknown): value is FragmentComponent => {
-  return isFunction(value) && (value as FragmentComponent)[FRAGMENT_MARK] === true;
+  return isFunction(value) && (value as FragmentRuntimeBrand)[FRAGMENT_MARK] === true;
 };
 
 const hasExplicitContext = (props: Partial<ctx>): props is ctx => {
@@ -175,6 +177,13 @@ export function fragment(
   }) as FragmentComponent;
 
   Object.defineProperty(component, FRAGMENT_MARK, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+
+  Object.defineProperty(component, "__ruwuterFragment", {
     value: true,
     enumerable: false,
     configurable: false,
@@ -425,14 +434,17 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
       if (!Component) continue;
 
       const loaderData = loaders[index];
-      const result = await (isFragmentComponent(Component)
-        ? Component({
+      let result: unknown;
+      if (isFragmentComponent(Component)) {
+        result = await Component({
           children: acc,
           request: ctx.request,
           params: ctx.params,
           context: ctx.context,
-        })
-        : Component({ loaderData, children: acc }));
+        });
+      } else {
+        result = await (Component as renderer)({ loaderData, children: acc });
+      }
 
       if (result instanceof Response) {
         throw result;
