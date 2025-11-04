@@ -45,6 +45,58 @@ interface ElementContext {
   refs: RefObject[];
 }
 
+interface SyntheticEventInit { currentTarget?: EventTarget | null }
+
+function synthesizeEvent<E extends Event>(event: E, init?: SyntheticEventInit): E {
+  // Create a shallow wrapper whose prototype chain includes the original event
+  // so `instanceof MouseEvent` etc. still succeed.
+  const snap: any = Object.create(event);
+
+  const currentTarget = init?.currentTarget ?? (event as any).currentTarget ?? null;
+  Object.defineProperty(snap, "currentTarget", { value: currentTarget, configurable: true });
+
+  // Legacy alias found in some environments
+  if ("srcElement" in (event as any)) {
+    const src = (event as any).srcElement ?? currentTarget;
+    Object.defineProperty(snap, "srcElement", { value: src, configurable: true });
+  }
+
+  // Freeze commonly inspected, timing-sensitive properties
+  Object.defineProperty(snap, "eventPhase", { value: event.eventPhase, configurable: true });
+
+  if (typeof event.composedPath === "function") {
+    const path = event.composedPath();
+    Object.defineProperty(snap, "composedPath", {
+      value: () => (path ? path.slice() : []),
+      configurable: true,
+    });
+  }
+
+  if ("relatedTarget" in (event as any)) {
+    Object.defineProperty(snap, "relatedTarget", {
+      value: (event as any).relatedTarget,
+      configurable: true,
+    });
+  }
+
+  if ("submitter" in (event as any)) {
+    Object.defineProperty(snap, "submitter", {
+      value: (event as any).submitter ?? null,
+      configurable: true,
+    });
+  }
+
+  // Popover toggle fields if present
+  const anyEv: any = event as any;
+  if (typeof anyEv.newState === "string" || typeof anyEv.oldState === "string") {
+    Object.defineProperty(snap, "newState", { value: anyEv.newState, configurable: true });
+    Object.defineProperty(snap, "oldState", { value: anyEv.oldState, configurable: true });
+    Object.defineProperty(snap, "source", { value: anyEv.source ?? null, configurable: true });
+  }
+
+  return snap as E;
+}
+
 function synthesizeLifecycleEvent(el: Element, type: "mount" | "unmount"): Event {
   const ev = new Event(type);
   return new Proxy(ev, {
@@ -257,7 +309,8 @@ function initializeClientRuntime(): void {
     const preventDefault = entry.opt?.preventDefault === true && entry.opt.passive !== true;
     el.addEventListener(type, (event) => {
       if (preventDefault && event.cancelable) event.preventDefault();
-      void invokeEntry(el, entry, type, event);
+      const synthetic = synthesizeEvent(event, { currentTarget: el });
+      void invokeEntry(el, entry, type, synthetic);
     }, listenerOptions);
   }
 
