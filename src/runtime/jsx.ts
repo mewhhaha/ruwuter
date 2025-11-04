@@ -16,7 +16,8 @@ type WithRef<Name extends string, Props> = Props & {
  * JSX namespace containing type definitions for JSX elements and attributes.
  */
 export namespace JSX {
-  type HtmlEventBindings = ClientEventList<any>;
+  // Accept both the finalized event list and the composer function form
+  type HtmlEventBindings = ClientEventList<any> | ((helpers: any) => unknown);
 
   interface AriaAttributes {
     // ARIA attributes
@@ -107,8 +108,8 @@ export namespace JSX {
     "aria-valuetext"?: string | undefined;
   }
 
-  // typed-html
-  export interface HtmlTag extends FixiAttributes, AriaAttributes {
+  // Base HTML tag attributes + Ruwuter client additions
+  export interface HtmlTag extends AriaAttributes {
     // Ruwuter client additions
     on?: HtmlEventBindings | undefined;
   }
