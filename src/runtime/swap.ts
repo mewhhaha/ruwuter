@@ -175,16 +175,8 @@ export const swap = async (
   };
 };
 
-export const installSwap = (
-  global: { swap?: typeof swap },
-): void => {
-  if (!global.swap) {
-    global.swap = swap;
-  }
-};
-
+// Always install on window when present, so apps can just use window.swap
 const hasWindow = typeof window !== "undefined";
-
 if (hasWindow) {
-  installSwap(window as { swap?: typeof swap });
+  (window as unknown as { swap: typeof swap }).swap = swap;
 }

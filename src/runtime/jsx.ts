@@ -1,7 +1,6 @@
 import type { Html } from "./node.ts";
-import type { FixiAttributes } from "./fixi.ts";
-import type { Handler, Ref as ClientRef } from "../components/client.ts";
-import type { ClientEventList } from "../events.ts";
+import type { Ref as ClientRef } from "../components/client.ts";
+import type { ClientEventList } from "@mewhhaha/ruwuter/events";
 
 type ElementForTag<Tag extends string> = Tag extends keyof HTMLElementTagNameMap
   ? HTMLElementTagNameMap[Tag]

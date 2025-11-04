@@ -45,84 +45,16 @@ interface ElementContext {
   refs: RefObject[];
 }
 
-type ModuleNamespace = Record<string, unknown>;
-
-interface GlobalClientWindow extends Window {
-  __ruwuter?: {
-    store?: RefStore;
-    loadModule?: (spec: string) => Promise<ModuleNamespace>;
-  };
-}
-
-interface SyntheticEventInit {
-  currentTarget?: EventTarget | null;
-}
-
-const syntheticEventCache = new WeakMap<Event, Event>();
-
-function synthesizeEvent<E extends Event>(
-  event: E,
-  init?: SyntheticEventInit,
-) {
-  if (!init && syntheticEventCache.has(event)) {
-    return syntheticEventCache.get(event)! as E;
-  }
-
-  const currentTarget = init?.currentTarget ?? event.currentTarget ?? null;
-  const srcElement =
-    ("srcElement" in event
-      ? (event as Event & { srcElement?: EventTarget | null }).srcElement
-      : undefined) ??
-      currentTarget;
-  const eventPhase = event.eventPhase;
-  const hasRelatedTarget = "relatedTarget" in event;
-  const relatedTarget = hasRelatedTarget
-    ? (event as Event & { relatedTarget?: EventTarget | null }).relatedTarget
-    : undefined;
-  const composedPath = typeof event.composedPath === "function" ? event.composedPath() : undefined;
-  const toggleCandidate = event as Event & {
-    newState?: string;
-    oldState?: string;
-    source?: Element | null;
-  };
-  const hasToggleState = typeof toggleCandidate.newState === "string" ||
-    typeof toggleCandidate.oldState === "string";
-  const toggleNewState = hasToggleState ? toggleCandidate.newState : undefined;
-  const toggleOldState = hasToggleState ? toggleCandidate.oldState : undefined;
-  const toggleSource = hasToggleState ? toggleCandidate.source ?? null : undefined;
-
-  const hasSubmitter = "submitter" in event;
-  const submitter = hasSubmitter
-    ? (event as Event & { submitter?: Element | null }).submitter ?? null
-    : undefined;
-
-  const proxy = new Proxy(event, {
-    get(target, prop, _receiver) {
-      if (prop === "currentTarget") return currentTarget;
-      if (prop === "srcElement") return srcElement;
-      if (prop === "eventPhase") return eventPhase;
-      if (prop === "relatedTarget" && hasRelatedTarget) return relatedTarget;
-      if (prop === "submitter" && hasSubmitter) return submitter;
-      if (prop === "composedPath") {
-        return () => composedPath ? composedPath.slice() : [];
-      }
-      if (hasToggleState) {
-        if (prop === "newState") return toggleNewState;
-        if (prop === "oldState") return toggleOldState;
-        if (prop === "source") return toggleSource;
-      }
-      const value = Reflect.get(target, prop);
-      return typeof value === "function" ? value.bind(target) : value;
+function synthesizeLifecycleEvent(el: Element, type: "mount" | "unmount"): Event {
+  const ev = new Event(type);
+  return new Proxy(ev, {
+    get(target, prop) {
+      if (prop === "currentTarget") return el;
+      const value = Reflect.get(target, prop as keyof Event);
+      return typeof value === "function" ? (value as Function).bind(target) : value;
     },
-  });
-
-  if (!init) {
-    syntheticEventCache.set(event, proxy);
-  }
-  return proxy as E;
+  }) as Event;
 }
-
-const hasWindow = typeof window !== "undefined";
 
 function isAbortError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -130,35 +62,22 @@ function isAbortError(error: unknown): boolean {
   return typeof name === "string" && name === "AbortError";
 }
 
+// No global or exported hooks; loader is fixed to dynamic import
+
 function initializeClientRuntime(): void {
-  if (!hasWindow) return;
-  const globalWindow = window as GlobalClientWindow;
-  if (globalWindow.__ruwuter?.store) return;
-  if (typeof document === "undefined") return;
-
-  const loadModule = (() => {
-    const cache = new Map<string, Promise<ModuleNamespace>>();
-
-    const resolve = (spec: string) => {
-      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(spec)) return spec; // already absolute URL
-      if (spec.startsWith("/")) return new URL(spec, window.location.origin).href;
-      // Resolve relative to the current directory, not treating the last path segment as a file
-      const baseDir = new URL(".", window.location.href);
-      return new URL(spec, baseDir).href;
-    };
-
-    return (spec: string) => {
-      const resolved = resolve(spec);
-      if (!cache.has(resolved)) {
-        const customLoader = globalWindow.__ruwuter?.loadModule;
-        cache.set(
-          resolved,
-          customLoader ? customLoader(resolved) : import(resolved),
-        );
-      }
-      return cache.get(resolved)!;
-    };
-  })();
+  const loadModule = (spec: string) => {
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(spec)) {
+      return import(spec);
+    }
+    const base = (typeof document.baseURI === "string" && document.baseURI &&
+        document.baseURI !== "about:blank")
+      ? document.baseURI
+      : window.location.href;
+    // Resolve relative to the current directory
+    const baseDir = new URL(".", base);
+    const resolved = new URL(spec, baseDir).href;
+    return import(resolved);
+  };
 
   const store: RefStore = (() => {
     const values = new Map<string, unknown>();
@@ -227,7 +146,7 @@ function initializeClientRuntime(): void {
   })();
 
   const contexts = new WeakMap<Element, ElementContext>();
-  const hydrated = new Set<string>();
+  const hydratedElements = new WeakSet<Element>();
 
   function revive(_key: string, value: unknown): unknown {
     if (value && typeof value === "object") {
@@ -298,9 +217,7 @@ function initializeClientRuntime(): void {
       controllers.set(type, controller);
     }
 
-    const eventForHandler = type === "mount" || type === "unmount"
-      ? synthesizeEvent(ev, { currentTarget: el })
-      : ev;
+    const eventForHandler = ev;
 
     try {
       await fn.call(ctx.bind ?? el, eventForHandler, controller.signal);
@@ -321,7 +238,7 @@ function initializeClientRuntime(): void {
     const type = entry.ev && entry.ev.length > 0 ? entry.ev : "click";
 
     if (type === "mount") {
-      queueMicrotask(() => invokeEntry(el, entry, "mount", new Event("mount")));
+      queueMicrotask(() => invokeEntry(el, entry, "mount", synthesizeLifecycleEvent(el, "mount")));
       return;
     }
 
@@ -339,11 +256,8 @@ function initializeClientRuntime(): void {
       : undefined;
     const preventDefault = entry.opt?.preventDefault === true && entry.opt.passive !== true;
     el.addEventListener(type, (event) => {
-      if (preventDefault && event.cancelable) {
-        event.preventDefault();
-      }
-      const synthetic = synthesizeEvent(event);
-      void invokeEntry(el, entry, type, synthetic);
+      if (preventDefault && event.cancelable) event.preventDefault();
+      void invokeEntry(el, entry, type, event);
     }, listenerOptions);
   }
 
@@ -371,50 +285,17 @@ function initializeClientRuntime(): void {
   }
 
   function findHydrationElement(script: HTMLScriptElement): Element | null {
-    const id = script.getAttribute("data-hydrate") ?? "";
-    if (!id) return null;
-
-    let node: ChildNode | null = script.previousSibling;
-    while (node) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        return node as Element;
-      }
-      if (node.nodeType === Node.COMMENT_NODE) {
-        const comment = node as Comment;
-        if (comment.data === `/rw:h:${id}` || comment.data === `/hydration-boundary:${id}`) {
-          let prev: ChildNode | null = comment.previousSibling;
-          while (prev && prev.nodeType !== Node.ELEMENT_NODE) {
-            prev = prev.previousSibling;
-          }
-          if (prev && prev.nodeType === Node.ELEMENT_NODE) {
-            return prev as Element;
-          }
-        }
-        if (comment.data === `hydration-boundary:${id}`) {
-          let next: ChildNode | null = comment.nextSibling;
-          while (next && next.nodeType !== Node.ELEMENT_NODE) {
-            next = next.nextSibling;
-          }
-          if (next && next.nodeType === Node.ELEMENT_NODE) {
-            return next as Element;
-          }
-        }
-      }
-      node = node.previousSibling;
-    }
-    return null;
+    // Simple adjacency: the host element is the previous element sibling
+    return script.previousElementSibling;
   }
 
   function hydrateScript(script: HTMLScriptElement): void {
-    const id = script.getAttribute("data-hydrate") ?? "";
-    if (!id || hydrated.has(id)) return;
-
     const el = findHydrationElement(script);
-    if (!el) return;
+    if (!el || hydratedElements.has(el)) return;
 
     const payload = parsePayload(script.textContent ?? "{}");
     hydratePayload(el, payload);
-    hydrated.add(id);
+    hydratedElements.add(el);
   }
 
   function teardownElement(el: Element): void {
@@ -426,7 +307,7 @@ function initializeClientRuntime(): void {
 
     if (ctx.unmount.length) {
       ctx.unmount.forEach((entry) => {
-        void invokeEntry(el, entry, "unmount", new Event("unmount"));
+        void invokeEntry(el, entry, "unmount", synthesizeLifecycleEvent(el, "unmount"));
       });
       ctx.unmount.length = 0;
     }
@@ -484,13 +365,11 @@ function initializeClientRuntime(): void {
   seed();
   observer.observe(document, { childList: true, subtree: true });
 
-  globalWindow.__ruwuter = Object.assign(globalWindow.__ruwuter ?? {}, {
-    store,
-  });
+  // Keep store internal; no globals/exports for tests or apps.
 }
 
-if (hasWindow) {
+document.addEventListener("DOMContentLoaded", () => {
   initializeClientRuntime();
-}
+}, { once: true });
 
 export {};

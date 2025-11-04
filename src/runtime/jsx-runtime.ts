@@ -57,7 +57,7 @@ const voidElements = new Set([
   "wbr",
 ]);
 
-// Sequence for JSON hydration boundaries for `on` handlers
+// Sequence for JSON hydration ids for `on` handlers
 let HYDRATE_SEQ = 0;
 
 type EventListenerOptions = {
@@ -141,8 +141,11 @@ export function jsx(
       continue;
     }
 
-    // Event handlers: expect tuple descriptors [eventType, href, options?]
-    if (key === "on" && Array.isArray(value)) {
+    // Event handlers: accept
+    // - tuples [type, href, options?]
+    // - arrays of tuples (possibly nested), optionally prefixed with a bind value
+    // - composer functions from `event.*(href)` and builder forms
+    if (key === "on") {
       const items: ModuleEntry[] = [];
       let bindCaptured = false;
       const captureBind = (candidate: unknown) => {
@@ -150,36 +153,81 @@ export function jsx(
         ensureHydration().bind = candidate;
         bindCaptured = true;
       };
+
+      const normalizeHref = (href: unknown): string | null => {
+        if (href == null) return null;
+        if (href instanceof URL) return href.pathname;
+        if (typeof href === "string") return href;
+        if (typeof href === "object" && typeof (href as any).toString === "function") {
+          const s = (href as any).toString();
+          return typeof s === "string" && s.length > 0 ? s : null;
+        }
+        // functions are not supported here
+        return null;
+      };
+
       const toModuleEntry = (tuple: readonly unknown[]): ModuleEntry | null => {
         if (tuple.length < 2) return null;
         const [ev, href, opts] = tuple;
         if (typeof ev !== "string" || ev.length === 0) return null;
-        if (typeof href !== "string" || href.length === 0) return null;
-        const entry: ModuleEntry = { t: "m", s: href, x: "default", ev };
+        const hrefStr = normalizeHref(href);
+        if (!hrefStr) return null;
+        const entry: ModuleEntry = { t: "m", s: hrefStr, x: "default", ev };
         const normalized = normalizeEventOptions(opts as EventOptions | undefined);
         if (normalized) entry.opt = normalized;
         return entry;
       };
+
       const isEventTuple = (tuple: readonly unknown[]): boolean =>
-        tuple.length >= 2 && typeof tuple[0] === "string" && typeof tuple[1] === "string";
+        tuple.length >= 2 && typeof tuple[0] === "string" && typeof tuple[1] !== "undefined";
+
+      const helpers = new Proxy(Object.create(null), {
+        get(_t, prop: PropertyKey) {
+          if (typeof prop !== "string") return undefined;
+          return (href: unknown, options?: EventOptions) => [prop, href, options] as const;
+        },
+      });
+
+      const expandComposer = (fn: unknown): unknown => {
+        if (typeof fn !== "function") return fn;
+        try {
+          // event.click(...): composer that expects helpers
+          return (fn as (h: any) => unknown)(helpers);
+        } catch {
+          return undefined;
+        }
+      };
+
       const visit = (node: unknown, allowBind: boolean): void => {
-        if (!Array.isArray(node)) return;
-        if (isEventTuple(node)) {
-          const entry = toModuleEntry(node);
-          if (entry) {
-            items.push(entry);
+        if (node == null) return;
+        // Expand composer functions
+        const expanded = typeof node === "function" ? expandComposer(node) : node;
+        if (Array.isArray(expanded)) {
+          if (isEventTuple(expanded)) {
+            const entry = toModuleEntry(expanded);
+            if (entry) items.push(entry);
+            return;
+          }
+          let startIndex = 0;
+          if (
+            allowBind && expanded.length > 0 && !Array.isArray(expanded[0]) &&
+            typeof expanded[0] !== "function"
+          ) {
+            captureBind(expanded[0]);
+            startIndex = 1;
+          }
+          for (let index = startIndex; index < expanded.length; index++) {
+            visit(expanded[index], true);
           }
           return;
         }
-        let startIndex = 0;
-        if (allowBind && node.length > 0 && !Array.isArray(node[0])) {
-          captureBind(node[0]);
-          startIndex = 1;
-        }
-        for (let index = startIndex; index < node.length; index++) {
-          visit(node[index], true);
+        // Single tuple
+        if (typeof expanded === "object") {
+          // not a supported form; ignore
+          return;
         }
       };
+
       visit(value, true);
       if (items.length) ensureHydration().on = items;
       continue;
@@ -265,10 +313,6 @@ export function jsx(
 
       yield escapeHtml(child.toString());
     }
-    // Pre-comment hydration boundary
-    if (hydrationId) {
-      yield `<!--hydration-boundary:${hydrationId}-->`;
-    }
     if (tag) {
       yield `<${tag}${attrs}>`;
     }
@@ -283,7 +327,6 @@ export function jsx(
       yield `</${tag}>`;
     }
     if (hydrationId && hydrationPayload) {
-      yield `<!--/hydration-boundary:${hydrationId}-->`;
       const json = escapeJsonForScript(JSON.stringify(hydrationPayload));
       yield `<script type="application/json" data-hydrate="${hydrationId}">${json}</script>`;
     }
