@@ -160,11 +160,6 @@ export const generateRouter = async (
     .join("\n");
 
   const routeItems = routes
-    .filter(([file]) => {
-      return routes.every(([suffix]) => {
-        return !suffix.startsWith(`${file}.`);
-      });
-    })
     .map(([file, name, pattern]) => {
       const fragments = [
         "$document",

@@ -70,7 +70,7 @@ type EventComposer<Required> = <Bind extends Required>(
 
 type EventsArg<Bind> = EventBindingValue<Bind> | EventComposer<Bind>;
 
-type BoundEventHelper<Bind, Type extends string, Ev extends Event> = <
+type BoundEventHelper<Bind, _Type extends string, Ev extends Event> = <
   Target extends Element = Element,
   Result = unknown | Promise<unknown>,
 >(
@@ -84,7 +84,7 @@ type BoundEventHelperRegistry<Bind> =
   }
   & Record<string, BoundEventHelper<Bind, string, Event>>;
 
-type EventHelper<Type extends string, Ev extends Event> = <
+type EventHelper<_Type extends string, Ev extends Event> = <
   This,
   Target extends Element = Element,
   Result = unknown | Promise<unknown>,
@@ -279,6 +279,16 @@ export type FormDataEvent<CurrentTarget extends Element = Element> = TargetedEve
 >;
 export type ToggleEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   PopoverToggleEvent,
+  CurrentTarget
+>;
+
+// Lifecycle events emitted by the client runtime
+export type MountEvent<CurrentTarget extends Element = Element> = ClientEvent<
+  "mount",
+  CurrentTarget
+>;
+export type UnmountEvent<CurrentTarget extends Element = Element> = ClientEvent<
+  "unmount",
   CurrentTarget
 >;
 

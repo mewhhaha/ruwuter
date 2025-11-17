@@ -16,8 +16,12 @@ type WithRef<Name extends string, Props> = Props & {
  * JSX namespace containing type definitions for JSX elements and attributes.
  */
 export namespace JSX {
-  // Accept both the finalized event list and the composer function form
-  type HtmlEventBindings = ClientEventList<any> | ((helpers: any) => unknown);
+  type HtmlEventComposer = (helpers: any) => unknown;
+  // Accept finalized event lists, composer functions, or nested arrays of both
+  type HtmlEventBindings =
+    | ClientEventList<any>
+    | HtmlEventComposer
+    | readonly HtmlEventBindings[];
 
   interface AriaAttributes {
     // ARIA attributes

@@ -140,13 +140,13 @@ export default function click(this: { msg: { get(): string } }, _ev: Event, _sig
 Client handler modules load on demand, so the first interaction usually crosses an async boundary
 while the module is importing. Native DOM events reset `currentTarget`, `srcElement`, and dispatch
 internals (like `eventPhase` and `composedPath()`) once the synchronous listener stack unwinds. That
-made the first click see `event.currentTarget === null` even though subsequent clicks behaved.
+can make the first click see `event.currentTarget === null` even though subsequent clicks behave.
 
-To keep those values stable we wrap each event in a lightweight synthetic proxy before invoking your
-handler. The proxy captures the unstable fields at the top of the listener and forwards every other
-property access straight to the underlying event. Methods like `preventDefault()` still mutate the
-real event, and `instanceof Event` stays true. We also pin properties such as `currentTarget`,
-`relatedTarget`, `srcElement`, and `eventPhase` so they survive async gaps.
+To keep those values stable we wrap each event in a tiny snapshot before invoking your handler. The
+snapshot fixes timing‑sensitive fields (e.g., `currentTarget`, `relatedTarget`, `srcElement`,
+`eventPhase`, and a copied `composedPath()`), while every other property/method continues to behave
+like the native event. Methods such as `preventDefault()` still hit the real event, and `instanceof
+MouseEvent`/`KeyboardEvent` continues to work.
 
 Handler signatures remain `(event: Event, signal: AbortSignal)`. You can rely on
 `event.currentTarget`/`event.srcElement` even if the handler awaits between import and execution.
@@ -177,7 +177,7 @@ export default function Page() {
 ```
 
 During hydration the client runtime writes the live DOM node into the ref, so calling
-`buttonRef.get()` (or watching it through `store.watch`) yields the hydrated element. When the
+`buttonRef.get()` yields the hydrated element. When the
 element is removed, the runtime automatically clears the ref back to `null`, keeping the value in
 sync with the DOM lifecycle.
 
@@ -623,31 +623,27 @@ export default function HomePage() {
   `event.click(clickHref, { preventDefault: true })` to cancel default browser behavior before the
   handler module finishes loading.
 
-### Hydration Boundaries (New)
+### Hydration Payload
 
-Instead of data attributes per handler, Ruwuter emits one comment boundary per element and a single
-JSON payload:
+Each hydratable element is followed by a single JSON payload describing refs/bindings for that
+element:
 
 ```html
-<!--rw:h:h_0--><button>+1</button><!--/rw:h:h_0-->
-<script type="application/json" data-rw-h="h_0">
+<button>+1</button>
+<script type="application/json" data-hydrate="h_0">
   {
     "bind": { "count": { "__ref": true, "i": "r1", "v": 0 } },
+    "ref": { "__ref": true, "i": "btn", "v": null },
     "on": [
-      {
-        "t": "m",
-        "s": "./click.js",
-        "x": "default",
-        "ev": "click"
-      }
+      { "t": "m", "s": "./click.js", "x": "default", "ev": "click" }
     ]
   }
-</script>
+  </script>
 ```
 
-- Handlers: module `{t:"m",s:"<href>",x:"default",ev}`.
-- Refs: `{ "__ref": true, i: "r1", v: 0 }` revive to `{ id, get(), set() }` and are shared across
-  all boundaries.
+- Handlers: module entries `{ t: "m", s: "<href>", x: "default", ev }`.
+- Refs: `{ "__ref": true, i, v }` revive to `{ id, get(), set() }` and stay shared across
+  payloads.
 
 ---
 
