@@ -19,8 +19,11 @@ type TrustedTypePolicyFactoryValue = typeof globalThis extends {
   };
 
 export type SwapTarget = Element | string | { current?: Element | null | undefined };
-export type SwapModeHandler = (context: { target: Element; text: string }) => void | Promise<void>;
-export type SwapMode = SwapModeHandler | string;
+export type SwapMode =
+  | "innerHTML"
+  | "outerHTML"
+  | InsertPosition
+  | "delete";
 
 export type SwapInput =
   | RequestInfo
@@ -34,14 +37,14 @@ export type SwapInput =
 
 export type SwapOptions = {
   target: SwapTarget;
-  swap?: SwapMode;
+  write?: SwapMode;
   text?: string | TrustedHTMLValue;
   init?: RequestInit;
 };
 
 export type SwapResult = {
   target: Element;
-  swap: SwapMode;
+  write: SwapMode;
   text: string;
   response: Response | null;
 };
@@ -105,25 +108,17 @@ const createTrustedHTML = (() => {
   };
 })();
 
-const applySwap = async (
+const applySwap = (
   target: Element,
-  swapMode: SwapMode,
+  mode: SwapMode,
   domValue: string | TrustedHTMLValue,
-  textForHandler: string,
-): Promise<void> => {
-  if (typeof swapMode === "function") {
-    await swapMode({ target, text: textForHandler });
+): void => {
+  if (mode === "delete") {
+    target.remove();
     return;
   }
 
-  const mode = swapMode ?? "innerHTML";
-
-  if (/(before|after)(begin|end)/.test(mode)) {
-    target.insertAdjacentHTML(mode as InsertPosition, String(domValue));
-    return;
-  }
-
-  if (mode in target) {
+  if (mode === "innerHTML" || mode === "outerHTML") {
     try {
       // @ts-expect-error - dynamic property assignment + Trusted Types
       target[mode] = domValue;
@@ -131,6 +126,11 @@ const applySwap = async (
     } catch {
       // fallthrough to error
     }
+  }
+
+  if (/(before|after)(begin|end)/.test(mode)) {
+    target.insertAdjacentHTML(mode as InsertPosition, String(domValue));
+    return;
   }
 
   throw new Error(`swap: unsupported swap mode "${mode}".`);
@@ -141,7 +141,7 @@ export const swap = async (
   options: SwapOptions,
 ): Promise<SwapResult> => {
   const target = resolveElement(options.target);
-  const swapMode = options.swap ?? "innerHTML";
+  const writeMode = options.write ?? "innerHTML";
 
   let response: Response | null = null;
   let rawHtml: string | TrustedHTMLValue;
@@ -163,14 +163,14 @@ export const swap = async (
   }
 
   const domValue = createTrustedHTML(rawHtml);
-  const textForHandler = typeof rawHtml === "string" ? rawHtml : String(rawHtml);
+  const resolvedText = typeof rawHtml === "string" ? rawHtml : String(rawHtml);
 
-  await applySwap(target, swapMode, domValue, textForHandler);
+  applySwap(target, writeMode, domValue);
 
   return {
     target,
-    swap: swapMode,
-    text: textForHandler,
+    write: writeMode,
+    text: resolvedText,
     response,
   };
 };

@@ -12,6 +12,11 @@ const segments = (a: string) => {
  * @internal
  */
 export const bySpecificity = (a: string, b: string): number => {
+  const aCatchAll = a.endsWith(".$");
+  const bCatchAll = b.endsWith(".$");
+  if (aCatchAll !== bCatchAll) {
+    return aCatchAll ? 1 : -1;
+  }
   const aSegments = segments(a);
   const bSegments = segments(b);
   if (aSegments.length === bSegments.length) {
