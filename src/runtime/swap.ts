@@ -118,22 +118,14 @@ const applySwap = (
     return;
   }
 
-  if (mode === "innerHTML" || mode === "outerHTML") {
-    try {
-      // @ts-expect-error - dynamic property assignment + Trusted Types
-      target[mode] = domValue;
-      return;
-    } catch {
-      // fallthrough to error
-    }
-  }
-
-  if (/(before|after)(begin|end)/.test(mode)) {
+  if (mode in target) {
+    // @ts-expect-error lol random
+    target[mode] = domValue;
+  } else if (/(before|after)(begin|end)/.test(mode)) {
     target.insertAdjacentHTML(mode as InsertPosition, String(domValue));
-    return;
+  } else {
+    throw new Error(`swap: unsupported swap mode "${mode}".`);
   }
-
-  throw new Error(`swap: unsupported swap mode "${mode}".`);
 };
 
 export const swap = async (
