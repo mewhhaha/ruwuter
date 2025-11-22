@@ -108,7 +108,11 @@ describe("Unified on-prop", () => {
           default: () => (
             <html>
               <body>
-                <a id="with-prevent" href="/somewhere" on={event.click(clickHref, { preventDefault: true })}>
+                <a
+                  id="with-prevent"
+                  href="/somewhere"
+                  on={event.click(clickHref, { preventDefault: true })}
+                >
                   tap
                 </a>
                 <Client />

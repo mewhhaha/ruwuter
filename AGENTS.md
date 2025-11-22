@@ -55,8 +55,7 @@ repository.
 
 - Located in `src/runtime/jsx*.ts`.
 - Supports `on` props on intrinsic elements with optional bound context as the first list entry.
-- Function-valued attributes are not supported; only HTML-compatible values plus `on` are
-  emitted.
+- Function-valued attributes are not supported; only HTML-compatible values plus `on` are emitted.
 - Do not re‑introduce inline client function paths; the runtime only emits `t: 'm'` (module)
   entries.
 

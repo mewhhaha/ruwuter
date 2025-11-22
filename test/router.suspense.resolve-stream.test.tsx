@@ -82,7 +82,7 @@ describe("Resolve streams resolved suspense chunks", () => {
 
     // Expect Resolve emitted a template targeting the fallback element
 
-    expect(full).toMatch(/<template\s+data-rw-target=\"suspense-[^"]+\"/);
+    expect(full).toMatch(/<template\s+data-rw-target="suspense-[^"]+"/);
     // Resolved HTML must be present
     expect(full).toContain("READY");
 

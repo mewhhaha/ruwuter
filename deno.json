@@ -1,6 +1,6 @@
 {
     "name": "@mewhhaha/ruwuter",
-    "version": "0.1.44",
+    "version": "0.1.45",
     "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
     "publish": {
         "include": ["deno.json", "README.md", "src"]
@@ -24,8 +24,6 @@
         "test": "deno test -A",
         "test:dom": "deno test -A",
         "test:workers": "deno run -A npm:vitest run -c vitest.config.ts",
-        "lint": "deno run -A npm:oxlint --max-warnings=0",
-        "format": "deno run -A npm:prettier . --check",
         "typecheck": "deno check -A src/ test/ test-dom/",
         "cf-typegen": "wrangler typegen"
     },

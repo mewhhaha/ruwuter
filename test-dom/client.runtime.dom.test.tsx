@@ -138,12 +138,16 @@ describe("Client runtime DOM behaviour", () => {
   it(
     "calls mount and unmount handlers and maintains per-element context",
     async () => {
-      const mountHref = `data:text/javascript,${encodeURIComponent(
-        'export default function(ev, signal){ const b=document.body; const n=Number(b.getAttribute("data-mounted")||"0"); b.setAttribute("data-mounted", String(n+1)); }',
-      )}`;
-      const unmountHref = `data:text/javascript,${encodeURIComponent(
-        'export default function(ev, signal){ const b=document.body; const n=Number(b.getAttribute("data-unmounted")||"0"); b.setAttribute("data-unmounted", String(n+1)); }',
-      )}`;
+      const mountHref = `data:text/javascript,${
+        encodeURIComponent(
+          'export default function(ev, signal){ const b=document.body; const n=Number(b.getAttribute("data-mounted")||"0"); b.setAttribute("data-mounted", String(n+1)); }',
+        )
+      }`;
+      const unmountHref = `data:text/javascript,${
+        encodeURIComponent(
+          'export default function(ev, signal){ const b=document.body; const n=Number(b.getAttribute("data-unmounted")||"0"); b.setAttribute("data-unmounted", String(n+1)); }',
+        )
+      }`;
 
       const pattern = new URLPattern({ pathname: "/" });
       const fragments: fragment[] = [
@@ -172,20 +176,20 @@ describe("Client runtime DOM behaviour", () => {
       );
       const html = await res.text();
 
-      const { window, doc, patchRemove, cleanup } = setupDomEnvironment(html);
+      const { window: _window, doc, patchRemove, cleanup } = setupDomEnvironment(html);
       try {
         await import(nextRuntimeUrl());
 
         doc.dispatchEvent(new Event("DOMContentLoaded"));
 
-        await waitFor(() => doc.body.getAttribute('data-mounted') === '1', 1000);
-        expect(doc.body.getAttribute('data-mounted')).toBe('1');
+        await waitFor(() => doc.body.getAttribute("data-mounted") === "1", 1000);
+        expect(doc.body.getAttribute("data-mounted")).toBe("1");
 
         const un = doc.getElementById("u")!;
         patchRemove(un as any);
         un.remove();
         await new Promise((r) => setTimeout(r, 0));
-        expect(Number(doc.body.getAttribute('data-unmounted')||'0')).toBeGreaterThanOrEqual(1);
+        expect(Number(doc.body.getAttribute("data-unmounted") || "0")).toBeGreaterThanOrEqual(1);
       } finally {
         cleanup();
       }
@@ -194,12 +198,16 @@ describe("Client runtime DOM behaviour", () => {
 
   it("hydrates ref props and clears them on unmount", async () => {
     const buttonRef = ref<HTMLButtonElement | null>(null);
-    const mountHref = `data:text/javascript,${encodeURIComponent(
-      'export default function(ev, signal){ const ok = this && this.get && this.get()===ev.currentTarget; ev.currentTarget.setAttribute("data-ref-ok", ok?"1":"0"); }',
-    )}`;
-    const unmountHref = `data:text/javascript,${encodeURIComponent(
-      'export default function(ev, signal){ setTimeout(()=>{ document.body.setAttribute("data-ref-cleared", "true"); }, 0); }',
-    )}`;
+    const mountHref = `data:text/javascript,${
+      encodeURIComponent(
+        'export default function(ev, signal){ const ok = this && this.get && this.get()===ev.currentTarget; ev.currentTarget.setAttribute("data-ref-ok", ok?"1":"0"); }',
+      )
+    }`;
+    const unmountHref = `data:text/javascript,${
+      encodeURIComponent(
+        'export default function(ev, signal){ setTimeout(()=>{ document.body.setAttribute("data-ref-cleared", "true"); }, 0); }',
+      )
+    }`;
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
@@ -209,7 +217,13 @@ describe("Client runtime DOM behaviour", () => {
           default: () => (
             <html>
               <body>
-                <button id="target" ref={buttonRef} on={events(buttonRef, event.mount(mountHref), event.unmount(unmountHref))}>ref target</button>
+                <button
+                  id="target"
+                  ref={buttonRef}
+                  on={events(buttonRef, event.mount(mountHref), event.unmount(unmountHref))}
+                >
+                  ref target
+                </button>
                 <Client />
               </body>
             </html>
@@ -227,21 +241,21 @@ describe("Client runtime DOM behaviour", () => {
     );
     const html = await res.text();
 
-    const { window, doc, patchRemove, cleanup } = setupDomEnvironment(html);
+    const { window: _window, doc, patchRemove, cleanup } = setupDomEnvironment(html);
     try {
       await import(nextRuntimeUrl());
       doc.dispatchEvent(new Event("DOMContentLoaded"));
 
       const btn = doc.getElementById("target") as HTMLButtonElement | null;
       if (!btn) throw new Error("expected target button to exist");
-      await waitFor(() => btn.getAttribute('data-ref-ok') === '1', 1000);
-      expect(btn.getAttribute('data-ref-ok')).toBe('1');
+      await waitFor(() => btn.getAttribute("data-ref-ok") === "1", 1000);
+      expect(btn.getAttribute("data-ref-ok")).toBe("1");
 
       patchRemove(btn as any);
       btn.remove();
 
-      await waitFor(() => doc.body.getAttribute('data-ref-cleared') === 'true', 1000);
-      expect(doc.body.getAttribute('data-ref-cleared')).toBe('true');
+      await waitFor(() => doc.body.getAttribute("data-ref-cleared") === "true", 1000);
+      expect(doc.body.getAttribute("data-ref-cleared")).toBe("true");
     } finally {
       cleanup();
     }

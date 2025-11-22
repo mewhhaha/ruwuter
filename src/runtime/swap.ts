@@ -18,6 +18,9 @@ type TrustedTypePolicyFactoryValue = typeof globalThis extends {
     ): TrustedTypePolicyValue;
   };
 
+type ViewTransitionValue = { finished: Promise<unknown> };
+type StartViewTransitionValue = (updateCallback: () => void) => ViewTransitionValue;
+
 export type SwapTarget = Element | string | { current?: Element | null | undefined };
 export type SwapMode =
   | "innerHTML"
@@ -40,6 +43,7 @@ export type SwapOptions = {
   write?: SwapMode;
   text?: string | TrustedHTMLValue;
   init?: RequestInit;
+  viewTransition?: boolean;
 };
 
 export type SwapResult = {
@@ -128,6 +132,15 @@ const applySwap = (
   }
 };
 
+const resolveViewTransition = (): StartViewTransitionValue | null => {
+  if (typeof document === "undefined") return null;
+  const { startViewTransition } = document as Document & {
+    startViewTransition?: unknown;
+  };
+  if (typeof startViewTransition !== "function") return null;
+  return startViewTransition.bind(document) as StartViewTransitionValue;
+};
+
 export const swap = async (
   input: SwapInput,
   options: SwapOptions,
@@ -157,7 +170,18 @@ export const swap = async (
   const domValue = createTrustedHTML(rawHtml);
   const resolvedText = typeof rawHtml === "string" ? rawHtml : String(rawHtml);
 
-  applySwap(target, writeMode, domValue);
+  let startTransition = (f: () => void) => {
+    f();
+    return { finished: Promise.resolve() };
+  };
+  if (options.viewTransition !== false && "startViewTransition" in document) {
+    startTransition = document.startViewTransition.bind(document);
+  }
+
+  const transition = startTransition(() => {
+    await applySwap(target, writeMode, domValue);
+  });
+  await transition.finished.catch(() => {});
 
   return {
     target,

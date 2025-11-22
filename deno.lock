@@ -14,6 +14,7 @@
     "npm:@cloudflare/workers-types@^4.20251011.0": "4.20251011.0",
     "npm:@types/node@*": "24.2.0",
     "npm:oxlint@*": "1.25.0",
+    "npm:prettier@*": "3.6.2",
     "npm:urlpattern-polyfill@^10.1.0": "10.1.0"
   },
   "jsr": {
@@ -117,6 +118,10 @@
         "@oxlint/win32-arm64",
         "@oxlint/win32-x64"
       ],
+      "bin": true
+    },
+    "prettier@3.6.2": {
+      "integrity": "sha512-I7AIg5boAr5R0FFtJ6rCfD+LFsWHp81dolrFD8S79U9tb8Az2nGrJncnMSnys+bpQJfRUzqs9hnA81OAA3hCuQ==",
       "bin": true
     },
     "undici-types@7.10.0": {

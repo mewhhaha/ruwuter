@@ -124,8 +124,9 @@ type FragmentProps = Partial<ctx> & {
 type FragmentBrand = { readonly __ruwuterFragment?: true };
 type FragmentRuntimeBrand = { [FRAGMENT_MARK]?: true };
 
-type FragmentComponent = ((props: FragmentProps) => JSX.Element | Promise<JSX.Element | string>) &
-  FragmentBrand;
+type FragmentComponent =
+  & ((props: FragmentProps) => JSX.Element | Promise<JSX.Element | string>)
+  & FragmentBrand;
 
 const isFragmentComponent = (value: unknown): value is FragmentComponent => {
   return isFunction(value) && (value as FragmentRuntimeBrand)[FRAGMENT_MARK] === true;
@@ -141,7 +142,9 @@ const hasExplicitContext = (props: Partial<ctx>): props is ctx => {
 };
 
 export function fragment(
-  render: (args: FragmentArgs & Record<string, unknown>) => JSX.Element | Promise<JSX.Element | string>,
+  render: (
+    args: FragmentArgs & Record<string, unknown>,
+  ) => JSX.Element | Promise<JSX.Element | string>,
 ): FragmentComponent {
   const component = ((
     props: FragmentProps,
@@ -167,7 +170,9 @@ export function fragment(
     }
 
     if (!activeCtx) {
-      throw new TypeError("fragment() components must be rendered within Router.handle or provided with explicit context.");
+      throw new TypeError(
+        "fragment() components must be rendered within Router.handle or provided with explicit context.",
+      );
     }
     return render({
       ...activeCtx,
@@ -358,9 +363,7 @@ export const Router = (routes: route[]): router => {
           return await serveAsset(fragments, assetName, ctx);
         }
 
-        const activeFragments = request.headers.has("fx-request")
-          ? fragments.slice(1)
-          : fragments;
+        const activeFragments = request.headers.has("fx-request") ? fragments.slice(1) : fragments;
 
         try {
           const leaf = activeFragments[activeFragments.length - 1]?.mod;

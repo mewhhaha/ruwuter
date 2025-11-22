@@ -145,7 +145,8 @@ can make the first click see `event.currentTarget === null` even though subseque
 To keep those values stable we wrap each event in a tiny snapshot before invoking your handler. The
 snapshot fixes timing‑sensitive fields (e.g., `currentTarget`, `relatedTarget`, `srcElement`,
 `eventPhase`, and a copied `composedPath()`), while every other property/method continues to behave
-like the native event. Methods such as `preventDefault()` still hit the real event, and `instanceof
+like the native event. Methods such as `preventDefault()` still hit the real event, and
+`instanceof
 MouseEvent`/`KeyboardEvent` continues to work.
 
 Handler signatures remain `(event: Event, signal: AbortSignal)`. You can rely on
@@ -177,9 +178,8 @@ export default function Page() {
 ```
 
 During hydration the client runtime writes the live DOM node into the ref, so calling
-`buttonRef.get()` yields the hydrated element. When the
-element is removed, the runtime automatically clears the ref back to `null`, keeping the value in
-sync with the DOM lifecycle.
+`buttonRef.get()` yields the hydrated element. When the element is removed, the runtime
+automatically clears the ref back to `null`, keeping the value in sync with the DOM lifecycle.
 
 On the server the ref becomes part of the per-element hydration payload that sits next to your
 markup:
@@ -583,10 +583,10 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 
 Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples
 produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their
-URLs with `?url`, and build tuples like `event.click(handlerHref)`. Use `events(bind, event.click(...))`
-(or the builder form `events(bind, on => on.click(...))` when composing dynamically) to prepend the
-object (or ref) you want as `this`. Those values can include shared `ref()`
-objects.
+URLs with `?url`, and build tuples like `event.click(handlerHref)`. Use
+`events(bind, event.click(...))` (or the builder form `events(bind, on => on.click(...))` when
+composing dynamically) to prepend the object (or ref) you want as `this`. Those values can include
+shared `ref()` objects.
 
 ```tsx
 // app/click.client.ts
@@ -638,12 +638,11 @@ element:
       { "t": "m", "s": "./click.js", "x": "default", "ev": "click" }
     ]
   }
-  </script>
+</script>
 ```
 
 - Handlers: module entries `{ t: "m", s: "<href>", x: "default", ev }`.
-- Refs: `{ "__ref": true, i, v }` revive to `{ id, get(), set() }` and stay shared across
-  payloads.
+- Refs: `{ "__ref": true, i, v }` revive to `{ id, get(), set() }` and stay shared across payloads.
 
 ---
 

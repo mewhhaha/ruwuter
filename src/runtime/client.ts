@@ -45,7 +45,9 @@ interface ElementContext {
   refs: RefObject[];
 }
 
-interface SyntheticEventInit { currentTarget?: EventTarget | null }
+interface SyntheticEventInit {
+  currentTarget?: EventTarget | null;
+}
 
 function synthesizeEvent<E extends Event>(event: E, init?: SyntheticEventInit): E {
   // Create a shallow wrapper whose prototype chain includes the original event
@@ -124,7 +126,7 @@ function initializeClientRuntime(): void {
     const base = (typeof document.baseURI === "string" && document.baseURI &&
         document.baseURI !== "about:blank")
       ? document.baseURI
-      : window.location.href;
+      : globalThis.location.href;
     // Resolve relative to the current directory
     const baseDir = new URL(".", base);
     const resolved = new URL(spec, baseDir).href;
