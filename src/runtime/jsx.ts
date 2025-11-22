@@ -366,12 +366,12 @@ export namespace JSX {
     maxlength?: number | undefined;
     method?: string | undefined;
     min?: string | undefined;
-    multiple?: string | undefined;
+    multiple?: boolean | undefined;
     name?: string | undefined;
-    novalidate?: string | boolean | undefined;
+    novalidate?: boolean | boolean | undefined;
     pattern?: string | undefined;
     placeholder?: string | undefined;
-    readonly?: string | undefined;
+    readonly?: boolean | undefined;
     required?: boolean | undefined;
     size?: string | undefined;
     src?: string | undefined;
