@@ -179,7 +179,7 @@ export const swap = async (
   }
 
   const transition = startTransition(() => {
-    await applySwap(target, writeMode, domValue);
+    applySwap(target, writeMode, domValue);
   });
   await transition.finished.catch(() => {});
 
