@@ -1,6 +1,6 @@
 {
     "name": "@mewhhaha/ruwuter",
-    "version": "0.1.48",
+    "version": "0.1.49",
     "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
     "publish": {
         "include": ["deno.json", "README.md", "src"]

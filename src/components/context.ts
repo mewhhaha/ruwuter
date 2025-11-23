@@ -86,7 +86,7 @@ export function bindContext<F extends (...args: any[]) => any>(fn: F): F {
  * Context API returned by {@link createContext}.
  */
 export type CreatedContext<T> = {
-  Provider: (props: { value: T; children: JSX.Element }) => JSX.Element;
+  Provider: (props: { value: T; children?: JSX.HtmlNode }) => JSX.Element;
   use: () => T;
   withValue: <R>(value: T, fn: () => R) => R;
 };
