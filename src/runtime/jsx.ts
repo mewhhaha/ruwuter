@@ -335,14 +335,16 @@ export namespace JSX {
     src?: string | undefined;
     srcdoc?: string | undefined;
     name?: string | undefined;
-    sandbox?: string | undefined;
+    sandbox?: string | boolean | undefined;
     seamless?: string | undefined;
     width?: string | undefined;
     height?: string | undefined;
+    loading?: "eager" | "lazy" | undefined;
   }
   export interface HtmlImageTag extends HtmlTag {
     alt?: string | undefined;
     src?: string | undefined;
+    loading?: "eager" | "lazy" | undefined;
     crossorigin?: string | undefined;
     usemap?: string | undefined;
     ismap?: string | undefined;
