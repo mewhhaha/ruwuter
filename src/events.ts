@@ -292,4 +292,9 @@ export type UnmountEvent<CurrentTarget extends Element = Element> = ClientEvent<
   CurrentTarget
 >;
 
+export type SyntheticEvent<CurrentTarget extends Element = Element> = TargetedEvent<
+  Event,
+  CurrentTarget
+>;
+
 export type { Handler };
