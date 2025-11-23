@@ -105,7 +105,7 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
     children,
   }: {
     value: T;
-    children?: JSX.Element;
+    children?: JSX.HtmlNode;
   }): JSX.Element => {
     const store = getStore();
     if (!store) {
