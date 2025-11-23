@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { into, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
+// @ts-types="@mewhhaha/ruwuter"
+import type { Html } from "@mewhhaha/ruwuter";
 
 type Store = Map<symbol, unknown[]>;
 
@@ -103,11 +105,11 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
     children,
   }: {
     value: T;
-    children: JSX.Element;
+    children?: JSX.Element;
   }): JSX.Element => {
     const store = getStore();
     if (!store) {
-      return children;
+      return into(children);
     }
 
     const release = pushValue(key, value);

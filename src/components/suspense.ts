@@ -89,7 +89,7 @@ export const Resolve = ({ nonce }: { nonce?: string } = {}): JSX.Element => {
   );
 };
 type SuspenseProviderProps = {
-  children: JSX.Element;
+  children?: JSX.Element;
 };
 
 export const SuspenseProvider = ({
