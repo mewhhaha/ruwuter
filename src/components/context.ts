@@ -170,3 +170,7 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
  * AsyncLocalStorage‑based context utilities for composing JSX trees.
  * Provides a small Provider/use API that mirrors React's ergonomics.
  */
+
+export const use = <T>(context: CreatedContext<T>): T => {
+  return context.use();
+};
