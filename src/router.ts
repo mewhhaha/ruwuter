@@ -110,37 +110,35 @@ export type fragment = { id: string; mod: mod; params?: string[] };
  */
 export type route = [pattern: URLPattern, fragments: fragment[]];
 
-const FRAGMENT_MARK = Symbol.for("ruwuter.fragment");
+const HTML_COMPONENT_MARK = Symbol.for("ruwuter.html");
 
-export type FragmentArgs = ctx & {
+export type HtmlArgs = ctx & {
   children?: JSX.Element;
 };
 
-type FragmentProps = FragmentArgs;
+type HtmlProps = HtmlArgs;
 
-type FragmentBrand = { readonly __ruwuterFragment?: true };
-type FragmentRuntimeBrand = { [FRAGMENT_MARK]?: true };
+type HtmlBrand = { readonly __ruwuterHtml?: true };
+type HtmlRuntimeBrand = { [HTML_COMPONENT_MARK]?: true };
 
-type FragmentComponent =
-  & ((props: FragmentProps) => JSX.Element | Promise<JSX.Element | string>)
-  & FragmentBrand;
+type HtmlComponent =
+  & ((props: HtmlProps) => JSX.Element | Promise<JSX.Element | string>)
+  & HtmlBrand;
 
-const isFragmentComponent = (value: unknown): value is FragmentComponent => {
-  return isFunction(value) && (value as FragmentRuntimeBrand)[FRAGMENT_MARK] === true;
+const isHtmlComponent = (value: unknown): value is HtmlComponent => {
+  return isFunction(value) && (value as HtmlRuntimeBrand)[HTML_COMPONENT_MARK] === true;
 };
 
-export function fragment(
-  render: (
-    args: FragmentArgs,
-  ) => JSX.Element | Promise<JSX.Element | string>,
-): FragmentComponent {
+export function html(
+  render: (args: HtmlArgs) => JSX.Element | Promise<JSX.Element | string>,
+): HtmlComponent {
   function component(
-    props: FragmentProps,
+    props: HtmlProps,
   ): JSX.Element | Promise<JSX.Element | string> {
     return render(props);
   }
 
-  component[FRAGMENT_MARK] = true;
+  component[HTML_COMPONENT_MARK] = true;
   return component;
 }
 
@@ -200,7 +198,7 @@ const serveHtmlAsset = async (
   ctx: ctx,
 ): Promise<Response | undefined> => {
   const component = mod[exportName];
-  if (!isFragmentComponent(component)) return undefined;
+  if (!isHtmlComponent(component)) return undefined;
 
   const loader = isFunction<loader>(mod.loader) ? mod.loader : undefined;
 
@@ -360,7 +358,7 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
       if (!Component) continue;
 
       const loaderData = await loaders[index];
-      const result = isFragmentComponent(Component)
+      const result = isHtmlComponent(Component)
         ? await Component({
           children: acc,
           request: ctx.request,

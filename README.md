@@ -232,20 +232,20 @@ async function writeFsRoutes(appFolder: string) {
 
 Call this whenever your file-system routes change (during builds, watch mode, etc.).
 
-## Fragment assets
+## HTML assets
 
 Components exported from a route module are exposed at predictable URLs. Each named export must
 begin with an uppercase letter, so `export function Hello()` becomes `/products/Hello.html` and
 `export const ProductCard` resolves to `/products/ProductCard.html`.
 
-Use the `fragment` helper to opt-in explicit fragments. It marks the component as routable and
+Use the `html` helper to opt-in explicit HTML exports. It marks the component as routable and
 passes the request context (`request`, `params`, and the `[env, ctx]` tuple) straight into your
-render function. Fragments can be async—await inside and return JSX when you’re done, and they’re
+render function. HTML exports can be async—await inside and return JSX when you’re done, and they’re
 responsible for loading their own data.
 
 ```tsx
 // app/routes/products.tsx
-import { fragment, type FragmentArgs } from "@mewhhaha/ruwuter";
+import { html, type HtmlArgs } from "@mewhhaha/ruwuter";
 import type { Route } from "./+types.products.ts";
 
 import { getProduct, getProductInsights } from "../lib/data.ts";
@@ -254,7 +254,7 @@ export async function loader({ params }: Route.LoaderArgs) {
   return { product: await getProduct(params.slug) };
 }
 
-export const Sidebar = fragment(async ({ params, request }: FragmentArgs) => {
+export const Sidebar = html(async ({ params, request }: HtmlArgs) => {
   const insights = await getProductInsights(params.slug);
   const url = new URL(request.url);
 
@@ -283,8 +283,8 @@ export default function Products({ loaderData, children }: Route.ComponentProps)
 }
 ```
 
-When you need a component fragment in response to an interaction, build that URL on the server and
-pass it down so the client can fetch and inject the markup:
+When you need an HTML export in response to an interaction, build that URL on the server and pass it
+down so the client can fetch and inject the markup:
 
 ```tsx
 // app/routes/products.tsx
