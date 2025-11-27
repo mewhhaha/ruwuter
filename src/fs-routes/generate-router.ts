@@ -4,6 +4,27 @@ import { bySpecificity } from "./sort.ts";
 import type { GeneratedFile } from "./types.ts";
 
 const unescapedDotRegex = /(?<!\[)\.(?![^[]*\])/g;
+const unescapeSegment = (segment: string): string => {
+  let result = "";
+  for (let index = 0; index < segment.length; index++) {
+    const start = segment.indexOf("[", index);
+    if (start === -1) {
+      result += segment.slice(index);
+      break;
+    }
+
+    result += segment.slice(index, start);
+    const end = segment.indexOf("]", start + 1);
+    if (end === -1) {
+      result += segment.slice(start);
+      break;
+    }
+
+    result += segment.slice(start + 1, end);
+    index = end;
+  }
+  return result;
+};
 
 const tsRegex = /\.ts(x)?$/;
 
@@ -18,16 +39,19 @@ const extractRouteParams = (routeName: string): ParamInfo => {
   for (const segment of routeName.split(unescapedDotRegex)) {
     const isOptional = segment.startsWith("(") && segment.endsWith(")");
     const actualSegment = isOptional ? segment.slice(1, -1) : segment;
+    const escaped = unescapeSegment(actualSegment);
 
-    if (actualSegment === "$") {
+    if (actualSegment.startsWith("[")) continue;
+
+    if (escaped === "$") {
       const name = wildcard.toString();
       paramNames.add(name);
       wildcard++;
       continue;
     }
 
-    if (actualSegment.startsWith("$")) {
-      let name = actualSegment.slice(1);
+    if (escaped.startsWith("$")) {
+      let name = escaped.slice(1);
       let optional = isOptional;
       if (name.startsWith("(") && name.endsWith(")")) {
         name = name.slice(1, -1);
@@ -37,7 +61,10 @@ const extractRouteParams = (routeName: string): ParamInfo => {
         if (!optional) paramNames.add(`${wildcard++}`);
         continue;
       }
-      paramNames.add(name);
+      const match = /^([A-Za-z0-9_]+)/.exec(name);
+      if (match?.[1]) {
+        paramNames.add(match[1]);
+      }
     }
   }
 
@@ -63,13 +90,15 @@ const generatePatternString = (routePath: string): string => {
   for (const segment of segments) {
     const isOptional = segment.startsWith("(") && segment.endsWith(")");
     const actualSegment = isOptional ? segment.slice(1, -1) : segment;
+    const escaped = unescapeSegment(actualSegment);
+    const wasEscaped = actualSegment.startsWith("[");
 
     pattern += "/";
-    if (actualSegment === "$") {
+    if (escaped === "$" && !wasEscaped) {
       pattern += "*";
       break;
-    } else if (actualSegment.startsWith("$")) {
-      let name = actualSegment.slice(1);
+    } else if (escaped.startsWith("$") && !wasEscaped) {
+      let name = escaped.slice(1);
       let optional = isOptional;
       if (name.startsWith("(") && name.endsWith(")")) {
         name = name.slice(1, -1);
@@ -78,13 +107,16 @@ const generatePatternString = (routePath: string): string => {
       if (name.length === 0) {
         name = "wild";
       }
-      pattern += `:${name}`;
+      const match = /^([A-Za-z0-9_]+)(.*)$/.exec(name);
+      const paramName = match?.[1] ?? "wild";
+      const suffix = match?.[2] ?? "";
+      pattern += `:${paramName}${suffix}`;
       if (optional) pattern += "?";
     } else {
       if (isOptional) {
-        pattern += `(${actualSegment})?`;
+        pattern += `(${escaped})?`;
       } else {
-        pattern += actualSegment;
+        pattern += escaped;
       }
     }
   }

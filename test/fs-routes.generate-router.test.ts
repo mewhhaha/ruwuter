@@ -25,4 +25,82 @@ describe("generateRouter", () => {
       await Deno.remove(app, { recursive: true });
     }
   });
+
+  it("supports escaped route conventions", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      const files = [
+        "sitemap[.]xml.tsx",
+        "[sitemap.xml].tsx",
+        "weird-url.[_index].tsx",
+        "dolla-bills-[$].tsx",
+        "[[so-weird]].tsx",
+        "reports.$id[.pdf].tsx",
+      ];
+      await Promise.all(
+        files.map((file) =>
+          Deno.writeTextFile(join(routesDir, file), "export default 1;")
+        ),
+      );
+
+      const [routerFile] = await generateRouter(app);
+      if (!routerFile) throw new Error("Router file not generated");
+      const { contents } = routerFile;
+
+      expect(contents).toContain('pathname: "/sitemap.xml/:__asset');
+      expect(contents).toContain('pathname: "/weird-url/_index/:__asset');
+      expect(contents).toContain('pathname: "/dolla-bills-$/:__asset');
+      expect(contents).toContain('pathname: "/[so-weird]/:__asset');
+      expect(contents).toContain('pathname: "/reports/:id.pdf/:__asset');
+      expect(contents).toContain('params: ["id"]');
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("orders more specific routes before generic params", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      const files = [
+        "reports.$id.tsx",
+        "reports.$id[.pdf].tsx",
+        "reports.(foo).tsx",
+      ];
+      await Promise.all(
+        files.map((file) =>
+          Deno.writeTextFile(join(routesDir, file), "export default 1;")
+        ),
+      );
+
+      const [routerFile] = await generateRouter(app);
+      if (!routerFile) throw new Error("Router file not generated");
+      const { contents } = routerFile;
+      const order = Array.from(
+        contents.matchAll(/pathname: "([^"]+)"/g),
+        (m) => m[1],
+      );
+
+      const pdfIndex = order.findIndex((value) =>
+        value.includes("/reports/:id.pdf")
+      );
+      const paramIndex = order.findIndex((value) =>
+        value.includes("/reports/:id/:__asset")
+      );
+      const optionalLiteralIndex = order.findIndex((value) =>
+        value.includes("/reports/(foo)?")
+      );
+
+      expect(pdfIndex).toBeGreaterThanOrEqual(0);
+      expect(paramIndex).toBeGreaterThanOrEqual(0);
+      expect(optionalLiteralIndex).toBeGreaterThanOrEqual(0);
+      expect(pdfIndex).toBeLessThan(paramIndex);
+      expect(optionalLiteralIndex).toBeLessThan(paramIndex);
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
 });

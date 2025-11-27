@@ -1,5 +1,47 @@
-const segments = (a: string) => {
-  return a.split(unescapedDotRegex);
+const segments = (a: string) => a.split(unescapedDotRegex);
+
+const unescapeSegment = (segment: string): string => {
+  let result = "";
+  for (let index = 0; index < segment.length; index++) {
+    const start = segment.indexOf("[", index);
+    if (start === -1) {
+      result += segment.slice(index);
+      break;
+    }
+
+    result += segment.slice(index, start);
+    const end = segment.indexOf("]", start + 1);
+    if (end === -1) {
+      result += segment.slice(start);
+      break;
+    }
+
+    result += segment.slice(start + 1, end);
+    index = end;
+  }
+  return result;
+};
+
+type SegmentInfo = {
+  weight: number;
+  optional: boolean;
+};
+
+const segmentInfo = (raw: string): SegmentInfo => {
+  const optional = raw.startsWith("(") && raw.endsWith(")");
+  const actual = optional ? raw.slice(1, -1) : raw;
+  const escaped = unescapeSegment(actual);
+  const wasEscaped = actual.startsWith("[");
+
+  if (!wasEscaped && escaped.startsWith("$")) {
+    const rest = escaped.slice(1);
+    const match = /^([A-Za-z0-9_]*)(.*)$/.exec(rest);
+    const suffix = match?.[2] ?? "";
+    const hasSuffix = suffix.length > 0;
+    return { weight: hasSuffix ? 2 : 1, optional };
+  }
+
+  return { weight: 3, optional };
 };
 
 /**
@@ -29,18 +71,18 @@ export const bySpecificity = (a: string, b: string): number => {
     }
 
     for (let i = 0; i < aSegments.length; i++) {
-      const aSegment = aSegments[i];
-      const bSegment = bSegments[i];
-      if (aSegment === bSegment) {
+      const aInfo = segmentInfo(aSegments[i]);
+      const bInfo = segmentInfo(bSegments[i]);
+      if (aInfo.weight === bInfo.weight && aInfo.optional === bInfo.optional) {
         continue;
       }
 
-      if (aSegment.startsWith("$")) {
-        return 1;
+      if (aInfo.weight !== bInfo.weight) {
+        return bInfo.weight - aInfo.weight;
       }
 
-      if (bSegment.startsWith("$")) {
-        return -1;
+      if (aInfo.optional !== bInfo.optional) {
+        return aInfo.optional ? 1 : -1;
       }
     }
 
