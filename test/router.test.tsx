@@ -47,7 +47,7 @@ describe("Router HTML responses", () => {
     expect(text).toContain("<html>");
   });
 
-  it("omits outer fragment when fx-request header is present", async () => {
+  it("renders outer fragment even when fx-request header is present", async () => {
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
       {
@@ -72,10 +72,10 @@ describe("Router HTML responses", () => {
     const { ctx } = makeCtx();
     const res = await router.handle(req, {} as Env, ctx);
     const text = await res.text();
-    // Should include doctype and inner content, but not the shell markup
+    // Should include doctype and both outer and inner content
     expect(text).toContain("<!doctype html>");
     expect(text).toContain("<h1>Inner</h1>");
-    expect(text).not.toContain("SHELL");
+    expect(text).toContain("SHELL");
   });
 });
 

@@ -176,19 +176,9 @@ const HTML_HEADERS = {
   "Cache-Control": "no-store",
 } as const;
 
-const streamHtml = (value: Html): Response => {
-  return new Response(value.toReadableStream(), {
-    status: 200,
-    headers: HTML_HEADERS,
-  });
-};
-
 const resolveComponentName = (asset: string): string | undefined => {
-  if (!asset.endsWith(".html")) return undefined;
-  const base = asset.slice(0, -5);
-  if (!base) return undefined;
-  if (!/^[A-Z][A-Za-z0-9_$]*$/.test(base)) return undefined;
-  return base;
+  const match = /^([A-Z][A-Za-z0-9_$]*)\.html$/.exec(asset);
+  return match?.[1];
 };
 
 const toParams = (
@@ -204,29 +194,13 @@ const toParams = (
   return result;
 };
 
-const pickParam = (
-  params: Record<string, string>,
-  key: string,
-): string | undefined => {
-  return Object.prototype.hasOwnProperty.call(params, key) ? params[key] : undefined;
-};
-
-function getExportFunction<Fn extends (...args: any[]) => unknown>(
-  mod: mod,
-  exportName: string,
-): Fn | undefined {
-  const candidate = mod[exportName];
-  return isFunction<Fn>(candidate) ? candidate : undefined;
-}
-
 const serveHtmlAsset = async (
   mod: mod,
   exportName: string,
   ctx: ctx,
 ): Promise<Response | undefined> => {
-  const candidate = getExportFunction<FragmentComponent>(mod, exportName);
-  if (!candidate || !isFragmentComponent(candidate)) return undefined;
-  const component = candidate;
+  const component = mod[exportName];
+  if (!isFragmentComponent(component)) return undefined;
 
   const loader = isFunction<loader>(mod.loader) ? mod.loader : undefined;
 
@@ -247,7 +221,10 @@ const serveHtmlAsset = async (
       `Component export "${exportName}" must return Html or Response when requested via __asset.`,
     );
   }
-  return streamHtml(rendered);
+  return new Response(rendered.toReadableStream(), {
+    status: 200,
+    headers: HTML_HEADERS,
+  });
 };
 
 const serveAsset = async (
@@ -259,18 +236,15 @@ const serveAsset = async (
   if (!exportName) return new Response(null, { status: 404 });
 
   for (let index = fragments.length - 1; index >= 0; index--) {
-    const fragment = fragments[index];
-    if (!fragment) continue;
-    const response = await serveHtmlAsset(fragment.mod, exportName, ctx);
+    const response = await serveHtmlAsset(fragments[index].mod, exportName, ctx);
     if (response) return response;
   }
 
   return new Response(null, { status: 404 });
 };
 
-const runWithStores = (fn: () => Promise<Response>) => {
-  return runWithHooksStore(() => runWithContextStore(fn));
-};
+const runWithStores = (fn: () => Promise<Response>) =>
+  runWithHooksStore(() => runWithContextStore(fn));
 
 export const Router = (routes: route[]): router => {
   const handle = (
@@ -292,15 +266,11 @@ export const Router = (routes: route[]): router => {
         return new Response(null, { status: 404 });
       }
 
-      const clonedParams: Record<string, string> = { ...params };
-      const assetName = pickParam(clonedParams, "__asset");
-      if (assetName !== undefined) {
-        delete clonedParams["__asset"];
-      }
+      const assetName = params["__asset"];
 
       const ctx: ctx = {
         request,
-        params: clonedParams,
+        params,
         context: args,
       };
 
@@ -308,20 +278,20 @@ export const Router = (routes: route[]): router => {
         return await serveAsset(fragments, assetName, ctx);
       }
 
-      const activeFragments = request.headers.has("fx-request") ? fragments.slice(1) : fragments;
+      const leaf = fragments[fragments.length - 1]?.mod;
+      if (!leaf) {
+        return new Response(null, { status: 404 });
+      }
 
       try {
-        const leaf = activeFragments[activeFragments.length - 1]?.mod;
-
-        if (request.method === "GET" && leaf?.default) {
-          return await routeResponse(activeFragments, ctx);
-        }
-
-        if (request.method === "GET" && leaf?.loader) {
-          return await dataResponse(leaf.loader, ctx);
-        }
-
-        if (request.method !== "GET" && leaf?.action) {
+        if (request.method === "GET") {
+          if (leaf.default) {
+            return await routeResponse(fragments, ctx);
+          }
+          if (leaf.loader) {
+            return await dataResponse(leaf.loader, ctx);
+          }
+        } else if (leaf.action) {
           return await dataResponse(leaf.action, ctx);
         }
 
@@ -365,10 +335,18 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
     }),
   );
 
-  const init = new Headers({
+  const headers = new Headers({
     "Content-Type": "text/html",
   });
-  const headers = await mergeFragmentHeaders(init, ctx, fragments, loaders);
+  for (let i = 0; i < fragments.length; i++) {
+    const headerFn = fragments[i].mod.headers;
+    if (!headerFn) continue;
+    const h = await headerFn({ ...ctx, loaderData: loaders[i] });
+    if (!h) continue;
+    for (const [k, v] of h instanceof Headers ? h : Object.entries(h)) {
+      if (v != null) headers.append(k, v);
+    }
+  }
 
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
@@ -381,17 +359,14 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
       if (!Component) continue;
 
       const loaderData = loaders[index];
-      let result: unknown;
-      if (isFragmentComponent(Component)) {
-        result = await Component({
+      const result = isFragmentComponent(Component)
+        ? await Component({
           children: acc,
           request: ctx.request,
           params: ctx.params,
           context: ctx.context,
-        });
-      } else {
-        result = await (Component as renderer)({ loaderData, children: acc });
-      }
+        })
+        : await (Component as renderer)({ loaderData, children: acc });
 
       if (result instanceof Response) {
         throw result;
@@ -440,22 +415,4 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
     headers,
     status: 200,
   });
-};
-
-const mergeFragmentHeaders = async (
-  headers: Headers,
-  ctx: ctx,
-  fragments: fragment[],
-  loaders: (unknown | undefined)[],
-) => {
-  for (let i = 0; i < fragments.length; i++) {
-    const { mod } = fragments[i];
-    if (!mod.headers) continue;
-    const h = await mod.headers({ ...ctx, loaderData: loaders[i] });
-    if (!h) continue;
-    for (const [k, v] of h instanceof Headers ? h : Object.entries(h)) {
-      if (v != null) headers.append(k, v);
-    }
-  }
-  return headers;
 };
