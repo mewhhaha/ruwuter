@@ -324,24 +324,25 @@ const dataResponse = async (f: action | loader, ctx: ctx) => {
 };
 
 const routeResponse = async (fragments: fragment[], ctx: ctx) => {
-  const loaders = await Promise.all(
-    fragments.map(async (fragment) => {
-      if (!fragment.mod.loader) return undefined;
-      const result = await fragment.mod.loader(ctx);
-      if (result instanceof Response) {
-        throw result;
-      }
-      return result;
-    }),
+  const loaders: (Promise<unknown> | undefined)[] = fragments.map(
+    (fragment) => fragment.mod.loader ? Promise.resolve(fragment.mod.loader(ctx)) : undefined,
   );
+  const headers = new Headers({ "Content-Type": "text/html" });
 
-  const headers = new Headers({
-    "Content-Type": "text/html",
-  });
   for (let i = 0; i < fragments.length; i++) {
-    const headerFn = fragments[i].mod.headers;
-    if (!headerFn) continue;
-    const h = await headerFn({ ...ctx, loaderData: loaders[i] });
+    const { mod } = fragments[i];
+    const loaderData = await loaders[i];
+    if (loaderData instanceof Response) {
+      throw loaderData;
+    }
+
+    if (!mod.headers) continue;
+    const h = await mod.headers({
+      request: ctx.request,
+      params: ctx.params,
+      context: ctx.context,
+      loaderData,
+    });
     if (!h) continue;
     for (const [k, v] of h instanceof Headers ? h : Object.entries(h)) {
       if (v != null) headers.append(k, v);
@@ -358,7 +359,7 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
       const Component = mod.default;
       if (!Component) continue;
 
-      const loaderData = loaders[index];
+      const loaderData = await loaders[index];
       const result = isFragmentComponent(Component)
         ? await Component({
           children: acc,
