@@ -23,7 +23,7 @@
 import type { JSX } from "./runtime/jsx.ts";
 import { type Html, into, isHtml } from "./runtime/node.ts";
 // SuspenseProvider must be applied by the consumer in their layout/document.
-import { bindContext, createContext, runWithContextStore } from "./components/context.ts";
+import { bindContext, runWithContextStore } from "./components/context.ts";
 import { runWithHooksStore } from "./runtime/hooks.ts";
 
 export type { Html } from "./runtime/node.ts";
@@ -111,15 +111,12 @@ export type fragment = { id: string; mod: mod; params?: string[] };
 export type route = [pattern: URLPattern, fragments: fragment[]];
 
 const FRAGMENT_MARK = Symbol.for("ruwuter.fragment");
-const fragmentContext = createContext<ctx | undefined>(undefined);
 
 export type FragmentArgs = ctx & {
   children?: JSX.Element;
 };
 
-type FragmentProps = Partial<ctx> & {
-  children?: JSX.Element;
-} & Record<string, unknown>;
+type FragmentProps = FragmentArgs;
 
 type FragmentBrand = { readonly __ruwuterFragment?: true };
 type FragmentRuntimeBrand = { [FRAGMENT_MARK]?: true };
@@ -132,69 +129,18 @@ const isFragmentComponent = (value: unknown): value is FragmentComponent => {
   return isFunction(value) && (value as FragmentRuntimeBrand)[FRAGMENT_MARK] === true;
 };
 
-const hasExplicitContext = (props: Partial<ctx>): props is ctx => {
-  const { request, params, context } = props;
-  if (!(request instanceof Request)) return false;
-  if (!params || typeof params !== "object") return false;
-  if (!context) return false;
-  if (!Array.isArray(context) || context.length !== 2) return false;
-  return true;
-};
-
 export function fragment(
   render: (
-    args: FragmentArgs & Record<string, unknown>,
+    args: FragmentArgs,
   ) => JSX.Element | Promise<JSX.Element | string>,
 ): FragmentComponent {
-  const component = ((
+  function component(
     props: FragmentProps,
-  ): JSX.Element | Promise<JSX.Element | string> => {
-    const {
-      request: maybeRequest,
-      params: maybeParams,
-      context: maybeContext,
-      children,
-      ...extra
-    } = props;
+  ): JSX.Element | Promise<JSX.Element | string> {
+    return render(props);
+  }
 
-    let activeCtx = fragmentContext.use();
-    if (!activeCtx) {
-      const candidate: Partial<ctx> = {
-        request: maybeRequest,
-        params: maybeParams,
-        context: maybeContext,
-      };
-      if (hasExplicitContext(candidate)) {
-        activeCtx = candidate;
-      }
-    }
-
-    if (!activeCtx) {
-      throw new TypeError(
-        "fragment() components must be rendered within Router.handle or provided with explicit context.",
-      );
-    }
-    return render({
-      ...activeCtx,
-      ...extra,
-      children,
-    });
-  }) as FragmentComponent;
-
-  Object.defineProperty(component, FRAGMENT_MARK, {
-    value: true,
-    enumerable: false,
-    configurable: false,
-    writable: false,
-  });
-
-  Object.defineProperty(component, "__ruwuterFragment", {
-    value: true,
-    enumerable: false,
-    configurable: false,
-    writable: false,
-  });
-
+  component[FRAGMENT_MARK] = true;
   return component;
 }
 
@@ -358,41 +304,39 @@ export const Router = (routes: route[]): router => {
         context: args,
       };
 
-      return fragmentContext.withValue(ctx, async () => {
-        if (assetName !== undefined) {
-          return await serveAsset(fragments, assetName, ctx);
+      if (assetName !== undefined) {
+        return await serveAsset(fragments, assetName, ctx);
+      }
+
+      const activeFragments = request.headers.has("fx-request") ? fragments.slice(1) : fragments;
+
+      try {
+        const leaf = activeFragments[activeFragments.length - 1]?.mod;
+
+        if (request.method === "GET" && leaf?.default) {
+          return await routeResponse(activeFragments, ctx);
         }
 
-        const activeFragments = request.headers.has("fx-request") ? fragments.slice(1) : fragments;
-
-        try {
-          const leaf = activeFragments[activeFragments.length - 1]?.mod;
-
-          if (request.method === "GET" && leaf?.default) {
-            return await routeResponse(activeFragments, ctx);
-          }
-
-          if (request.method === "GET" && leaf?.loader) {
-            return await dataResponse(leaf.loader, ctx);
-          }
-
-          if (request.method !== "GET" && leaf?.action) {
-            return await dataResponse(leaf.action, ctx);
-          }
-
-          return new Response(null, { status: 404 });
-        } catch (e) {
-          if (e instanceof Response) {
-            return e;
-          }
-
-          if (e instanceof Error) {
-            console.error(e.message);
-          }
-
-          return new Response(null, { status: 500 });
+        if (request.method === "GET" && leaf?.loader) {
+          return await dataResponse(leaf.loader, ctx);
         }
-      });
+
+        if (request.method !== "GET" && leaf?.action) {
+          return await dataResponse(leaf.action, ctx);
+        }
+
+        return new Response(null, { status: 404 });
+      } catch (e) {
+        if (e instanceof Response) {
+          return e;
+        }
+
+        if (e instanceof Error) {
+          console.error(e.message);
+        }
+
+        return new Response(null, { status: 500 });
+      }
     });
   };
 
