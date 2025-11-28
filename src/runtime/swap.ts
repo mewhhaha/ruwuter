@@ -18,9 +18,6 @@ type TrustedTypePolicyFactoryValue = typeof globalThis extends {
     ): TrustedTypePolicyValue;
   };
 
-type ViewTransitionValue = { finished: Promise<unknown> };
-type StartViewTransitionValue = (updateCallback: () => void) => ViewTransitionValue;
-
 export type SwapTarget = Element | string | { current?: Element | null | undefined };
 export type SwapMode =
   | "innerHTML"
@@ -130,15 +127,6 @@ const applySwap = (
   } else {
     throw new Error(`swap: unsupported swap mode "${mode}".`);
   }
-};
-
-const resolveViewTransition = (): StartViewTransitionValue | null => {
-  if (typeof document === "undefined") return null;
-  const { startViewTransition } = document as Document & {
-    startViewTransition?: unknown;
-  };
-  if (typeof startViewTransition !== "function") return null;
-  return startViewTransition.bind(document) as StartViewTransitionValue;
 };
 
 export const swap = async (

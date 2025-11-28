@@ -1,22 +1,23 @@
 # @mewhhaha/ruwuter (๑˃ᴗ˂)ﻭ
 
-A lightweight, fast TypeScript router for Cloudflare Workers with file‑based routing, streaming
-HTML, and a custom JSX runtime. Tiny router, big uwu energy 👉🏻👈🏻 — perfect for Workers fans who like
-their DX cozy _and_ productive.
+A smol, speedy TypeScript router for Cloudflare Workers with file‑based routing, streaming HTML, and
+a custom JSX runtime. Tiny router, big uwu energy 👉🏻👈🏻 — perfect for Workers pals who like their DX
+cozy, silly, _and_ productive. Think “enterprise ready, but it also sends you a meme at lunch.”
 
-## Features
+## Features (sparkly bits)
 
-- ✨ Zero dependencies — completely standalone (sparkly vibes guaranteed)
-- 📁 File-based routing — auto‑generated from your file structure, so no scary boilerplate
-- ⚡️ Streaming HTML — first‑class streaming responses for snappy feels
-- 🧩 Custom JSX runtime — no React required (supports dangerouslySetInnerHTML)
-- ☁️ Workers‑first — optimized for Cloudflare deployments
-- 🧪 Type‑safe — great DX with TypeScript, happy typings happy life
-- 🚀 Fast — minimal overhead, maximum performance, zoom zoom~
+- ✨ Zero dependencies — completely standalone (sparkly vibes guaranteed; smol and proud)
+- 📁 File‑based routing — auto‑generated from your file structure, so no scary boilerplate jumpscares
+- ⚡️ Streaming HTML — first‑class streaming responses for snappy feels (vroom vroom)
+- 🧩 Custom JSX runtime — no React required (supports dangerouslySetInnerHTML, but only because we trust you uwu)
+- ☁️ Workers‑first — optimized for Cloudflare deployments with extra cozy cloud pillows
+- 🧪 Type‑safe — great DX with TypeScript, happy typings happy life (they did their skincare)
+- 🚀 Fast — minimal overhead, maximum performance, zoom zoom~ now with bonus sparkles
 
 ## Quick Start
 
-Ready to vibe with Workers? Follow the comfy checklist below~
+Ready to vibe with Workers? Grab a cozy drink, wiggle your fingers, and follow the comfy checklist
+below~
 
 ```bash
 # Install @mewhhaha/ruwuter
@@ -27,9 +28,12 @@ pnpm add -D vite @cloudflare/vite-plugin wrangler
 ```
 
 > Cloudflare setup: enable the Workers Node compatibility flag (`nodejs_compat`, or at least
-> `nodejs_als`) so `AsyncLocalStorage` is available.
+> `nodejs_als`) so `AsyncLocalStorage` is available. It’s like tucking your runtime in with a warm
+> blanket.
 
 ### Context
+
+Context, but make it snuggly — share data without cold feet.
 
 Ruwuter provides a lightweight context API with React‑like ergonomics, backed by Cloudflare’s
 `AsyncLocalStorage` under the hood.
@@ -49,6 +53,8 @@ export function useTheme() {
 ```
 
 ## Basic Usage
+
+Let’s build a smol router friend together.
 
 ### 1. Create your router
 
@@ -98,13 +104,6 @@ export default function HomePage() {
     <html>
       <head>
         <title>Welcome to @mewhhaha/ruwuter</title>
-        {/* Include fixi for hypermedia-style interactions */}
-        <script
-          src="https://cdn.jsdelivr.net/gh/bigskysoftware/fixi@0.9.0/fixi.js"
-          crossorigin="anonymous"
-          integrity="sha256-0957yKwrGW4niRASx0/UxJxBY/xBhYK63vDCnTF7hH4="
-        >
-        </script>
         <Client />
         <script type="module" src={resolveUrl}></script>
       </head>
@@ -113,11 +112,6 @@ export default function HomePage() {
           <div class="container">
             <h1>Hello, World!</h1>
             <p>Welcome to your new @mewhhaha/ruwuter app.</p>
-            {/* Fixi example (server-driven) */}
-            <button fx-action="/api/click" fx-method="post" fx-target="#result">
-              Click me (fixi)
-            </button>
-            <div id="result"></div>
             {/* Client example using URL-based handler modules. */}
             <button on={events({ msg: greeting }, event.click(clickHref))}>
               Click me (client)
@@ -137,6 +131,7 @@ export default function click(this: { msg: { get(): string } }, _ev: Event, _sig
 
 ## Client Events
 
+Client events are like shy kittens: they scamper in when needed and might blink once before pouncing.
 Client handler modules load on demand, so the first interaction usually crosses an async boundary
 while the module is importing. Native DOM events reset `currentTarget`, `srcElement`, and dispatch
 internals (like `eventPhase` and `composedPath()`) once the synchronous listener stack unwinds. That
@@ -155,6 +150,8 @@ Handler signatures remain `(event: Event, signal: AbortSignal)`. You can rely on
 ### 4. Generate the router and type helpers
 
 ## Element refs
+
+Refs are your lil sticky notes on the DOM fridge.
 
 All intrinsic JSX elements now accept a `ref` prop that points at a `Ref<HTMLElement | null>`. Use
 `ref(null)` (from `@mewhhaha/ruwuter/components`) to create the container and pass it to the
@@ -233,6 +230,8 @@ async function writeFsRoutes(appFolder: string) {
 Call this whenever your file-system routes change (during builds, watch mode, etc.).
 
 ## HTML assets
+
+Send your components on lil field trips as predictable HTML exports.
 
 Components exported from a route module are exposed at predictable URLs. Each named export must
 begin with an uppercase letter, so `export function Hello()` becomes `/products/Hello.html` and
@@ -355,6 +354,8 @@ export {};
 
 ## Examples
 
+Copy‑pasta with extra cheese (and uwu).
+
 ### Basic Route with Loader
 
 ```tsx
@@ -427,50 +428,6 @@ export default function ContactForm() {
 }
 ```
 
-### Dynamic Forms with fixi
-
-```tsx
-// app/search.tsx
-export default function SearchPage() {
-  return (
-    <div>
-      <h1>Product Search</h1>
-      <form fx-action="/api/search" fx-target="#results" fx-trigger="input">
-        <input type="search" name="q" placeholder="Search products..." />
-      </form>
-      <div id="results">{/* Results will be loaded here */}</div>
-    </div>
-  );
-}
-
-// app/api/search.ts
-export async function loader({ request }) {
-  const url = new URL(request.url);
-  const query = url.searchParams.get("q");
-
-  const products = await searchProducts(query);
-
-  // Using JSX in loader with toPromise()
-  const html = await (
-    <>
-      {products.map((p) => (
-        <div class="product">
-          <h3>{p.name}</h3>
-          <p>${p.price}</p>
-          <button fx-action="/api/cart" fx-method="post" data-id={p.id}>
-            Add to Cart
-          </button>
-        </div>
-      ))}
-    </>
-  ).toPromise();
-
-  return new Response(html, {
-    headers: { "Content-Type": "text/html" },
-  });
-}
-```
-
 ### Streaming with Suspense
 
 ```tsx
@@ -501,6 +458,8 @@ export default function Dashboard() {
 
 ## Composition
 
+Mix your routing friendship bracelets however you like.
+
 - Router does not wrap Suspense. To enable streaming Suspense:
   - Wrap your root HTML with `SuspenseProvider`.
   - `SuspenseProvider` now appends a single `<Resolve />` after its children, so wrapping your
@@ -512,29 +471,15 @@ export default function Dashboard() {
 - Stick to HTML-native attribute values; dynamic state flows through the `on` event list (optionally
   prefixed with your bound state) plus client handlers rather than function-valued props.
 
-### Using Both fixi and Client
+### Client runtime vibes
 
-fixi and the Client runtime solve different problems and work great together:
-
-- When to use fixi
-  - Server-driven interactions: form posts, link clicks, partial updates.
-  - Progressive enhancement with minimal JS (fx-action, fx-target, fx-method, fx-trigger).
-  - Great for CRUD, pagination, search, and streaming HTML fragments.
-
-- When to use Client
-  - Local UI behavior that doesn’t need a network roundtrip (toggles, animations, small DOM tweaks).
-  - Fine‑grained event handling and small shared state via `ref()`.
-  - On‑demand code loading per interaction to keep initial JS minimal.
-
-- Combine them
-  - Use fixi for networking and server-rendered HTML; use Client for local UI polish.
-- If you attach both fixi and a client handler tuple via `on={...}`, default browser behavior
-  continues unless you opt in with `event.click(handlerHref, { preventDefault: true })` (or call
-  `ev.preventDefault()` inside your client handler). Prefer sibling/wrapper elements, or let the
-  client handler perform the fetch and DOM update itself.
-  - Keep client handlers small and self-contained; place them in sidecar `*.client.ts` files and
-    import their URLs with `?url`.
-  - For strict CSP, use `<Client nonce={cspNonce} />`.
+- Reach for the Client runtime when you want local sparkle: toggles, animations, little DOM tweaks.
+- Keep server work on the server: let loaders/actions handle data, and ship tiny sidecar
+  `*.client.ts` handlers for UI polish.
+- Keep client handlers small and self-contained; import their URLs with `?url`/`?url&no-inline`.
+- Use `event.click(handlerHref, { preventDefault: true })` when you need to cancel default browser
+  behavior before the module finishes loading.
+- For strict CSP, use `<Client nonce={cspNonce} />`.
 
 ### Shipping the Client Runtime
 
@@ -648,7 +593,7 @@ element:
 
 \n## Vite plugin Tips
 
-A plugin for auto-generating routes on build and updates, and also fixing the import.meta.url
+A plugin for auto-generating routes on build and updates, and also patching the import.meta.url
 references in the build output.
 
 ```tsx
@@ -663,19 +608,19 @@ export interface RuwuterPluginOptions {
    */
   appFolder?: string;
   /**
-   * Whether to fix import.meta.url references in the build output
+   * Whether to rewrite import.meta.url references in the build output
    * @default true
    */
-  fixImportMeta?: boolean;
+  rewriteImportMeta?: boolean;
 }
 
 /**
  * Combined Vite plugin for @mewhhaha/ruwuter that:
  * - Watches for route file changes and regenerates routes
- * - Fixes import.meta.url references in the build output
+ * - Rewrites import.meta.url references in the build output
  */
 export const ruwuter = (options: RuwuterPluginOptions = {}): PluginOption => {
-  const { appFolder = "./app", fixImportMeta = true } = options;
+  const { appFolder = "./app", rewriteImportMeta = true } = options;
   const writeGeneratedFiles = async () => {
     const { router, types } = await generate(appFolder);
     const files = [...router, ...types]; // router => "./app/routes.ts", types => ".router/types/**"
@@ -716,9 +661,9 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): PluginOption => {
       });
     },
 
-    // Build: Fix import.meta.url references
+    // Build: Rewrite import.meta.url references
     renderChunk(code) {
-      if (!fixImportMeta) return code;
+      if (!rewriteImportMeta) return code;
 
       // Replace import.meta.url with a static string
       // This prevents runtime errors when import.meta.url is undefined
@@ -730,8 +675,9 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): PluginOption => {
 
 ## Contributing
 
-Contributions are welcome! Please read our contributing guidelines before submitting PRs.
+Contributions are welcome! Bring snacks, say hi, and please read our contributing guidelines before
+submitting PRs. We love wholesome PR descriptions.
 
 ## License
 
-MIT
+MIT (share the coziness responsibly)
