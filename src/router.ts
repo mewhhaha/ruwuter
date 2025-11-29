@@ -358,20 +358,33 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
     const { mod } = fragments[index];
     const next = () => renderFragment(index + 1);
     const loaderData = await loaders[index];
+    if (loaderData instanceof Response) {
+      throw loaderData;
+    }
+
+    // Defer rendering of the child fragment until it is consumed so
+    // outer providers can wrap inner fragments while keeping children
+    // available as an Html instance for components that expect it.
+    const childHtml = into(
+      (async function* (): AsyncGenerator<string> {
+        const inner = await next();
+        yield* inner.generator;
+      })(),
+    );
 
     const Component = mod.default;
     if (!Component) {
-      return next();
+      return childHtml;
     }
 
     const result = isHtmlComponent(Component)
       ? await Component({
-        children: next,
+        children: childHtml,
         request: ctx.request,
         params: ctx.params,
         context: ctx.context,
       })
-      : await (Component as renderer)({ loaderData, children: next });
+      : await (Component as renderer)({ loaderData, children: childHtml });
 
     if (result instanceof Response) {
       throw result;
