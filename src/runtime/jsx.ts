@@ -600,7 +600,7 @@ export namespace JSX {
     | number
     | null
     | undefined
-    | false
+    | boolean
     | HtmlNode[];
 
   export interface ElementChildrenAttribute {

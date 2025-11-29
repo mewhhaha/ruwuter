@@ -111,7 +111,12 @@ export function jsx(
   { children, ...props }: { children?: unknown } & Record<string, unknown>,
 ): Html {
   if (typeof tag === "function") {
-    return withComponentFrame(() => tag({ children, ...props }));
+    return into(
+      (async function* (): AsyncGenerator<string> {
+        const rendered = withComponentFrame(() => tag({ children, ...props }));
+        yield* into(rendered).generator;
+      })(),
+    );
   }
 
   let attrs = "";
