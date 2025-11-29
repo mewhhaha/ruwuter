@@ -350,42 +350,61 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
-  const createNode = async () => {
-    let acc = into("");
-    for (let index = fragments.length - 1; index >= 0; index--) {
-      const { mod } = fragments[index];
-      const Component = mod.default;
-      if (!Component) continue;
-
-      const loaderData = await loaders[index];
-      const result = isHtmlComponent(Component)
-        ? await Component({
-          children: acc,
-          request: ctx.request,
-          params: ctx.params,
-          context: ctx.context,
-        })
-        : await (Component as renderer)({ loaderData, children: acc });
-
-      if (result instanceof Response) {
-        throw result;
-      }
-
-      acc = isHtml(result) ? result : into(result);
+  const renderFragment = async (index: number): Promise<Html> => {
+    if (index >= fragments.length) {
+      return into("");
     }
 
-    return acc;
+    const { mod } = fragments[index];
+    const next = () => renderFragment(index + 1);
+    const loaderData = await loaders[index];
+
+    const Component = mod.default;
+    if (!Component) {
+      return next();
+    }
+
+    const result = isHtmlComponent(Component)
+      ? await Component({
+        children: next,
+        request: ctx.request,
+        params: ctx.params,
+        context: ctx.context,
+      })
+      : await (Component as renderer)({ loaderData, children: next });
+
+    if (result instanceof Response) {
+      throw result;
+    }
+
+    return isHtml(result) ? result : into(result);
   };
 
-  const node = await createNode();
+  const node = await renderFragment(0);
 
   const htmlStream = node.toReadableStream();
   const reader = htmlStream.getReader();
+  let firstChunk: Uint8Array | null = null;
+
+  try {
+    const first = await reader.read();
+    if (!first.done && first.value) {
+      firstChunk = first.value;
+    }
+  } catch (e) {
+    if (e instanceof Response) {
+      throw e;
+    }
+    throw e;
+  }
 
   const startStreaming = async () => {
     try {
       const textEncoder = new TextEncoder();
       await writer.write(textEncoder.encode("<!doctype html>"));
+      if (firstChunk) {
+        await writer.write(firstChunk);
+      }
 
       while (true) {
         const { done, value } = await reader.read();

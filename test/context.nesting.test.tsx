@@ -53,4 +53,41 @@ describe("context providers", () => {
     expect(html).toContain("moon:en-US");
     expect(html).not.toContain("nowhere:xx-XX");
   });
+
+  it("lets layout fragment providers wrap the leaf component", async () => {
+    const ThemeContext = createContext("plain");
+
+    const fragments: fragment[] = [
+      {
+        id: "layout",
+        mod: {
+          default: ({ children }: any) => (
+            <ThemeContext.Provider value="spicy">
+              <html>
+                <body>{children}</body>
+              </html>
+            </ThemeContext.Provider>
+          ),
+        },
+      },
+      {
+        id: "leaf",
+        mod: {
+          default: () => <div id="theme">{ThemeContext.use()}</div>,
+        },
+      },
+    ];
+
+    const router = Router([[new URLPattern({ pathname: "/layout" }), fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(
+      new Request("https://example.com/layout"),
+      {} as Env,
+      ctx,
+    );
+    const html = await res.text();
+
+    expect(html).toContain('<div id="theme" >spicy</div>');
+    expect(html).not.toContain("plain");
+  });
 });

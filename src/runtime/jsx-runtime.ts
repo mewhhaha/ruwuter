@@ -318,6 +318,15 @@ export function jsx(
 
       yield escapeHtml(child.toString());
     }
+    let primedChild: IteratorResult<string> | undefined;
+    let childIterator: AsyncGenerator<string> | undefined;
+
+    if (dangerousHtml === undefined) {
+      childIterator = (async function* (): AsyncGenerator<string> {
+        yield* processChild(children);
+      })();
+      primedChild = await childIterator.next();
+    }
     if (tag) {
       yield `<${tag}${attrs}>`;
     }
@@ -325,8 +334,13 @@ export function jsx(
     // If dangerouslySetInnerHTML is provided, use it instead of children
     if (dangerousHtml !== undefined) {
       yield dangerousHtml;
-    } else {
-      yield* processChild(children);
+    } else if (childIterator) {
+      if (primedChild && !primedChild.done) {
+        yield primedChild.value;
+      }
+      for await (const chunk of childIterator) {
+        yield chunk;
+      }
     }
     if (tag && !voidElements.has(tag)) {
       yield `</${tag}>`;
