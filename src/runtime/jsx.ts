@@ -344,6 +344,7 @@ export namespace JSX {
   export interface HtmlImageTag extends HtmlTag {
     alt?: string | undefined;
     src?: string | undefined;
+    srcset?: string | undefined;
     loading?: "eager" | "lazy" | undefined;
     crossorigin?: string | undefined;
     usemap?: string | undefined;
