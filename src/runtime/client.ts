@@ -423,8 +423,8 @@ function initializeClientRuntime(): void {
   // Keep store internal; no globals/exports for tests or apps.
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+if (typeof window !== "undefined") {
   initializeClientRuntime();
-}, { once: true });
+}
 
 export {};
