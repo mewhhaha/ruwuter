@@ -23,7 +23,7 @@ export type SwapMode =
   | "innerHTML"
   | "outerHTML"
   | InsertPosition
-  | "delete";
+  | "remove";
 
 export type SwapInput =
   | RequestInfo
@@ -118,7 +118,7 @@ const applySwap = (
   mode: SwapMode,
   domValue: string | TrustedHTMLValue,
 ): void => {
-  if (mode === "delete") {
+  if (mode === "remove") {
     target.remove();
     return;
   }
