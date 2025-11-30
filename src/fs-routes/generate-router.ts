@@ -126,6 +126,13 @@ const generatePatternString = (routePath: string): string => {
 
 const COMPONENT_SEGMENT = "[A-Z][A-Za-z0-9_$]*\\.html";
 
+const isPathlessLayout = (segments: string[]): boolean => {
+  const last = segments.at(-1);
+  if (!last) return false;
+  if (last === "_index") return false;
+  return last.startsWith("_");
+};
+
 const withAssetPattern = (pattern: string): string => {
   if (pattern === "/") {
     return `(/):__asset(${COMPONENT_SEGMENT})?`;
@@ -161,6 +168,7 @@ export const generateRouter = async (
   const routeData = files.map((file) => {
     const routeId = file.replace(tsRegex, "");
     const name = varName(file);
+    const segments = routeId.split(unescapedDotRegex);
     const pattern = withAssetPattern(generatePatternString(routeId));
     const params = extractRouteParams(routeId).names;
     return {
@@ -168,21 +176,23 @@ export const generateRouter = async (
       name,
       pattern,
       params,
+      pathless: isPathlessLayout(segments),
     };
   });
 
-  const routes = routeData
+  const routes = [...routeData].sort((a, b) => bySpecificity(a.routeId, b.routeId));
+
+  const routable = routes
+    .filter(({ pathless }) => !pathless)
     .map(({ routeId, name, pattern }) => {
       return [routeId, name, pattern] as const;
-    })
-    .sort(([a], [b]) => bySpecificity(a, b));
+    });
 
   const routeVars = routes
-    .map(([routeId, name]) => {
-      const data = routeData.find((item) => item.routeId === routeId)!;
-      if (data.params.length > 0) {
+    .map(({ routeId, name, params }) => {
+      if (params.length > 0) {
         return `const $${name} = { id: "${routeId}", mod: ${name}, params: [${
-          data.params
+          params
             .map((param) => JSON.stringify(param))
             .join(",")
         }] };`;
@@ -191,13 +201,13 @@ export const generateRouter = async (
     })
     .join("\n");
 
-  const routeItems = routes
+  const routeItems = routable
     .map(([file, name, pattern]) => {
       const fragments = [
         "$document",
         ...routes
-          .filter(([prefix]) => file.startsWith(`${prefix}.`))
-          .map(([, nestedName]) => `$${nestedName}`)
+          .filter(({ routeId }) => file.startsWith(`${routeId}.`))
+          .map(({ name: nestedName }) => `$${nestedName}`)
           .reverse(),
         `$${name}`,
       ];

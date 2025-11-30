@@ -26,6 +26,51 @@ describe("generateRouter", () => {
     }
   });
 
+  it("does not create matchable routes for pathless layouts", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(routesDir, "_app.tsx"), "export default 1;");
+      await Deno.writeTextFile(join(routesDir, "_app.b.tsx"), "export default 2;");
+
+      const [routerFile] = await generateRouter(app);
+      if (!routerFile) throw new Error("Router file not generated");
+
+      const { contents } = routerFile;
+      const patternMatches = contents.match(/new URLPattern/g) ?? [];
+      expect(patternMatches.length).toBe(1);
+      expect(contents).toContain('pathname: "/b/:__asset');
+      expect(contents).not.toContain('pathname: "(/):__asset');
+      expect(contents).toContain("[$document,$$_app,$$_app_b]");
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("allows pathless segments in the middle but not at the tail", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(routesDir, "_a.b.tsx"), "export default 1;");
+      await Deno.writeTextFile(join(routesDir, "_a.b._c.tsx"), "export default 2;");
+
+      const [routerFile] = await generateRouter(app);
+      if (!routerFile) throw new Error("Router file not generated");
+
+      const { contents } = routerFile;
+      const patternMatches = contents.match(/new URLPattern/g) ?? [];
+      expect(patternMatches.length).toBe(1);
+      expect(contents).toContain('pathname: "/b/:__asset');
+      expect(contents).not.toContain('pathname: "/c/:__asset');
+      expect(contents).toContain("[$document,$$_a_b]");
+      expect(contents).toContain('id: "_a.b._c"'); // remains available for children
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
   it("supports escaped route conventions", async () => {
     const app = await Deno.makeTempDir();
     try {
@@ -40,9 +85,7 @@ describe("generateRouter", () => {
         "reports.$id[.pdf].tsx",
       ];
       await Promise.all(
-        files.map((file) =>
-          Deno.writeTextFile(join(routesDir, file), "export default 1;")
-        ),
+        files.map((file) => Deno.writeTextFile(join(routesDir, file), "export default 1;")),
       );
 
       const [routerFile] = await generateRouter(app);
@@ -71,9 +114,7 @@ describe("generateRouter", () => {
         "reports.(foo).tsx",
       ];
       await Promise.all(
-        files.map((file) =>
-          Deno.writeTextFile(join(routesDir, file), "export default 1;")
-        ),
+        files.map((file) => Deno.writeTextFile(join(routesDir, file), "export default 1;")),
       );
 
       const [routerFile] = await generateRouter(app);
@@ -84,15 +125,9 @@ describe("generateRouter", () => {
         (m) => m[1],
       );
 
-      const pdfIndex = order.findIndex((value) =>
-        value.includes("/reports/:id.pdf")
-      );
-      const paramIndex = order.findIndex((value) =>
-        value.includes("/reports/:id/:__asset")
-      );
-      const optionalLiteralIndex = order.findIndex((value) =>
-        value.includes("/reports/(foo)?")
-      );
+      const pdfIndex = order.findIndex((value) => value.includes("/reports/:id.pdf"));
+      const paramIndex = order.findIndex((value) => value.includes("/reports/:id/:__asset"));
+      const optionalLiteralIndex = order.findIndex((value) => value.includes("/reports/(foo)?"));
 
       expect(pdfIndex).toBeGreaterThanOrEqual(0);
       expect(paramIndex).toBeGreaterThanOrEqual(0);
