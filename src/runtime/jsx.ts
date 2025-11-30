@@ -345,6 +345,7 @@ export namespace JSX {
     alt?: string | undefined;
     src?: string | undefined;
     srcset?: string | undefined;
+    sizes?: string | undefined;
     loading?: "eager" | "lazy" | undefined;
     crossorigin?: string | undefined;
     usemap?: string | undefined;
