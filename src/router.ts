@@ -52,7 +52,7 @@ export interface ctx {
   /** The incoming request */
   request: Request;
   /** URL parameters extracted from the route pattern */
-  params: Record<any, string>;
+  params: Record<string, string>;
   /** Cloudflare Workers context: [env, executionContext] */
   context: [Env, ExecutionContext];
 }
@@ -125,13 +125,13 @@ const isHtmlComponent = (value: unknown): value is HtmlComponent => {
   return isFunction(value) && (value as HtmlRuntimeBrand)[HTML_COMPONENT_MARK] === true;
 };
 
-export function html(
-  render: (args: HtmlProps) => JSX.Element | Promise<JSX.Element | string>,
+export function html<explicit extends HtmlProps>(
+  render: (props: explicit) => JSX.Element | Promise<JSX.Element | string>,
 ): HtmlComponent {
   function component(
     props: HtmlProps,
   ): JSX.Element | Promise<JSX.Element | string> {
-    return render(props);
+    return render(props as explicit);
   }
 
   component[HTML_COMPONENT_MARK] = true;
