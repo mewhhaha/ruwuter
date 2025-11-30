@@ -50,8 +50,6 @@ export type SwapResult = {
   response: Response | null;
 };
 
-const isResponseLike = (input: unknown): input is Response => input instanceof Response;
-const isRequestLike = (input: unknown): input is Request => input instanceof Request;
 const hasUrl = (input: unknown): input is { url: string } =>
   typeof input === "object" && input !== null && "url" in input &&
   typeof (input as { url: unknown }).url === "string";
@@ -74,24 +72,30 @@ const resolveElement = (ref: SwapTarget): Element => {
   throw new TypeError("swap: unsupported element reference provided.");
 };
 
-const resolveText = async (
+const trustedHTMLCtor =
+  (globalThis as { TrustedHTML?: { new (...args: never[]): TrustedHTMLValue } }).TrustedHTML;
+
+const toHtml = async (
   input: SwapInput,
-  provided?: string | TrustedHTMLValue,
-): Promise<string | TrustedHTMLValue> => {
-  if (provided !== undefined) return provided;
-  if (typeof input === "string") return input;
-  if (typeof globalThis === "object" && "TrustedHTML" in globalThis) {
-    const ctor =
-      (globalThis as { TrustedHTML?: { new (...args: never[]): TrustedHTMLValue } }).TrustedHTML;
-    if (ctor && input instanceof ctor) {
-      return input;
-    }
+  override?: string | TrustedHTMLValue,
+  init?: RequestInit,
+): Promise<{ html: string | TrustedHTMLValue; response: Response | null }> => {
+  if (override !== undefined) return { html: override, response: null };
+  if (typeof input === "string") return { html: input, response: null };
+  if (trustedHTMLCtor && input instanceof trustedHTMLCtor) {
+    return { html: input, response: null };
   }
-  if (isResponseLike(input)) return await input.text();
+  if (input instanceof Response) {
+    return { html: await input.text(), response: input };
+  }
+  if (input instanceof Request || hasUrl(input)) {
+    const response = await fetch(input as RequestInfo, init);
+    return { html: await response.text(), response };
+  }
   if (input && typeof (input as { text?: () => Promise<string> }).text === "function") {
-    return await (input as { text: () => Promise<string> }).text();
+    return { html: await (input as { text: () => Promise<string> }).text(), response: null };
   }
-  return String(input ?? "");
+  return { html: String(input ?? ""), response: null };
 };
 
 const createTrustedHTML = (() => {
@@ -129,6 +133,23 @@ const applySwap = (
   }
 };
 
+type StartViewTransition = (updateCallback: () => void) => { finished: Promise<unknown> };
+
+const runWithTransition = async (
+  update: () => void,
+  enabled?: boolean,
+): Promise<void> => {
+  const doc = document as Document & { startViewTransition?: StartViewTransition };
+  const start = enabled !== false && doc.startViewTransition
+    ? doc.startViewTransition.bind(doc)
+    : (cb: () => void) => {
+      cb();
+      return { finished: Promise.resolve() };
+    };
+
+  await start(update).finished.catch(() => {});
+};
+
 export const swap = async (
   input: SwapInput,
   options: SwapOptions,
@@ -136,40 +157,11 @@ export const swap = async (
   const target = resolveElement(options.target);
   const writeMode = options.write ?? "innerHTML";
 
-  let response: Response | null = null;
-  let rawHtml: string | TrustedHTMLValue;
+  const { html, response } = await toHtml(input, options.text, options.init);
+  const domValue = createTrustedHTML(html);
+  const resolvedText = typeof html === "string" ? html : String(html);
 
-  if (options.text !== undefined) {
-    rawHtml = options.text;
-  } else if (isResponseLike(input)) {
-    response = input;
-    rawHtml = await response.text();
-  } else if (
-    typeof input === "string" ||
-    isRequestLike(input) ||
-    hasUrl(input)
-  ) {
-    response = await fetch(input as RequestInfo, options.init);
-    rawHtml = await response.text();
-  } else {
-    rawHtml = await resolveText(input);
-  }
-
-  const domValue = createTrustedHTML(rawHtml);
-  const resolvedText = typeof rawHtml === "string" ? rawHtml : String(rawHtml);
-
-  let startTransition = (f: () => void) => {
-    f();
-    return { finished: Promise.resolve() };
-  };
-  if (options.viewTransition !== false && "startViewTransition" in document) {
-    startTransition = document.startViewTransition.bind(document);
-  }
-
-  const transition = startTransition(() => {
-    applySwap(target, writeMode, domValue);
-  });
-  await transition.finished.catch(() => {});
+  await runWithTransition(() => applySwap(target, writeMode, domValue), options.viewTransition);
 
   return {
     target,
@@ -180,7 +172,6 @@ export const swap = async (
 };
 
 // Always install on window when present, so apps can just use window.swap
-const hasWindow = typeof window !== "undefined";
-if (hasWindow) {
+if (typeof window !== "undefined") {
   (window as unknown as { swap: typeof swap }).swap = swap;
 }

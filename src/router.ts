@@ -52,7 +52,7 @@ export interface ctx {
   /** The incoming request */
   request: Request;
   /** URL parameters extracted from the route pattern */
-  params: Record<string, string>;
+  params: Record<any, string>;
   /** Cloudflare Workers context: [env, executionContext] */
   context: [Env, ExecutionContext];
 }
@@ -112,11 +112,7 @@ export type route = [pattern: URLPattern, fragments: fragment[]];
 
 const HTML_COMPONENT_MARK = Symbol.for("ruwuter.html");
 
-export type HtmlArgs = ctx & {
-  children?: JSX.Element;
-};
-
-type HtmlProps = HtmlArgs;
+type HtmlProps = ctx;
 
 type HtmlBrand = { readonly __ruwuterHtml?: true };
 type HtmlRuntimeBrand = { [HTML_COMPONENT_MARK]?: true };
@@ -130,7 +126,7 @@ const isHtmlComponent = (value: unknown): value is HtmlComponent => {
 };
 
 export function html(
-  render: (args: HtmlArgs) => JSX.Element | Promise<JSX.Element | string>,
+  render: (args: HtmlProps) => JSX.Element | Promise<JSX.Element | string>,
 ): HtmlComponent {
   function component(
     props: HtmlProps,
