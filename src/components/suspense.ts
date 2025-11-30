@@ -66,12 +66,9 @@ export const Suspense = ({
  * Streams resolved Suspense content. Define once near the end of <body>.
  * If a strict CSP is used, supply a nonce so the defining script can run.
  */
-export const Resolve = ({ nonce }: { nonce?: string } = {}): JSX.Element => {
-  const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
+export const Resolve = (): JSX.Element => {
   return into(
     (async function* () {
-      yield `<script type="module"${nonceAttr}>import "@mewhhaha/ruwuter/resolve";</script>`;
-
       const registry = getRegistry();
       if (!registry) return;
 
