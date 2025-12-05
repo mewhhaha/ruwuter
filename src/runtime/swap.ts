@@ -127,7 +127,8 @@ const applySwap = (
     // @ts-expect-error lol random
     target[mode] = domValue;
   } else if (/(before|after)(begin|end)/.test(mode)) {
-    target.insertAdjacentHTML(mode as InsertPosition, String(domValue));
+    // Keep TrustedHTML branded values intact for Trusted Types enforcement
+    target.insertAdjacentHTML(mode as InsertPosition, domValue as unknown as string);
   } else {
     throw new Error(`swap: unsupported swap mode "${mode}".`);
   }
