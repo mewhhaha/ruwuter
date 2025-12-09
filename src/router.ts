@@ -193,6 +193,10 @@ const serveHtmlAsset = async (
   exportName: string,
   ctx: ctx,
 ): Promise<Response | undefined> => {
+  if (!(Object.hasOwn(mod, exportName))) {
+    throw new Response(null, { status: 404})
+  }
+
   const component = mod[exportName];
   if (!isHtmlComponent(component)) return undefined;
 
