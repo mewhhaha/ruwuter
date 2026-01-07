@@ -46,6 +46,7 @@ describe("Suspense streaming", () => {
                       return <div>A-DONE</div>;
                     }}
                   </Suspense>
+                  <script type="module" src="@mewhhaha/ruwuter/resolve"></script>
                 </body>
               </html>
             </SuspenseProvider>

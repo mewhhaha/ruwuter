@@ -50,50 +50,41 @@ interface SyntheticEventInit {
 }
 
 function synthesizeEvent<E extends Event>(event: E, init?: SyntheticEventInit): E {
-  // Create a shallow wrapper whose prototype chain includes the original event
-  // so `instanceof MouseEvent` etc. still succeed.
+  // Shallow wrapper whose prototype chain includes the original event.
   const snap: any = Object.create(event);
+  const define = (key: string, value: unknown) => {
+    Object.defineProperty(snap, key, { value, configurable: true });
+  };
 
   const currentTarget = init?.currentTarget ?? (event as any).currentTarget ?? null;
-  Object.defineProperty(snap, "currentTarget", { value: currentTarget, configurable: true });
+  define("currentTarget", currentTarget);
 
-  // Legacy alias found in some environments
   if ("srcElement" in (event as any)) {
-    const src = (event as any).srcElement ?? currentTarget;
-    Object.defineProperty(snap, "srcElement", { value: src, configurable: true });
+    define("srcElement", (event as any).srcElement ?? currentTarget);
   }
 
   // Freeze commonly inspected, timing-sensitive properties
-  Object.defineProperty(snap, "eventPhase", { value: event.eventPhase, configurable: true });
+  define("eventPhase", event.eventPhase);
 
   if (typeof event.composedPath === "function") {
     const path = event.composedPath();
-    Object.defineProperty(snap, "composedPath", {
-      value: () => (path ? path.slice() : []),
-      configurable: true,
-    });
+    define("composedPath", () => (path ? path.slice() : []));
   }
 
   if ("relatedTarget" in (event as any)) {
-    Object.defineProperty(snap, "relatedTarget", {
-      value: (event as any).relatedTarget,
-      configurable: true,
-    });
+    define("relatedTarget", (event as any).relatedTarget);
   }
 
   if ("submitter" in (event as any)) {
-    Object.defineProperty(snap, "submitter", {
-      value: (event as any).submitter ?? null,
-      configurable: true,
-    });
+    define("submitter", (event as any).submitter ?? null);
   }
 
   // Popover toggle fields if present
   const anyEv: any = event as any;
   if (typeof anyEv.newState === "string" || typeof anyEv.oldState === "string") {
-    Object.defineProperty(snap, "newState", { value: anyEv.newState, configurable: true });
-    Object.defineProperty(snap, "oldState", { value: anyEv.oldState, configurable: true });
-    Object.defineProperty(snap, "source", { value: anyEv.source ?? null, configurable: true });
+    define("newState", anyEv.newState);
+    define("oldState", anyEv.oldState);
+    define("source", anyEv.source ?? null);
   }
 
   return snap as E;
@@ -120,16 +111,13 @@ function isAbortError(error: unknown): boolean {
 
 function initializeClientRuntime(): void {
   const loadModule = (spec: string) => {
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(spec)) {
-      return import(spec);
-    }
     const base = (typeof document.baseURI === "string" && document.baseURI &&
         document.baseURI !== "about:blank")
       ? document.baseURI
-      : globalThis.location.href;
-    // Resolve relative to the current directory
-    const baseDir = new URL(".", base);
-    const resolved = new URL(spec, baseDir).href;
+      : (typeof globalThis.location?.href === "string"
+        ? globalThis.location.href
+        : "http://localhost/");
+    const resolved = new URL(spec, base).href;
     return import(resolved);
   };
 
@@ -260,6 +248,13 @@ function initializeClientRuntime(): void {
     const ctx = getContext(el);
     const controllers = ctx.controllers;
 
+    if (typeof (globalThis as { document?: unknown }).document === "undefined") {
+      const owner = el instanceof Element ? el.ownerDocument : null;
+      if (owner) {
+        (globalThis as { document?: Document }).document = owner;
+      }
+    }
+
     if (type === "unmount") {
       controllers.forEach((ctrl) => ctrl.abort());
       controllers.clear();
@@ -339,13 +334,9 @@ function initializeClientRuntime(): void {
     payload.on?.forEach((entry) => attachHandler(el, entry));
   }
 
-  function findHydrationElement(script: HTMLScriptElement): Element | null {
-    // Simple adjacency: the host element is the previous element sibling
-    return script.previousElementSibling;
-  }
-
   function hydrateScript(script: HTMLScriptElement): void {
-    const el = findHydrationElement(script);
+    // Simple adjacency: the host element is the previous element sibling
+    const el = script.previousElementSibling;
     if (!el || hydratedElements.has(el)) return;
 
     const payload = parsePayload(script.textContent ?? "{}");
@@ -388,6 +379,17 @@ function initializeClientRuntime(): void {
     (node.getAttribute("type") || "").toLowerCase() === "application/json" &&
     node.hasAttribute("data-hydrate");
 
+  const hydrateNode = (node: Node): void => {
+    if (isHydrationScript(node)) {
+      hydrateScript(node);
+      return;
+    }
+    if (!(node instanceof Element)) return;
+    node
+      .querySelectorAll('script[type="application/json"][data-hydrate]')
+      .forEach((script) => hydrateScript(script as HTMLScriptElement));
+  };
+
   function seed(): void {
     document
       .querySelectorAll('script[type="application/json"][data-hydrate]')
@@ -396,16 +398,7 @@ function initializeClientRuntime(): void {
 
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      mutation.addedNodes?.forEach((node) => {
-        if (!(node instanceof Element)) return;
-        if (isHydrationScript(node)) {
-          hydrateScript(node);
-          return;
-        }
-        node
-          .querySelectorAll('script[type="application/json"][data-hydrate]')
-          .forEach((script) => hydrateScript(script as HTMLScriptElement));
-      });
+      mutation.addedNodes?.forEach((node) => hydrateNode(node));
 
       mutation.removedNodes?.forEach((node) => {
         if (!(node instanceof Element)) return;

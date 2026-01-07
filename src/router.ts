@@ -194,7 +194,7 @@ const serveHtmlAsset = async (
   ctx: ctx,
 ): Promise<Response | undefined> => {
   if (!(Object.hasOwn(mod, exportName))) {
-    throw new Response(null, { status: 404})
+    return undefined;
   }
 
   const component = mod[exportName];

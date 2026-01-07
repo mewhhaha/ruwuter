@@ -5,31 +5,31 @@ repository.
 
 ## Architecture Overview
 
-- Entry points live under `src/` with TypeScript `.ts` modules using `moduleResolution: NodeNext`.
+- Entry points live under `src/` as TypeScript `.ts` modules driven by `deno.json` compiler options.
 - The router and JSX runtime are isomorphic, but the “client runtime” is a small, browser‑only JS
   module injected in the HTML.
 - File‑system routes live in your application (e.g. `app/`) and are processed by `src/fs-routes` to
   generate a static route table.
+- HTML asset endpoints (`/__asset` and `*.html` exports) may return `Response` from loaders or
+  exports (for cookies/headers or data responses).
 
 ## Client Runtime
 
-- Source: `src/client.runtime.js` (plain JS, executed as `<script type="module">`).
+- Source: `src/runtime/client.ts` (TypeScript, executed in the browser as a module script).
 - Keep it minimal and standards‑based (ESNext + DOM APIs). Less is more.
-- No IIFE is needed; modules execute at top level. The file initializes itself via
-  `DOMContentLoaded` or immediately if the DOM is ready.
+- No IIFE is needed; modules execute at top level. The file initializes itself immediately when
+  loaded in the browser.
 - Must support:
   - `on={...}` handlers loaded on demand via ESM `import()` using module hrefs (see “Client
     Handlers” below).
   - Optional leading bind values inside the `on` list that are passed as `this` for handlers.
-  - Function-valued attributes (e.g., `class`, `hidden`, `disabled`, `inert`) computed client-side
-    and recomputed when bound refs change.
   - `mount`/`unmount` lifecycle events.
   - Proper `AbortSignal` passing to handlers:
     - Per element, per event: abort previous controller before running the next.
     - Abort all controllers on unmount, then run unmount handlers.
 - No legacy inline function storage (no KV-backed registries). Only module-based handlers are
   supported.
-- Type safety: the file uses `// @ts-check` and JSDoc. Keep and expand types as you edit the file.
+- Type safety: the runtime is authored in TypeScript. Keep types accurate as you edit the file.
 
 ### Suspense client behavior
 
@@ -70,16 +70,14 @@ repository.
 
 ## Types and Lint
 
-- TypeScript config: `tsconfig.json` (NodeNext). Prefer `.ts` over `.mjs`.
-- Raw imports: use `?raw` and keep `src/types.raw.d.ts` in sync so `tsc` recognizes them.
-- The client runtime JS is type‑checked via `// @ts-check` and JSDoc.
-- Linting uses `oxlint`. Ensure the tree is clean before finishing work.
+- TypeScript config lives in `deno.json` (Deno compiler options). Prefer `.ts` over `.mjs`.
+- Linting uses `deno lint`. Formatting uses `deno fmt`.
 
 ### Commands (via Deno tasks)
 
 - Type check: `deno task typecheck`
-- Lint: `deno task lint`
-- Format: `deno task format`
+- Lint: `deno lint`
+- Format: `deno fmt`
 - Tests:
   - DOM tests (default): `deno task test`
   - Explicit DOM: `deno task test:dom`
@@ -101,8 +99,8 @@ repository.
 
 ## Quick Checklist (before you finish)
 
-- [ ] tsc is clean
-- [ ] oxlint is clean
+- [ ] `deno task typecheck` is clean
+- [ ] `deno lint` is clean
 - [ ] Any new `.client.*` handler has a generated declaration entry (run
       `node src/fs-routes/routes.ts ./app`)
 - [ ] README examples stay in sync with behavior

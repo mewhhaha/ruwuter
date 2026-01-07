@@ -155,7 +155,7 @@ export const generateRouter = async (
   };
 
   const routeImports = files
-    .map((file) => {
+    .map((file: string) => {
       const isDirectory = !file.endsWith(".tsx");
       const name = varName(file);
       if (isDirectory) {
@@ -165,7 +165,7 @@ export const generateRouter = async (
     })
     .join("\n");
 
-  const routeData = files.map((file) => {
+  const routeData = files.map((file: string) => {
     const routeId = file.replace(tsRegex, "");
     const name = varName(file);
     const segments = routeId.split(unescapedDotRegex);
@@ -193,7 +193,7 @@ export const generateRouter = async (
       if (params.length > 0) {
         return `const $${name} = { id: "${routeId}", mod: ${name}, params: [${
           params
-            .map((param) => JSON.stringify(param))
+            .map((param: string) => JSON.stringify(param))
             .join(",")
         }] };`;
       }

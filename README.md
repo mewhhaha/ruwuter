@@ -66,7 +66,7 @@ import { routes } from "./routes";
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     // Router does not wrap Suspense. Wrap your HTML with <SuspenseProvider>
-    // and include <Resolve /> in your document/layout.
+    // and include the resolve runtime module in your document/layout.
     const router = Router(routes);
     return router.handle(request, env, ctx);
   },
@@ -236,6 +236,7 @@ Send your components on lil field trips as predictable HTML exports.
 Components exported from a route module are exposed at predictable URLs. Each named export must
 begin with an uppercase letter, so `export function Hello()` becomes `/products/Hello.html` and
 `export const ProductCard` resolves to `/products/ProductCard.html`.
+HTML asset endpoints may return `Response` from loaders or exports (useful for cookies/headers).
 
 Use the `html` helper to opt-in explicit HTML exports. It marks the component as routable and
 passes the request context (`request`, `params`, and the `[env, ctx]` tuple) straight into your
@@ -432,7 +433,7 @@ export default function ContactForm() {
 
 ```tsx
 // app/dashboard.tsx
-import { Resolve, Suspense, SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import { Suspense, SuspenseProvider } from "@mewhhaha/ruwuter/components";
 
 async function SlowData() {
   const data = await fetch("https://api.slow-endpoint.com/data");
@@ -448,7 +449,7 @@ export default function Dashboard() {
           <Suspense fallback={<div>Loading...</div>}>
             <SlowData />
           </Suspense>
-          <Resolve />
+          <script type="module" src="@mewhhaha/ruwuter/resolve"></script>
         </body>
       </html>
     </SuspenseProvider>
@@ -462,10 +463,9 @@ Mix your routing friendship bracelets however you like.
 
 - Router does not wrap Suspense. To enable streaming Suspense:
   - Wrap your root HTML with `SuspenseProvider`.
-  - `SuspenseProvider` now appends a single `<Resolve />` after its children, so wrapping your
-    document/body is sufficient for streaming.
-  - If you prefer to control placement yourself, use `<SuspenseProvider resolve={false}>` and render
-    `<Resolve />` where you want it. Add `nonce` for strict CSP.
+  - `SuspenseProvider` appends a single `<Resolve />` after its children; do not add another one.
+  - Include the resolve runtime module yourself (e.g. a `<script type="module">` that imports
+    `@mewhhaha/ruwuter/resolve`).
 - Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be
   wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `event.click(handlerHref)`).
 - Stick to HTML-native attribute values; dynamic state flows through the `on` event list (optionally
@@ -487,7 +487,7 @@ Include the runtime so client handlers hydrate in the browser. The convenience c
 from `@mewhhaha/ruwuter/components` will emit the correct module scripts for you:
 
 ```tsx
-import { Client, Resolve, SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import { Client, SuspenseProvider } from "@mewhhaha/ruwuter/components";
 
 export default function Document({ children }: { children: JSX.Element }) {
   return (
@@ -495,6 +495,7 @@ export default function Document({ children }: { children: JSX.Element }) {
       <html>
         <body>
           {children}
+          <script type="module" src="@mewhhaha/ruwuter/resolve"></script>
           <Client />
         </body>
       </html>
