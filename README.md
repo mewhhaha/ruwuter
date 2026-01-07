@@ -39,7 +39,7 @@ Ruwuter provides a lightweight context API with React‑like ergonomics, backed 
 `AsyncLocalStorage` under the hood.
 
 ```tsx
-import { createContext } from "@mewhhaha/ruwuter/context";
+import { createContext } from "@mewhhaha/ruwuter/components";
 
 export const ThemeContext = createContext("light");
 
@@ -79,7 +79,6 @@ Note: @mewhhaha/ruwuter uses flat file‑based routing. All route files live dir
 
 ```bash
 app/
-├── _layout.tsx           # Root layout wrapper
 ├── document.tsx          # Document wrapper
 └── routes/
     ├── _index.tsx        # / route
@@ -144,8 +143,9 @@ like the native event. Methods such as `preventDefault()` still hit the real eve
 `instanceof
 MouseEvent`/`KeyboardEvent` continues to work.
 
-Handler signatures remain `(event: Event, signal: AbortSignal)`. You can rely on
-`event.currentTarget`/`event.srcElement` even if the handler awaits between import and execution.
+Handler signatures remain `(this: unknown, event: Event, signal: AbortSignal)`. When you don’t pass
+a bind value, `this` defaults to the element. You can rely on `event.currentTarget`/`event.srcElement`
+even if the handler awaits between import and execution.
 
 ### 4. Generate the router and type helpers
 
@@ -245,7 +245,7 @@ responsible for loading their own data.
 
 ```tsx
 // app/routes/products.tsx
-import { html, type HtmlArgs } from "@mewhhaha/ruwuter";
+import { html, type ctx } from "@mewhhaha/ruwuter";
 import type { Route } from "./+types.products.ts";
 
 import { getProduct, getProductInsights } from "../lib/data.ts";
@@ -254,7 +254,7 @@ export async function loader({ params }: Route.LoaderArgs) {
   return { product: await getProduct(params.slug) };
 }
 
-export const Sidebar = html(async ({ params, request }: HtmlArgs) => {
+export const Sidebar = html(async ({ params, request }: ctx) => {
   const insights = await getProductInsights(params.slug);
   const url = new URL(request.url);
 
@@ -449,7 +449,7 @@ export default function Dashboard() {
           <Suspense fallback={<div>Loading...</div>}>
             <SlowData />
           </Suspense>
-          <script type="module" src="@mewhhaha/ruwuter/resolve"></script>
+          <script type="module" src="@mewhhaha/ruwuter/resolve.js"></script>
         </body>
       </html>
     </SuspenseProvider>
@@ -465,7 +465,7 @@ Mix your routing friendship bracelets however you like.
   - Wrap your root HTML with `SuspenseProvider`.
   - `SuspenseProvider` appends a single `<Resolve />` after its children; do not add another one.
   - Include the resolve runtime module yourself (e.g. a `<script type="module">` that imports
-    `@mewhhaha/ruwuter/resolve`).
+    `@mewhhaha/ruwuter/resolve.js`).
 - Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be
   wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `event.click(handlerHref)`).
 - Stick to HTML-native attribute values; dynamic state flows through the `on` event list (optionally
@@ -495,7 +495,7 @@ export default function Document({ children }: { children: JSX.Element }) {
       <html>
         <body>
           {children}
-          <script type="module" src="@mewhhaha/ruwuter/resolve"></script>
+          <script type="module" src="@mewhhaha/ruwuter/resolve.js"></script>
           <Client />
         </body>
       </html>
@@ -509,8 +509,8 @@ inject the scripts yourself. The `?url&no-inline` suffix tells Vite to emit dedi
 instead of inlining the runtime.
 
 ```tsx
-import clientRuntimeUrl from "@mewhhaha/ruwuter/client?url&no-inline";
-import resolveRuntimeUrl from "@mewhhaha/ruwuter/resolve?url&no-inline";
+import clientRuntimeUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
+import resolveRuntimeUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
 
 export function HtmlShell({ children }: { children: JSX.Element }) {
   return (
@@ -563,8 +563,8 @@ export default function HomePage() {
 }
 ```
 
-- Lifecycle: `on={[event.mount(mountHref), event.unmount(unmountHref)]}`. `mount` fires after
-  `DOMContentLoaded`; `unmount` fires when the element is removed.
+- Lifecycle: `on={[event.mount(mountHref), event.unmount(unmountHref)]}`. `mount` fires as soon as the
+  runtime hydrates the element (queued microtask); `unmount` fires when the element is removed.
 - Add event options as the third tuple entry, e.g.
   `event.click(clickHref, { preventDefault: true })` to cancel default browser behavior before the
   handler module finishes loading.
