@@ -1,16 +1,8 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client } from "../src/components/client.ts";
 import { event, events } from "../src/events.ts";
-
-const makeCtx = () => {
-  const pending: Promise<any>[] = [];
-  const ctx: ExecutionContext = {
-    waitUntil: (p: Promise<any>) => pending.push(p),
-    passThroughOnException: () => {},
-  } as any;
-  return { ctx, pending } as const;
-};
 
 describe("Client interactions (no bundler)", () => {
   it("renders on-boundary and serves function module", async () => {
@@ -24,7 +16,7 @@ describe("Client interactions (no bundler)", () => {
           default: () => (
             <html>
               <body>
-                <button id="b" on={events({ by: 2 }, event.click(clickHref))}>
+                <button id="b" type="button" on={events({ by: 2 }, event.click(clickHref))}>
                   0
                 </button>
                 <Client />

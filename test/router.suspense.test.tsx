@@ -1,19 +1,12 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
-import { type Env, type fragment, Router } from "../src/router.ts";
+import { makeCtx } from "../test-support/ctx.ts";
+import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/router.ts";
 import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const makeCtx = () => {
-  const pending: Promise<any>[] = [];
-  const ctx: ExecutionContext = {
-    waitUntil: (p: Promise<any>) => pending.push(p),
-    passThroughOnException: () => {},
-  } as any;
-  return { ctx, pending } as const;
-};
-
 const textDecoder = new TextDecoder();
+type LayoutProps = { children?: RuwuterJSX.Element };
 
 async function readUntil(
   reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -210,7 +203,7 @@ describe("Suspense streaming", () => {
       {
         id: "layout",
         mod: {
-          default: ({ children }: any) => (
+          default: ({ children }: LayoutProps) => (
             <SuspenseProvider>
               <html>
                 <body>

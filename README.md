@@ -319,7 +319,7 @@ export default function Products({ loaderData: { helloUrl } }) {
 export default async function addHello(this: { helloUrl: string }) {
   await window.swap?.(fetch(this.helloUrl, { method: "POST" }), {
     target: "#items",
-    swap: "beforeend",
+    write: "beforeend",
   });
 }
 ```

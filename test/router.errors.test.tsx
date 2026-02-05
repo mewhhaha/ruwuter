@@ -1,14 +1,8 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
-import { type Env, type fragment, Router } from "../src/router.ts";
+import { makeCtx } from "../test-support/ctx.ts";
+import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/router.ts";
 
-const makeCtx = () => {
-  const pending: Promise<any>[] = [];
-  const ctx: ExecutionContext = {
-    waitUntil: (p: Promise<any>) => pending.push(p),
-    passThroughOnException: () => {},
-  } as any;
-  return { ctx, pending } as const;
-};
+type LayoutProps = { children?: RuwuterJSX.HtmlNode };
 
 describe("Thrown Response handling", () => {
   it("returns 404 when a loader returns a Response during HTML rendering", async () => {
@@ -18,7 +12,7 @@ describe("Thrown Response handling", () => {
         id: "root",
         mod: {
           loader: () => new Response("Not Found", { status: 404 }),
-          default: ({ children }: any) => (
+          default: ({ children }: LayoutProps) => (
             <html>
               <body>{children}</body>
             </html>
@@ -50,7 +44,7 @@ describe("Thrown Response handling", () => {
           loader: () => {
             throw new Response("Not Found", { status: 404 });
           },
-          default: ({ children }: any) => (
+          default: ({ children }: LayoutProps) => (
             <html>
               <body>{children}</body>
             </html>
@@ -125,7 +119,7 @@ describe("Thrown Response handling", () => {
       {
         id: "root",
         mod: {
-          default: ({ children }: any) => (
+          default: ({ children }: LayoutProps) => (
             <html>
               <body>{children}</body>
             </html>

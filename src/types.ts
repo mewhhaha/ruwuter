@@ -31,7 +31,7 @@ import type { ExecutionContext } from "@cloudflare/workers-types";
 export type InferComponentProps<module> = {
   children?: JSX.Element;
   loaderData: module extends {
-    loader: infer loader extends (...args: any) => any;
+    loader: infer loader extends (...args: unknown[]) => unknown;
   } ? Awaited<ReturnType<loader>>
     : undefined;
 };
@@ -72,14 +72,16 @@ export type InferHeadersFunction<
   params: params;
   context: [Env, ExecutionContext];
   loaderData: module extends {
-    loader: infer loader extends (...args: any) => any;
+    loader: infer loader extends (...args: unknown[]) => unknown;
   } ? ReturnType<loader>
     : undefined;
 }) => Promise<Headers | HeadersLike> | Headers | HeadersLike;
 
 type HeadersLike = {
-  [key in CommonHeaders | (string & {})]?: string | undefined | null;
+  [key in CommonHeaders | OpenString]?: string | undefined | null;
 };
+
+type OpenString = string & Record<never, never>;
 
 type CommonHeaders =
   | "Accept"

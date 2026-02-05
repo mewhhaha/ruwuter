@@ -1,82 +1,17 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path/posix";
+import {
+  extractRouteParams,
+  isRouteModuleName,
+  splitRouteSegments,
+  stripRouteExtension,
+  unescapeSegment,
+} from "./route-name.ts";
 import { bySpecificity } from "./sort.ts";
 import type { GeneratedFile } from "./types.ts";
 
-const unescapedDotRegex = /(?<!\[)\.(?![^[]*\])/g;
-const unescapeSegment = (segment: string): string => {
-  let result = "";
-  for (let index = 0; index < segment.length; index++) {
-    const start = segment.indexOf("[", index);
-    if (start === -1) {
-      result += segment.slice(index);
-      break;
-    }
-
-    result += segment.slice(index, start);
-    const end = segment.indexOf("]", start + 1);
-    if (end === -1) {
-      result += segment.slice(start);
-      break;
-    }
-
-    result += segment.slice(start + 1, end);
-    index = end;
-  }
-  return result;
-};
-
-const tsRegex = /\.ts(x)?$/;
-
-type ParamInfo = {
-  names: string[];
-};
-
-const extractRouteParams = (routeName: string): ParamInfo => {
-  const paramNames = new Set<string>();
-  let wildcard = 0;
-
-  for (const segment of routeName.split(unescapedDotRegex)) {
-    const isOptional = segment.startsWith("(") && segment.endsWith(")");
-    const actualSegment = isOptional ? segment.slice(1, -1) : segment;
-    const escaped = unescapeSegment(actualSegment);
-
-    if (actualSegment.startsWith("[")) continue;
-
-    if (escaped === "$") {
-      const name = wildcard.toString();
-      paramNames.add(name);
-      wildcard++;
-      continue;
-    }
-
-    if (escaped.startsWith("$")) {
-      let name = escaped.slice(1);
-      let optional = isOptional;
-      if (name.startsWith("(") && name.endsWith(")")) {
-        name = name.slice(1, -1);
-        optional = true;
-      }
-      if (name.length === 0) {
-        if (!optional) paramNames.add(`${wildcard++}`);
-        continue;
-      }
-      const match = /^([A-Za-z0-9_]+)/.exec(name);
-      if (match?.[1]) {
-        paramNames.add(match[1]);
-      }
-    }
-  }
-
-  return {
-    names: Array.from(paramNames),
-  };
-};
-
 const generatePatternString = (routePath: string): string => {
-  const segments = routePath
-    .split(unescapedDotRegex)
-    .filter((value) => !value.startsWith("_"));
+  const segments = splitRouteSegments(routePath).filter((value) => !value.startsWith("_"));
 
   if (segments.length === 0) {
     return "/";
@@ -126,6 +61,12 @@ const generatePatternString = (routePath: string): string => {
 
 const COMPONENT_SEGMENT = "[A-Z][A-Za-z0-9_$]*\\.html";
 
+type RouteEntry = {
+  sourceName: string;
+  routeId: string;
+  isDirectory: boolean;
+};
+
 const isPathlessLayout = (segments: string[]): boolean => {
   const last = segments.at(-1);
   if (!last) return false;
@@ -147,30 +88,41 @@ export const generateRouter = async (
   appFolder: string,
 ): Promise<GeneratedFile[]> => {
   const routesFolder = path.join(appFolder, "routes");
+  const entries = await readdir(routesFolder, { withFileTypes: true });
 
-  const files = await readdir(routesFolder);
+  const routeEntries: RouteEntry[] = entries
+    .filter((entry) => entry.isDirectory() || (entry.isFile() && isRouteModuleName(entry.name)))
+    .map((entry) => {
+      if (entry.isDirectory()) {
+        return { sourceName: entry.name, routeId: entry.name, isDirectory: true };
+      }
+      return {
+        sourceName: entry.name,
+        routeId: stripRouteExtension(entry.name),
+        isDirectory: false,
+      };
+    });
 
-  const varName = (file: string) => {
-    return "$" + file.replace(tsRegex, "").replace(/[^a-zA-Z0-9]/g, "_");
+  const varName = (routeId: string) => {
+    return "$" + routeId.replace(/[^a-zA-Z0-9]/g, "_");
   };
 
-  const routeImports = files
-    .map((file: string) => {
-      const isDirectory = !file.endsWith(".tsx");
-      const name = varName(file);
-      if (isDirectory) {
-        return `import * as ${name} from "./routes/${file}/route.tsx";`;
+  const routeImports = routeEntries
+    .map((entry) => {
+      const name = varName(entry.routeId);
+      if (entry.isDirectory) {
+        return `import * as ${name} from "./routes/${entry.sourceName}/route.tsx";`;
       }
-      return `import * as ${name} from "./routes/${file}";`;
+      return `import * as ${name} from "./routes/${entry.sourceName}";`;
     })
     .join("\n");
 
-  const routeData = files.map((file: string) => {
-    const routeId = file.replace(tsRegex, "");
-    const name = varName(file);
-    const segments = routeId.split(unescapedDotRegex);
+  const routeData = routeEntries.map((entry) => {
+    const routeId = entry.routeId;
+    const name = varName(routeId);
+    const segments = splitRouteSegments(routeId);
     const pattern = withAssetPattern(generatePatternString(routeId));
-    const params = extractRouteParams(routeId).names;
+    const params = Array.from(extractRouteParams(routeId).paramNames);
     return {
       routeId,
       name,

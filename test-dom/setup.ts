@@ -2,19 +2,21 @@
 // Node 20+ provides URLPattern globally, but the jsdom environment
 // may not carry it over. If missing, polyfill it.
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-if (typeof (globalThis as any).URLPattern === "undefined") {
+type URLPatternCtor = typeof URLPattern;
+type URLPatternModule = { URLPattern?: URLPatternCtor };
+type GlobalWithURLPattern = typeof globalThis & { URLPattern?: URLPatternCtor };
+
+const globalWithURLPattern = globalThis as GlobalWithURLPattern;
+
+if (typeof globalWithURLPattern.URLPattern === "undefined") {
   try {
     // Importing this module defines URLPattern globally
     // and also exports it; we ensure the global assignment.
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    const mod = await import("urlpattern-polyfill");
-    const URLPatternCtor = (mod as any).URLPattern ?? (globalThis as any).URLPattern;
-    if (URLPatternCtor) {
+    const mod = await import("urlpattern-polyfill") as unknown as URLPatternModule;
+    const urlPatternCtor = mod.URLPattern ?? globalWithURLPattern.URLPattern;
+    if (urlPatternCtor) {
       Object.defineProperty(globalThis, "URLPattern", {
-        value: URLPatternCtor,
+        value: urlPatternCtor,
         configurable: true,
         writable: true,
       });

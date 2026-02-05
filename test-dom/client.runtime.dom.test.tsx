@@ -1,19 +1,12 @@
+// deno-lint-ignore-file no-explicit-any
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { makeCtx } from "../test-support/ctx.ts";
 import "./setup.ts";
 import { DOMParser } from "@b-fuze/deno-dom";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client, ref } from "../src/components/client.ts";
 import { event, events } from "../src/events.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
-
-const makeCtx = () => {
-  const pending: Promise<any>[] = [];
-  const ctx: ExecutionContext = {
-    waitUntil: (p: Promise<any>) => pending.push(p),
-    passThroughOnException: () => {},
-  } as any;
-  return { ctx, pending } as const;
-};
 
 const nextRuntimeUrl = () => nextClientRuntimeUrl();
 
@@ -196,6 +189,64 @@ describe("Client runtime DOM behaviour", () => {
     },
   );
 
+  it("runs sibling handlers bound to the same event without aborting each other", async () => {
+    const slowHref = `data:text/javascript,${
+      encodeURIComponent(
+        'export default async function(_ev, signal){ await new Promise((r)=>setTimeout(r,20)); if (signal.aborted) return; const b=document.body; const n=Number(b.getAttribute("data-slow")||"0"); b.setAttribute("data-slow", String(n+1)); }',
+      )
+    }`;
+    const fastHref = `data:text/javascript,${
+      encodeURIComponent(
+        'export default function(){ const b=document.body; const n=Number(b.getAttribute("data-fast")||"0"); b.setAttribute("data-fast", String(n+1)); }',
+      )
+    }`;
+
+    const pattern = new URLPattern({ pathname: "/" });
+    const fragments: fragment[] = [
+      {
+        id: "root",
+        mod: {
+          default: () => (
+            <html>
+              <body>
+                <button id="multi" type="button" on={[event.click(slowHref), event.click(fastHref)]}>
+                  multi
+                </button>
+                <Client />
+              </body>
+            </html>
+          ),
+        },
+      },
+    ];
+
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(
+      new Request("https://example.com/"),
+      {} as Env,
+      ctx,
+    );
+    const html = await res.text();
+
+    const { window: _window, doc, patchRemove: _patchRemove, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+      doc.dispatchEvent(new Event("DOMContentLoaded"));
+
+      const button = doc.getElementById("multi");
+      if (!button) throw new Error("expected multi button");
+      button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+
+      await waitFor(() => doc.body.getAttribute("data-fast") === "1", 1000);
+      await waitFor(() => doc.body.getAttribute("data-slow") === "1", 1000);
+      expect(doc.body.getAttribute("data-fast")).toBe("1");
+      expect(doc.body.getAttribute("data-slow")).toBe("1");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("hydrates ref props and clears them on unmount", async () => {
     const buttonRef = ref<HTMLButtonElement | null>(null);
     const mountHref = `data:text/javascript,${
@@ -219,6 +270,7 @@ describe("Client runtime DOM behaviour", () => {
               <body>
                 <button
                   id="target"
+                  type="button"
                   ref={buttonRef}
                   on={events(buttonRef, event.mount(mountHref), event.unmount(unmountHref))}
                 >

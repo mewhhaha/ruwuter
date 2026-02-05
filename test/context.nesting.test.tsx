@@ -1,15 +1,9 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { makeCtx } from "../test-support/ctx.ts";
 import { createContext } from "../src/components/context.ts";
-import { type Env, type fragment, Router } from "../src/router.ts";
+import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/router.ts";
 
-const makeCtx = () => {
-  const pending: Promise<any>[] = [];
-  const ctx: ExecutionContext = {
-    waitUntil: (p: Promise<any>) => pending.push(p),
-    passThroughOnException: () => {},
-  } as any;
-  return { ctx, pending } as const;
-};
+type LayoutProps = { children?: RuwuterJSX.HtmlNode };
 
 describe("context providers", () => {
   it("exposes values from nested providers to descendants", async () => {
@@ -61,7 +55,7 @@ describe("context providers", () => {
       {
         id: "layout",
         mod: {
-          default: ({ children }: any) => (
+          default: ({ children }: LayoutProps) => (
             <ThemeContext.Provider value="spicy">
               <html>
                 <body>{children}</body>

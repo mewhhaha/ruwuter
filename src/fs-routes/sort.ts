@@ -1,26 +1,6 @@
-const segments = (a: string) => a.split(unescapedDotRegex);
+import { splitRouteSegments, unescapeSegment } from "./route-name.ts";
 
-const unescapeSegment = (segment: string): string => {
-  let result = "";
-  for (let index = 0; index < segment.length; index++) {
-    const start = segment.indexOf("[", index);
-    if (start === -1) {
-      result += segment.slice(index);
-      break;
-    }
-
-    result += segment.slice(index, start);
-    const end = segment.indexOf("]", start + 1);
-    if (end === -1) {
-      result += segment.slice(start);
-      break;
-    }
-
-    result += segment.slice(start + 1, end);
-    index = end;
-  }
-  return result;
-};
+const segments = (a: string) => splitRouteSegments(a);
 
 type SegmentInfo = {
   weight: number;
@@ -91,5 +71,3 @@ export const bySpecificity = (a: string, b: string): number => {
 
   return bSegments.length - aSegments.length;
 };
-
-const unescapedDotRegex = /(?<!\[)\.(?![^[]*\])/g;

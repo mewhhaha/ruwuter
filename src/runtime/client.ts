@@ -38,10 +38,15 @@ interface RefStore {
   ref(id: string, initial: unknown): RefObject;
 }
 
+interface RegisteredUnmountHandler {
+  controllerKey: string;
+  entry: ModuleEntry;
+}
+
 interface ElementContext {
   bind: unknown;
   controllers: Map<string, AbortController>;
-  unmount: ModuleEntry[];
+  unmount: RegisteredUnmountHandler[];
   refs: RefObject[];
 }
 
@@ -49,18 +54,31 @@ interface SyntheticEventInit {
   currentTarget?: EventTarget | null;
 }
 
+type EventLike = Event & {
+  currentTarget?: EventTarget | null;
+  srcElement?: EventTarget | null;
+  relatedTarget?: EventTarget | null;
+  submitter?: HTMLElement | null;
+  newState?: string;
+  oldState?: string;
+  source?: Element | null;
+};
+
+type BoundEventMethod = (...args: unknown[]) => unknown;
+
 function synthesizeEvent<E extends Event>(event: E, init?: SyntheticEventInit): E {
   // Shallow wrapper whose prototype chain includes the original event.
-  const snap: any = Object.create(event);
+  const baseEvent = event as EventLike;
+  const snap = Object.create(event) as Record<string, unknown>;
   const define = (key: string, value: unknown) => {
     Object.defineProperty(snap, key, { value, configurable: true });
   };
 
-  const currentTarget = init?.currentTarget ?? (event as any).currentTarget ?? null;
+  const currentTarget = init?.currentTarget ?? baseEvent.currentTarget ?? null;
   define("currentTarget", currentTarget);
 
-  if ("srcElement" in (event as any)) {
-    define("srcElement", (event as any).srcElement ?? currentTarget);
+  if ("srcElement" in baseEvent) {
+    define("srcElement", baseEvent.srcElement ?? currentTarget);
   }
 
   // Freeze commonly inspected, timing-sensitive properties
@@ -71,20 +89,19 @@ function synthesizeEvent<E extends Event>(event: E, init?: SyntheticEventInit): 
     define("composedPath", () => (path ? path.slice() : []));
   }
 
-  if ("relatedTarget" in (event as any)) {
-    define("relatedTarget", (event as any).relatedTarget);
+  if ("relatedTarget" in baseEvent) {
+    define("relatedTarget", baseEvent.relatedTarget);
   }
 
-  if ("submitter" in (event as any)) {
-    define("submitter", (event as any).submitter ?? null);
+  if ("submitter" in baseEvent) {
+    define("submitter", baseEvent.submitter ?? null);
   }
 
   // Popover toggle fields if present
-  const anyEv: any = event as any;
-  if (typeof anyEv.newState === "string" || typeof anyEv.oldState === "string") {
-    define("newState", anyEv.newState);
-    define("oldState", anyEv.oldState);
-    define("source", anyEv.source ?? null);
+  if (typeof baseEvent.newState === "string" || typeof baseEvent.oldState === "string") {
+    define("newState", baseEvent.newState);
+    define("oldState", baseEvent.oldState);
+    define("source", baseEvent.source ?? null);
   }
 
   return snap as E;
@@ -96,7 +113,7 @@ function synthesizeLifecycleEvent(el: Element, type: "mount" | "unmount"): Event
     get(target, prop) {
       if (prop === "currentTarget") return el;
       const value = Reflect.get(target, prop as keyof Event);
-      return typeof value === "function" ? (value as Function).bind(target) : value;
+      return typeof value === "function" ? (value as BoundEventMethod).bind(target) : value;
     },
   }) as Event;
 }
@@ -189,6 +206,7 @@ function initializeClientRuntime(): void {
 
   const contexts = new WeakMap<Element, ElementContext>();
   const hydratedElements = new WeakSet<Element>();
+  let controllerSequence = 0;
 
   function revive(_key: string, value: unknown): unknown {
     if (value && typeof value === "object") {
@@ -242,6 +260,7 @@ function initializeClientRuntime(): void {
     entry: ModuleEntry,
     type: string,
     ev: Event,
+    controllerKey: string,
   ): Promise<void> {
     const fn = await resolveEntry(entry);
     if (!fn) return;
@@ -261,10 +280,8 @@ function initializeClientRuntime(): void {
     }
 
     const controller = new AbortController();
-    if (type) {
-      controllers.get(type)?.abort();
-      controllers.set(type, controller);
-    }
+    controllers.get(controllerKey)?.abort();
+    controllers.set(controllerKey, controller);
 
     const eventForHandler = ev;
 
@@ -276,8 +293,8 @@ function initializeClientRuntime(): void {
       }
       console.error(err);
     } finally {
-      if (type && controllers.get(type) === controller) {
-        controllers.delete(type);
+      if (controllers.get(controllerKey) === controller) {
+        controllers.delete(controllerKey);
       }
     }
   }
@@ -285,15 +302,18 @@ function initializeClientRuntime(): void {
   function attachHandler(el: Element, entry: ModuleEntry): void {
     if (!entry || entry.t !== "m") return;
     const type = entry.ev && entry.ev.length > 0 ? entry.ev : "click";
+    const controllerKey = `${type}:${controllerSequence++}`;
 
     if (type === "mount") {
-      queueMicrotask(() => invokeEntry(el, entry, "mount", synthesizeLifecycleEvent(el, "mount")));
+      queueMicrotask(() =>
+        invokeEntry(el, entry, "mount", synthesizeLifecycleEvent(el, "mount"), controllerKey)
+      );
       return;
     }
 
     const ctx = getContext(el);
     if (type === "unmount") {
-      ctx.unmount.push(entry);
+      ctx.unmount.push({ controllerKey, entry });
       return;
     }
     const listenerOptions = entry.opt
@@ -307,7 +327,7 @@ function initializeClientRuntime(): void {
     el.addEventListener(type, (event) => {
       if (preventDefault && event.cancelable) event.preventDefault();
       const synthetic = synthesizeEvent(event, { currentTarget: el });
-      void invokeEntry(el, entry, type, synthetic);
+      void invokeEntry(el, entry, type, synthetic, controllerKey);
     }, listenerOptions);
   }
 
@@ -352,8 +372,14 @@ function initializeClientRuntime(): void {
     ctx.controllers.clear();
 
     if (ctx.unmount.length) {
-      ctx.unmount.forEach((entry) => {
-        void invokeEntry(el, entry, "unmount", synthesizeLifecycleEvent(el, "unmount"));
+      ctx.unmount.forEach(({ controllerKey, entry }) => {
+        void invokeEntry(
+          el,
+          entry,
+          "unmount",
+          synthesizeLifecycleEvent(el, "unmount"),
+          controllerKey,
+        );
       });
       ctx.unmount.length = 0;
     }

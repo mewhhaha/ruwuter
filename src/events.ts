@@ -59,7 +59,10 @@ export type EventTuple<
   Type extends string = string,
 > = [Type, HandlerReference<Fn>, EventOptions?];
 
-type EventBinding<Bind> = EventTuple<Handler<BindContext<Bind>, any, any>, string>;
+type EventBinding<Bind> = EventTuple<
+  Handler<BindContext<Bind>, Event, unknown | Promise<unknown>>,
+  string
+>;
 type EventBindingValue<Bind> =
   | EventBinding<Bind>
   | readonly EventBindingValue<Bind>[];
@@ -67,6 +70,8 @@ type EventBindingValue<Bind> =
 type EventComposer<Required> = <Bind extends Required>(
   helpers: BoundEventHelperRegistry<Bind>,
 ) => EventBindingValue<Bind>;
+
+export type EventComposerHelpers<Bind = unknown> = BoundEventHelperRegistry<Bind>;
 
 type EventsArg<Bind> = EventBindingValue<Bind> | EventComposer<Bind>;
 
@@ -154,7 +159,7 @@ function normalizeHandlerReference(
       `Client event helpers require a module URL; received a function for "${prop}".`,
     );
   }
-  return href instanceof URL ? href.pathname : href.toString();
+  return href.toString();
 }
 
 function createBoundHelperRegistry<Bind>(): BoundEventHelperRegistry<Bind> {

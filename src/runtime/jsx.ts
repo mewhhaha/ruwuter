@@ -1,6 +1,7 @@
+// deno-lint-ignore-file no-namespace
 import type { Html } from "./node.ts";
 import type { Ref as ClientRef } from "../components/client.ts";
-import type { ClientEventList } from "@mewhhaha/ruwuter/events";
+import type { ClientEventList, EventComposerHelpers } from "@mewhhaha/ruwuter/events";
 
 type ElementForTag<Tag extends string> = Tag extends keyof HTMLElementTagNameMap
   ? HTMLElementTagNameMap[Tag]
@@ -12,13 +13,16 @@ type WithRef<Name extends string, Props> = Props & {
   ref?: ClientRef<ElementForTag<Name> | null> | undefined;
 };
 
+type OpenString = string & Record<never, never>;
+
 /**
  * JSX namespace containing type definitions for JSX elements and attributes.
  */
 export namespace JSX {
-  type HtmlEventComposer = (helpers: any) => unknown;
+  type HtmlEventComposer = (helpers: EventComposerHelpers) => unknown;
   // Accept finalized event lists, composer functions, or nested arrays of both
   type HtmlEventBindings =
+    // deno-lint-ignore no-explicit-any
     | ClientEventList<any>
     | HtmlEventComposer
     | readonly HtmlEventBindings[];
@@ -216,7 +220,7 @@ export namespace JSX {
     inert?: string | boolean | undefined;
     popover?: "auto" | "hint" | "manual";
     popovertarget?: string | undefined;
-    popoveraction?: "close" | "open" | "toggle" | (string & {}) | undefined;
+    popoveraction?: "close" | "open" | "toggle" | OpenString | undefined;
     id?: string | undefined;
     role?: string | undefined;
     lang?: string | undefined;
@@ -278,7 +282,7 @@ export namespace JSX {
       | "hide-popover"
       | "show-modal"
       | "close"
-      | (string & {})
+      | OpenString
       | undefined;
     form?: string | undefined;
     method?: string | undefined;
@@ -597,6 +601,7 @@ export namespace JSX {
 
   export type HtmlNode =
     | Element
+    // deno-lint-ignore no-explicit-any
     | ClientRef<any>
     | string
     | number

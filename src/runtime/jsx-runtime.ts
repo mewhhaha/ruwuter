@@ -74,7 +74,13 @@ type HydrationPayload = {
   ref?: ClientRef<unknown>;
 };
 
-const escapeJsonForScript = (json: string): string => json.replaceAll("</script>", "<\\/script>");
+const escapeJsonForScript = (json: string): string =>
+  json
+    .replaceAll(/</g, "\\u003C")
+    .replaceAll(/>/g, "\\u003E")
+    .replaceAll(/&/g, "\\u0026")
+    .replaceAll(/\u2028/g, "\\u2028")
+    .replaceAll(/\u2029/g, "\\u2029");
 
 const normalizeEventOptions = (
   options: EventOptions | undefined,
@@ -105,15 +111,14 @@ const normalizeEventOptions = (
  * @param props - Element properties and children
  * @returns Html instance for streaming
  */
-export function jsx(
-  // deno-lint-ignore no-explicit-any
-  tag: string | ((props: any) => JSX.Element),
-  { children, ...props }: { children?: unknown } & Record<string, unknown>,
+export function jsx<Props extends { children?: unknown } & Record<string, unknown>>(
+  tag: string | ((props: Props) => JSX.Element),
+  { children, ...props }: Props,
 ): Html {
   if (typeof tag === "function") {
     return into(
       (async function* (): AsyncGenerator<string> {
-        const rendered = withComponentFrame(() => tag({ children, ...props }));
+        const rendered = withComponentFrame(() => tag({ children, ...props } as Props));
         yield* into(rendered).generator;
       })(),
     );
@@ -161,10 +166,10 @@ export function jsx(
 
       const normalizeHref = (href: unknown): string | null => {
         if (href == null) return null;
-        if (href instanceof URL) return href.pathname;
+        if (href instanceof URL) return href.toString();
         if (typeof href === "string") return href;
-        if (typeof href === "object" && typeof (href as any).toString === "function") {
-          const s = (href as any).toString();
+        if (typeof href === "object" && typeof (href as { toString?: unknown }).toString === "function") {
+          const s = (href as { toString: () => string }).toString();
           return typeof s === "string" && s.length > 0 ? s : null;
         }
         // functions are not supported here
@@ -197,7 +202,7 @@ export function jsx(
         if (typeof fn !== "function") return fn;
         try {
           // event.click(...): composer that expects helpers
-          return (fn as (h: any) => unknown)(helpers);
+          return (fn as (h: unknown) => unknown)(helpers);
         } catch {
           return undefined;
         }
@@ -394,10 +399,9 @@ const sanitize = (value: unknown): string | undefined => {
  * @param props - Element properties and children
  * @returns JSX element
  */
-export function jsxs(
-  // deno-lint-ignore no-explicit-any
-  tag: string | ((props: any) => JSX.Element),
-  props: { children?: unknown } & Record<string, unknown>,
+export function jsxs<Props extends { children?: unknown } & Record<string, unknown>>(
+  tag: string | ((props: Props) => JSX.Element),
+  props: Props,
 ): Html {
   return jsx(tag, props);
 }

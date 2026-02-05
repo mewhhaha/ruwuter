@@ -103,6 +103,25 @@ describe("generateRouter", () => {
     }
   });
 
+  it("treats .ts routes as files, not route directories", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(routesDir, "api.users.ts"), "export default 1;");
+
+      const [routerFile] = await generateRouter(app);
+      if (!routerFile) throw new Error("Router file not generated");
+      const { contents } = routerFile;
+
+      expect(contents).toContain('import * as $api_users from "./routes/api.users.ts";');
+      expect(contents).not.toContain('./routes/api.users.ts/route.tsx');
+      expect(contents).toContain('pathname: "/api/users/:__asset');
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
   it("orders more specific routes before generic params", async () => {
     const app = await Deno.makeTempDir();
     try {

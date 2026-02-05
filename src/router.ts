@@ -60,17 +60,20 @@ export interface ctx {
 /**
  * Loader function for GET requests. Fetches data that will be passed to the component.
  */
+// deno-lint-ignore no-explicit-any
 export type loader = (params: any) => any;
 
 /**
  * Action function for non-GET requests (POST, PUT, DELETE, etc.).
  */
+// deno-lint-ignore no-explicit-any
 export type action = (params: any) => any;
 
 /**
  * Component renderer function that returns JSX.
  */
 export type renderer = (
+  // deno-lint-ignore no-explicit-any
   props: any,
 ) => JSX.Element | Promise<JSX.Element | string>;
 
@@ -79,6 +82,7 @@ export type renderer = (
  */
 export type headers = (
   params: ctx & {
+    // deno-lint-ignore no-explicit-any
     loaderData: any | never;
   },
 ) =>

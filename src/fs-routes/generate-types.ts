@@ -1,10 +1,19 @@
-import path from "node:path";
 import { readdir } from "node:fs/promises";
+import path from "node:path";
 import process from "node:process";
+import {
+  extractRouteParams,
+  isRouteModuleName,
+  stripRouteExtension,
+  toJsModuleName,
+} from "./route-name.ts";
 import type { GeneratedFile } from "./types.ts";
 
-const unescapedDotRegex = /(?<!\[)\.(?![^[]*\])/g;
-const tsRegex = /\.(m)?ts(x)?$/;
+type RouteEntry = {
+  sourceName: string;
+  routeName: string;
+  isDirectory: boolean;
+};
 
 /**
  * Generates TypeScript type definitions for route parameters.
@@ -17,9 +26,21 @@ export const generateTypes = async (
 ): Promise<GeneratedFile[]> => {
   const resolvedAppFolder = path.resolve(appFolder);
   const routesFolder = path.join(resolvedAppFolder, "routes");
-  let files: string[] = [];
+  let routeEntries: RouteEntry[] = [];
   try {
-    files = await readdir(routesFolder);
+    const entries = await readdir(routesFolder, { withFileTypes: true });
+    routeEntries = entries
+      .filter((entry) => entry.isDirectory() || (entry.isFile() && isRouteModuleName(entry.name)))
+      .map((entry) => {
+        if (entry.isDirectory()) {
+          return { sourceName: entry.name, routeName: entry.name, isDirectory: true };
+        }
+        return {
+          sourceName: entry.name,
+          routeName: stripRouteExtension(entry.name),
+          isDirectory: false,
+        };
+      });
   } catch {
     return [];
   }
@@ -31,7 +52,6 @@ export const generateTypes = async (
 
   const outputs: GeneratedFile[] = [];
 
-  // First, extract all route parameters
   const routeParams = new Map<
     string,
     {
@@ -40,23 +60,18 @@ export const generateTypes = async (
     }
   >();
 
-  for (const file of files) {
-    const routeName = file.replace(tsRegex, "");
-    const params = extractParamsFromRoute(routeName);
-    routeParams.set(routeName, params);
+  for (const { routeName } of routeEntries) {
+    routeParams.set(routeName, extractRouteParams(routeName));
   }
 
-  // Create a map to track all parameters for each route (including from child routes)
   const allRouteParams = new Map<string, Set<string>>();
   const allOptionalParams = new Map<string, Set<string>>();
 
-  // Initialize with direct parameters
   for (const [routeName, params] of routeParams.entries()) {
     allRouteParams.set(routeName, new Set(params.paramNames));
     allOptionalParams.set(routeName, new Set(params.optionalParams));
   }
 
-  // Find all layout routes
   const layoutRoutes = new Set<string>();
   for (const routeName of routeParams.keys()) {
     let parentRoute = routeName;
@@ -66,25 +81,20 @@ export const generateTypes = async (
     }
   }
 
-  // For each route, find all child routes and propagate their parameters
   for (const layoutRoute of layoutRoutes) {
     const layoutParams = allRouteParams.get(layoutRoute) || new Set();
     const layoutOptionalParams = allOptionalParams.get(layoutRoute) || new Set();
 
-    // Find all child routes
     for (const routeName of routeParams.keys()) {
-      if (
-        routeName !== layoutRoute &&
-        routeName.startsWith(layoutRoute + ".")
-      ) {
-        const childParams = routeParams.get(routeName);
-        if (childParams) {
-          // Add all child parameters to the layout route as optional
-          for (const param of childParams.paramNames) {
-            layoutParams.add(param);
-            layoutOptionalParams.add(param); // All propagated params are optional in the parent
-          }
-        }
+      if (routeName === layoutRoute || !routeName.startsWith(layoutRoute + ".")) {
+        continue;
+      }
+
+      const childParams = routeParams.get(routeName);
+      if (!childParams) continue;
+      for (const param of childParams.paramNames) {
+        layoutParams.add(param);
+        layoutOptionalParams.add(param);
       }
     }
 
@@ -92,36 +102,30 @@ export const generateTypes = async (
     allOptionalParams.set(layoutRoute, layoutOptionalParams);
   }
 
-  // Now generate the type files with the collected parameters
-  for (const file of files) {
-    const routeName = file.replace(tsRegex, "");
+  for (const entry of routeEntries) {
+    const params = allRouteParams.get(entry.routeName) || new Set();
+    const optionalParams = allOptionalParams.get(entry.routeName) || new Set();
 
-    // Get all parameters for this route
-    const params = allRouteParams.get(routeName) || new Set();
-    const optionalParams = allOptionalParams.get(routeName) || new Set();
-
-    // Generate the params string
     const paramsString = Array.from(params)
+      .sort()
       .map((param) => {
         const isOptional = optionalParams.has(param);
-        return `\t${param}${isOptional ? "?" : ""}: string;`;
+        return `  ${JSON.stringify(param)}${isOptional ? "?" : ""}: string;`;
       })
       .join("\n");
 
-    const isDirectory = !file.endsWith(".tsx");
-
     const template = createTemplate(
-      isDirectory ? "route.tsx" : file,
+      entry.isDirectory ? "route.tsx" : entry.sourceName,
       paramsString,
     );
 
     const basePath = routesTypesRoot;
-    if (isDirectory) {
-      const targetDir = path.join(basePath, file);
+    if (entry.isDirectory) {
+      const targetDir = path.join(basePath, entry.sourceName);
       const outputPath = path.join(targetDir, "+types.route.d.ts");
       outputs.push({ path: outputPath, contents: template });
     } else {
-      const outputPath = path.join(basePath, `+types.${file.replace(tsRegex, ".ts")}`);
+      const outputPath = path.join(basePath, `+types.${stripRouteExtension(entry.sourceName)}.ts`);
       outputs.push({ path: outputPath, contents: template });
     }
   }
@@ -133,45 +137,8 @@ export const generateTypes = async (
   return outputs;
 };
 
-/**
- * Extract parameter names from a route, identifying which ones are optional
- */
-function extractParamsFromRoute(routeName: string): {
-  paramNames: Set<string>;
-  optionalParams: Set<string>;
-} {
-  const paramNames = new Set<string>();
-  const optionalParams = new Set<string>();
-  let wildcard = 0;
-
-  routeName.split(unescapedDotRegex).forEach((segment) => {
-    // Check if this is an optional segment
-    const isOptional = segment.startsWith("(") && segment.endsWith(")");
-    const actualSegment = isOptional ? segment.slice(1, -1) : segment;
-
-    // Check if it's a parameter
-    if (actualSegment === "$" && isOptional) {
-      optionalParams.add(wildcard.toString());
-      wildcard++;
-    } else if (actualSegment === "$") {
-      paramNames.add(wildcard.toString());
-      wildcard++;
-    } else if (actualSegment.startsWith("$")) {
-      const paramName = actualSegment.slice(1);
-      paramNames.add(paramName);
-
-      // If the segment was optional, mark the parameter as optional
-      if (isOptional) {
-        optionalParams.add(paramName);
-      }
-    }
-  });
-
-  return { paramNames, optionalParams };
-}
-
 const createTemplate = (file: string, params: string) => {
-  const paramsObject = params ? `{ ${params.trim()} }` : "Record<never, never>";
+  const paramsObject = params ? `{\n${params}\n}` : "Record<never, never>";
 
   const template = `
 import type {
@@ -180,7 +147,7 @@ import type {
   InferHeadersFunction,
   InferLoaderArgs,
 } from "@mewhhaha/ruwuter/types";
-import * as r from "./${file.replace(tsRegex, ".js")}";
+import * as r from "./${toJsModuleName(file)}";
 
 export type RouteParams = ${paramsObject};
 

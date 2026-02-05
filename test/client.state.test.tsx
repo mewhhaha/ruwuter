@@ -1,16 +1,8 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { Client, ref } from "../src/components/client.ts";
 import { event, events } from "../src/events.ts";
-
-const makeCtx = () => {
-  const pending: Promise<any>[] = [];
-  const ctx: ExecutionContext = {
-    waitUntil: (p: Promise<any>) => pending.push(p),
-    passThroughOnException: () => {},
-  } as any;
-  return { ctx, pending } as const;
-};
 
 describe("Ref hydration and on boundary", () => {
   it("emits hydration boundary and hydrates refs in bind payload", async () => {
@@ -25,7 +17,11 @@ describe("Ref hydration and on boundary", () => {
           default: () => (
             <html>
               <body>
-                <button id="btn" on={events({ count, by: 1 }, event.click(clickHref))}>
+                <button
+                  id="btn"
+                  type="button"
+                  on={events({ count, by: 1 }, event.click(clickHref))}
+                >
                   X
                 </button>
                 <Client />

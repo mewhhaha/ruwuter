@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { into, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
-// @ts-types="@mewhhaha/ruwuter"
-import type { Html } from "@mewhhaha/ruwuter";
 
 type Store = Map<symbol, unknown[]>;
 
@@ -66,16 +64,18 @@ export function runWithContextStore<T>(fn: () => T): T {
  * Captures the current store and returns a function that runs under it.
  * Useful when scheduling async work that must see the same context.
  */
-export function bindContext<F extends (...args: any[]) => any>(fn: F): F {
+type UnknownFn = (...args: unknown[]) => unknown;
+
+export function bindContext<F extends UnknownFn>(fn: F): F {
   const store = getStore();
   if (!store) return fn as F;
-  return ((...args: any[]) =>
+  return ((...args: Parameters<F>): ReturnType<F> =>
     // Prefer ALS; also set fallback for the duration
     storage.run(store, () => {
       const prev = fallbackStore;
       fallbackStore = store;
       try {
-        return fn(...args);
+        return fn(...args) as ReturnType<F>;
       } finally {
         fallbackStore = prev;
       }

@@ -1,18 +1,10 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
-import { type Env, Router } from "../src/router.ts";
+import { makeCtx } from "../test-support/ctx.ts";
+import { type Env, type JSX as RuwuterJSX, Router } from "../src/router.ts";
 import type { fragment } from "../src/router.ts";
 import { into } from "../src/runtime/node.ts";
 
-const makeCtx = () => {
-  const pending: Promise<any>[] = [];
-  const ctx: ExecutionContext = {
-    waitUntil: (p: Promise<any>) => {
-      pending.push(p);
-    },
-    passThroughOnException: () => {},
-  } as any;
-  return { ctx, pending } as const;
-};
+type LayoutProps = { children?: RuwuterJSX.HtmlNode };
 
 describe("Router HTML responses", () => {
   it("returns HTML for GET with default component", async () => {
@@ -21,7 +13,7 @@ describe("Router HTML responses", () => {
       {
         id: "root",
         mod: {
-          default: ({ children }: any) => (
+          default: ({ children }: LayoutProps) => (
             <html>
               <body>{children}</body>
             </html>
@@ -53,7 +45,7 @@ describe("Router HTML responses", () => {
       {
         id: "root",
         mod: {
-          default: ({ children }: any) => (
+          default: ({ children }: LayoutProps) => (
             <html>
               <body>
                 <div id="shell">SHELL</div>
@@ -121,7 +113,7 @@ describe("Headers merging", () => {
       {
         id: "root",
         mod: {
-          default: ({ children }: any) => <div>{children}</div>,
+          default: ({ children }: LayoutProps) => <div>{children}</div>,
           headers: () => ({ "X-Root": "yes" }),
         },
       },

@@ -6,7 +6,7 @@ import {
   assertEquals,
   assertMatch,
   assertStringIncludes,
-} from "https://deno.land/std@0.224.0/assert/mod.ts";
+} from "@std/assert";
 
 const nameStack: string[] = [];
 
@@ -23,16 +23,16 @@ type TestOptions = {
   permissions?: Deno.PermissionOptionsObject;
 };
 
-export function it(name: string, fn: () => any | Promise<any>): void;
+export function it(name: string, fn: () => unknown | Promise<unknown>): void;
 export function it(
   name: string,
   options: TestOptions,
-  fn: () => any | Promise<any>,
+  fn: () => unknown | Promise<unknown>,
 ): void;
 export function it(
   name: string,
-  optionsOrFn: TestOptions | (() => any | Promise<any>),
-  maybeFn?: () => any | Promise<any>,
+  optionsOrFn: TestOptions | (() => unknown | Promise<unknown>),
+  maybeFn?: () => unknown | Promise<unknown>,
 ) {
   const fullName = [...nameStack, name].join(" > ");
   const fn = typeof optionsOrFn === "function" ? optionsOrFn : maybeFn;
@@ -67,10 +67,10 @@ type ExpectObj<T> = {
 export function expect<T>(val: T): ExpectObj<T> {
   return {
     toBe(exp: T) {
-      assertEquals(val as any, exp as any);
+      assertEquals(val, exp);
     },
     toEqual(exp: T) {
-      assertEquals(val as any, exp as any);
+      assertEquals(val, exp);
     },
     toContain(needle: string) {
       assertStringIncludes(String(val), needle);
