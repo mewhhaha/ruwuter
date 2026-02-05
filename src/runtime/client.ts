@@ -46,6 +46,7 @@ interface RegisteredUnmountHandler {
 interface ElementContext {
   bind: unknown;
   controllers: Map<string, AbortController>;
+  listenerController: AbortController;
   unmount: RegisteredUnmountHandler[];
   refs: RefObject[];
 }
@@ -247,6 +248,7 @@ function initializeClientRuntime(): void {
       ctx = {
         bind: undefined,
         controllers: new Map<string, AbortController>(),
+        listenerController: new AbortController(),
         unmount: [],
         refs: [],
       };
@@ -316,13 +318,12 @@ function initializeClientRuntime(): void {
       ctx.unmount.push({ controllerKey, entry });
       return;
     }
-    const listenerOptions = entry.opt
-      ? {
-        capture: entry.opt.capture,
-        once: entry.opt.once,
-        passive: entry.opt.passive,
-      }
-      : undefined;
+    const listenerOptions: AddEventListenerOptions = {
+      signal: ctx.listenerController.signal,
+    };
+    if (entry.opt?.capture === true) listenerOptions.capture = true;
+    if (entry.opt?.once === true) listenerOptions.once = true;
+    if (entry.opt?.passive === true) listenerOptions.passive = true;
     const preventDefault = entry.opt?.preventDefault === true && entry.opt.passive !== true;
     el.addEventListener(type, (event) => {
       if (preventDefault && event.cancelable) event.preventDefault();
@@ -368,6 +369,7 @@ function initializeClientRuntime(): void {
     const ctx = contexts.get(el);
     if (!ctx) return;
 
+    ctx.listenerController.abort();
     ctx.controllers.forEach((ctrl) => ctrl.abort());
     ctx.controllers.clear();
 

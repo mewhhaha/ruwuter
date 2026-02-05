@@ -50,10 +50,6 @@ export type SwapResult = {
   response: Response | null;
 };
 
-const hasUrl = (input: unknown): input is { url: string } =>
-  typeof input === "object" && input !== null && "url" in input &&
-  typeof (input as { url: unknown }).url === "string";
-
 const resolveElement = (ref: SwapTarget): Element => {
   if (!ref) {
     throw new TypeError("swap: target is required.");
@@ -88,8 +84,8 @@ const toHtml = async (
   if (input instanceof Response) {
     return { html: await input.text(), response: input };
   }
-  if (input instanceof Request || hasUrl(input)) {
-    const response = await fetch(input as RequestInfo, init);
+  if (input instanceof Request || input instanceof URL) {
+    const response = await fetch(input, init);
     return { html: await response.text(), response };
   }
   if (input && typeof (input as { text?: () => Promise<string> }).text === "function") {
