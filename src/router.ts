@@ -129,6 +129,11 @@ const isHtmlComponent = (value: unknown): value is HtmlComponent => {
   return isFunction(value) && (value as HtmlRuntimeBrand)[HTML_COMPONENT_MARK] === true;
 };
 
+/**
+ * Marks a component as an HTML asset export (`*.html`) for `__asset` responses.
+ *
+ * @param render - Component receiving router `ctx` props.
+ */
 export function html<explicit extends HtmlProps>(
   render: (props: explicit) => JSX.Element | Promise<JSX.Element | string>,
 ): HtmlComponent {
@@ -156,19 +161,6 @@ export type router = {
   handle: (request: Request, ...args: ctx["context"]) => Promise<Response>;
 };
 
-/**
- * Creates a router instance from an array of routes.
- *
- * @param routes - Array of route tuples
- * @returns A router instance with a handle method
- *
- * @example
- * ```typescript
- * const router = Router([
- *   [new URLPattern({ pathname: "/users/:id" }), fragments]
- * ]);
- * ```
- */
 const HTML_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
   "Cache-Control": "no-store",
@@ -248,6 +240,12 @@ const serveAsset = async (
 const runWithStores = (fn: () => Promise<Response>) =>
   runWithHooksStore(() => runWithContextStore(fn));
 
+/**
+ * Creates a router instance from route tuples.
+ *
+ * @param routes - Array of `[URLPattern, fragments]` entries.
+ * @returns Router object with a `handle(request, env, executionContext)` method.
+ */
 export const Router = (routes: route[]): router => {
   const handle = (
     request: Request,

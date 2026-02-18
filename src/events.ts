@@ -1,12 +1,22 @@
+/**
+ * @module
+ *
+ * Typed client event helpers used with `on={...}` payloads.
+ * This module builds serialized event tuples and strongly typed event aliases for client handlers.
+ */
+
 import type { Handler } from "./components/client.ts";
 
 type BindContext<Bind> = Bind extends undefined ? undefined : Bind;
 type RequiredBind<Bind> = Bind extends undefined ? unknown : Bind;
 
+/** Extended event listener options accepted by client event tuples. */
 export interface ClientEventInit extends AddEventListenerOptions {
+  /** When true, calls `event.preventDefault()` before invoking the client handler. */
   preventDefault?: boolean;
 }
 
+/** Listener options accepted by serialized client event tuples. */
 export type EventOptions = boolean | ClientEventInit;
 
 /**
@@ -41,6 +51,7 @@ type WithCurrentTarget<E extends Event, Target extends Element> = OverrideEventP
 type WithRelatedTarget<E extends Event, Related> = [Related] extends [never] ? E
   : OverrideOptionalEventProperty<E, "relatedTarget", Related>;
 
+/** Rewrites event typings so handlers see a precise `currentTarget` (and optional `relatedTarget`). */
 export type TargetedEvent<
   E extends Event,
   CurrentTarget extends Element = Element,
@@ -71,6 +82,7 @@ type EventComposer<Required> = <Bind extends Required>(
   helpers: BoundEventHelperRegistry<Bind>,
 ) => EventBindingValue<Bind>;
 
+/** Helper registry passed into builder callbacks used by `events(bind, on => ...)`. */
 export type EventComposerHelpers<Bind = unknown> = BoundEventHelperRegistry<Bind>;
 
 type EventsArg<Bind> = EventBindingValue<Bind> | EventComposer<Bind>;
@@ -200,11 +212,20 @@ function pushBinding<Bind>(
   target.push(value as unknown as EventBinding<Bind>);
 }
 
+/** Serialized `on` payload shape consumed by the JSX runtime. */
 export type ClientEventList<Bind = unknown> =
   | [Bind, ...EventBinding<Bind>[]]
   | readonly EventBinding<Bind>[]
   | EventBinding<Bind>;
 
+/**
+ * Builds a serialized `on` payload with an explicit bind context.
+ *
+ * @example
+ * ```ts
+ * events({ id: "x" }, event.click(handlerUrl))
+ * ```
+ */
 export const events = <Bind>(
   bind: Bind,
   ...parts: readonly EventsArg<Bind>[]
@@ -218,88 +239,109 @@ export const events = <Bind>(
   return [bind, ...bindings] as ClientEventList<Bind>;
 };
 
+/** Event type by key from the helper registry, with typed `currentTarget`. */
 export type ClientEvent<
   Type extends keyof GlobalEventMap,
   CurrentTarget extends Element = Element,
 > = TargetedEvent<GlobalEventMap[Type], CurrentTarget>;
+/** DOM `UIEvent` with typed `currentTarget`. */
 export type UIEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.UIEvent,
   CurrentTarget
 >;
+/** DOM `MouseEvent` with typed `currentTarget` and `relatedTarget`. */
 export type MouseEvent<
   CurrentTarget extends Element = Element,
   RelatedTarget = globalThis.MouseEvent["relatedTarget"],
 > = TargetedEvent<globalThis.MouseEvent, CurrentTarget, RelatedTarget>;
+/** DOM `PointerEvent` with typed `currentTarget`. */
 export type PointerEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.PointerEvent,
   CurrentTarget
 >;
+/** DOM `KeyboardEvent` with typed `currentTarget`. */
 export type KeyboardEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.KeyboardEvent,
   CurrentTarget
 >;
+/** DOM `FocusEvent` with typed `currentTarget` and `relatedTarget`. */
 export type FocusEvent<
   CurrentTarget extends Element = Element,
   RelatedTarget = globalThis.FocusEvent["relatedTarget"],
 > = TargetedEvent<globalThis.FocusEvent, CurrentTarget, RelatedTarget>;
+/** DOM `DragEvent` with typed `currentTarget` and `relatedTarget`. */
 export type DragEvent<
   CurrentTarget extends Element = Element,
   RelatedTarget = globalThis.DragEvent["relatedTarget"],
 > = TargetedEvent<globalThis.DragEvent, CurrentTarget, RelatedTarget>;
+/** DOM `WheelEvent` with typed `currentTarget`. */
 export type WheelEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.WheelEvent,
   CurrentTarget
 >;
+/** DOM `TouchEvent` with typed `currentTarget`. */
 export type TouchEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.TouchEvent,
   CurrentTarget
 >;
+/** DOM `ClipboardEvent` with typed `currentTarget`. */
 export type ClipboardEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.ClipboardEvent,
   CurrentTarget
 >;
+/** DOM `InputEvent` with typed `currentTarget`. */
 export type InputEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.InputEvent,
   CurrentTarget
 >;
+/** DOM `CompositionEvent` with typed `currentTarget`. */
 export type CompositionEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.CompositionEvent,
   CurrentTarget
 >;
+/** DOM `AnimationEvent` with typed `currentTarget`. */
 export type AnimationEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.AnimationEvent,
   CurrentTarget
 >;
+/** DOM `TransitionEvent` with typed `currentTarget`. */
 export type TransitionEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.TransitionEvent,
   CurrentTarget
 >;
+/** DOM `SubmitEvent` with typed `currentTarget`. */
 export type SubmitEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.SubmitEvent,
   CurrentTarget
 >;
+/** DOM `FormDataEvent` with typed `currentTarget`. */
 export type FormDataEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   globalThis.FormDataEvent,
   CurrentTarget
 >;
+/** Popover toggle event with typed `currentTarget`. */
 export type ToggleEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   PopoverToggleEvent,
   CurrentTarget
 >;
 
 // Lifecycle events emitted by the client runtime
+/** Synthetic mount lifecycle event fired after hydration attaches handlers. */
 export type MountEvent<CurrentTarget extends Element = Element> = ClientEvent<
   "mount",
   CurrentTarget
 >;
+/** Synthetic unmount lifecycle event fired before hydrated elements are torn down. */
 export type UnmountEvent<CurrentTarget extends Element = Element> = ClientEvent<
   "unmount",
   CurrentTarget
 >;
 
+/** Base synthetic event shape used by lifecycle and wrapped DOM events. */
 export type SyntheticEvent<CurrentTarget extends Element = Element> = TargetedEvent<
   Event,
   CurrentTarget
 >;
 
+/** Client handler function signature used by serialized event helpers. */
 export type { Handler };

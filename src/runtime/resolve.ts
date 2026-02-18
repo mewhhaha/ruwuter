@@ -1,3 +1,10 @@
+/**
+ * @module
+ *
+ * Browser runtime for streamed Suspense templates.
+ * Replaces fallback nodes when matching `<template data-rw-target>` chunks arrive.
+ */
+
 const hasWindow = typeof window !== "undefined";
 
 function initializeResolveRuntime(): void {

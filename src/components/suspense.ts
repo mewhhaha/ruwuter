@@ -21,6 +21,9 @@ type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
   children?: JSX.Element | (() => Promise<JSX.Element>);
 } & Omit<JSX.IntrinsicElements[AS], "children">;
 
+/**
+ * Suspense boundary that streams fallback immediately and resolved content later.
+ */
 export const Suspense = ({
   fallback,
   as: As = "div",
@@ -89,6 +92,9 @@ type SuspenseProviderProps = {
   children?: JSX.HtmlNode;
 };
 
+/**
+ * Enables streaming Suspense by wiring a per-render registry and appending `<Resolve />`.
+ */
 export const SuspenseProvider = ({
   children,
 }: SuspenseProviderProps): JSX.Element => {

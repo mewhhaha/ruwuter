@@ -125,6 +125,9 @@ const toGenerator = (value: unknown): AsyncGenerator<string> => {
   })();
 };
 
+/**
+ * Normalizes arbitrary values into the internal `Html` streaming container.
+ */
 export const into = (value: unknown): Html => {
   if (isHtml(value)) {
     return value;

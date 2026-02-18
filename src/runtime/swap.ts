@@ -1,3 +1,10 @@
+/**
+ * @module
+ *
+ * Browser-side HTML swap helper used by client handlers.
+ * Supports fetchable inputs and Trusted Types-aware HTML sinks.
+ */
+
 type TrustedHTMLValue = typeof globalThis extends {
   TrustedHTML: { prototype: infer T };
 } ? T
@@ -18,13 +25,16 @@ type TrustedTypePolicyFactoryValue = typeof globalThis extends {
     ): TrustedTypePolicyValue;
   };
 
+/** Element reference accepted by `swap` (`Element`, selector, or React-style ref object). */
 export type SwapTarget = Element | string | { current?: Element | null | undefined };
+/** Write mode used by `swap` when applying HTML to the target element. */
 export type SwapMode =
   | "innerHTML"
   | "outerHTML"
   | InsertPosition
   | "remove";
 
+/** Input sources accepted by `swap`. */
 export type SwapInput =
   | RequestInfo
   | URL
@@ -35,6 +45,7 @@ export type SwapInput =
   | null
   | undefined;
 
+/** Options controlling target resolution and write behavior for `swap`. */
 export type SwapOptions = {
   target: SwapTarget;
   write?: SwapMode;
@@ -43,6 +54,7 @@ export type SwapOptions = {
   viewTransition?: boolean;
 };
 
+/** Result returned by `swap` after the DOM update finishes. */
 export type SwapResult = {
   target: Element;
   write: SwapMode;
@@ -147,6 +159,12 @@ const runWithTransition = async (
   await start(update).finished.catch(() => {});
 };
 
+/**
+ * Swaps HTML into a target element from raw text, fetchable input, or `Response`.
+ *
+ * @param input - Content source (URL/Request/Response/string/etc).
+ * @param options - Swap target and write mode configuration.
+ */
 export const swap = async (
   input: SwapInput,
   options: SwapOptions,

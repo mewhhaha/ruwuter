@@ -1,3 +1,10 @@
+/**
+ * @module
+ *
+ * Minimal browser runtime that hydrates serialized `on={...}` payloads,
+ * lazily imports handler modules, and manages mount/unmount lifecycles.
+ */
+
 type EventListenerOptions = {
   capture?: boolean;
   once?: boolean;

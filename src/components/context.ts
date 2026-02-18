@@ -66,6 +66,9 @@ export function runWithContextStore<T>(fn: () => T): T {
  */
 type UnknownFn = (...args: unknown[]) => unknown;
 
+/**
+ * Binds a function to the current context store so later execution sees the same context values.
+ */
 export function bindContext<F extends UnknownFn>(fn: F): F {
   const store = getStore();
   if (!store) return fn as F;
