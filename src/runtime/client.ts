@@ -1,5 +1,3 @@
-type RefListener = () => void;
-
 type EventListenerOptions = {
   capture?: boolean;
   once?: boolean;
@@ -34,7 +32,6 @@ interface RefObject {
 interface RefStore {
   set(id: string, next: unknown | ((prev: unknown) => unknown)): void;
   get(id: string): unknown;
-  watch(id: string, fn: RefListener): () => void;
   ref(id: string, initial: unknown): RefObject;
 }
 
@@ -141,7 +138,6 @@ function initializeClientRuntime(): void {
 
   const store: RefStore = (() => {
     const values = new Map<string, unknown>();
-    const listeners = new Map<string, Set<RefListener>>();
     const refs = new Map<string, RefObject>();
 
     const ensure = (id: string, initial: unknown) => {
@@ -155,31 +151,6 @@ function initializeClientRuntime(): void {
         ? (next as (prev: unknown) => unknown)(current)
         : next;
       values.set(id, value);
-      const subs = listeners.get(id);
-      if (!subs) return;
-      const snapshot = Array.from(subs);
-      snapshot.forEach((fn) => {
-        try {
-          fn();
-        } catch {
-          /* ignore subscriber errors */
-        }
-      });
-    };
-
-    const watch = (id: string, fn: RefListener) => {
-      let subs = listeners.get(id);
-      if (!subs) {
-        subs = new Set<RefListener>();
-        listeners.set(id, subs);
-      }
-      subs.add(fn);
-      return () => {
-        const bucket = listeners.get(id);
-        if (!bucket) return;
-        bucket.delete(fn);
-        if (bucket.size === 0) listeners.delete(id);
-      };
     };
 
     const createRef = (id: string, initial: unknown): RefObject => {
@@ -200,7 +171,6 @@ function initializeClientRuntime(): void {
     return {
       set,
       get: (id: string) => values.get(id),
-      watch,
       ref: createRef,
     };
   })();

@@ -22,12 +22,11 @@ function initializeResolveRuntime(): void {
 
   const scanRoot = (root: Document | DocumentFragment | Element): void => {
     const nodeList = root.querySelectorAll?.("template[data-rw-target]");
-    const nodes = nodeList
-      ? Array.from(nodeList).filter((node): node is HTMLTemplateElement =>
-        node instanceof HTMLTemplateElement
-      )
-      : [];
-    nodes.forEach((node) => processTemplate(node));
+    nodeList?.forEach((node) => {
+      if (node instanceof HTMLTemplateElement) {
+        processTemplate(node);
+      }
+    });
   };
 
   scanRoot(document);
