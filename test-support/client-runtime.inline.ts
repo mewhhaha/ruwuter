@@ -8,3 +8,9 @@ export function nextClientRuntimeUrl(): string {
   url.searchParams.set("v", `${seq++}`);
   return url.href;
 }
+
+export function nextResolveRuntimeUrl(): string {
+  const url = new URL("../src/runtime/resolve.ts", import.meta.url);
+  url.searchParams.set("v", `${seq++}`);
+  return url.href;
+}

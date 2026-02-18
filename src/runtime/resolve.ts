@@ -14,8 +14,9 @@ function initializeResolveRuntime(): void {
     const target = document.getElementById(targetId);
     if (!target) return;
 
-    const fragment = template.content.cloneNode(true);
-    target.replaceWith(fragment);
+    // Move nodes out of the template directly rather than cloning.
+    // Cloning template content that includes <script> can trip TT script enforcement.
+    target.replaceWith(template.content);
     processed.add(template);
     template.remove();
   };
