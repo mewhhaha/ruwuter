@@ -15,7 +15,7 @@ describe("client.scope", () => {
           default: () => {
             const scopeState = client.scope();
             const input = scopeState.ref("input", null as HTMLInputElement | null);
-            scopeState.run(mountHref);
+            scopeState.mount(mountHref);
             return (
               <html>
                 <body>
@@ -52,7 +52,7 @@ describe("client.scope", () => {
         mod: {
           default: () => {
             const scopeState = client.scope();
-            scopeState.run(mountHref);
+            scopeState.mount(mountHref);
             return (
               <html>
                 <body>

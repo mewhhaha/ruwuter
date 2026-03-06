@@ -184,9 +184,6 @@ export type ClientScope<Bind extends Record<string, unknown> = Record<string, un
   mount(
     href: HandlerReference<Handler<Bind, Event, unknown | Promise<unknown>>>,
   ): void;
-  run(
-    href: HandlerReference<Handler<Bind, Event, unknown | Promise<unknown>>>,
-  ): void;
   unmount(
     href: HandlerReference<Handler<Bind, Event, unknown | Promise<unknown>>>,
   ): void;
@@ -238,14 +235,11 @@ export function scope<Bind extends Record<string, unknown> = Record<string, unkn
       },
       mount(href) {
         const normalized = normalizeHandlerReference("scope.mount()", href);
-        state.entries.push({ t: "m", s: normalized, x: "default", ev: "mount" });
-      },
-      run(href) {
-        this.mount(href);
+        state.entries.push({ t: "m", s: normalized, ev: "mount" });
       },
       unmount(href) {
         const normalized = normalizeHandlerReference("scope.unmount()", href);
-        state.entries.push({ t: "m", s: normalized, x: "default", ev: "unmount" });
+        state.entries.push({ t: "m", s: normalized, ev: "unmount" });
       },
       props() {
         state.explicit = true;

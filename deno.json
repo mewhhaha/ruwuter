@@ -12,7 +12,6 @@
   "exports": {
     ".": "./src/router.ts",
     "./components": "./src/components/index.ts",
-    "./events": "./src/events.ts",
     "./fs-routes": "./src/fs-routes/js.ts",
     "./types": "./src/types.ts",
     "./jsx-runtime": "./src/runtime/jsx-runtime.ts",
@@ -63,7 +62,6 @@
     "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260205.0",
     "@mewhhaha/ruwuter/jsx-runtime": "./src/runtime/jsx-runtime.ts",
     "@mewhhaha/ruwuter/jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.ts",
-    "@mewhhaha/ruwuter/events": "./src/events.ts",
     "@mewhhaha/ruwuter/swap": "./src/runtime/swap.ts",
     "@std/assert": "jsr:@std/assert@^1.0.18",
     "urlpattern-polyfill": "npm:urlpattern-polyfill@^10.1.0"

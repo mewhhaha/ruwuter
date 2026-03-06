@@ -147,16 +147,9 @@ dispatch internals (like `eventPhase` and `composedPath()`) once the synchronous
 unwinds. That can make the first click see `event.currentTarget === null` even though subsequent
 clicks behave.
 
-To keep those values stable we wrap each event in a tiny snapshot before invoking your handler. The
-snapshot fixes timing‑sensitive fields (e.g., `currentTarget`, `relatedTarget`, `srcElement`,
-`eventPhase`, and a copied `composedPath()`), while every other property/method continues to behave
-like the native event. Methods such as `preventDefault()` still hit the real event, and
-`instanceof
-MouseEvent`/`KeyboardEvent` continues to work.
-
-Handler signatures remain `(this: unknown, event: Event, signal: AbortSignal)`. When you don’t pass
-a bind value, `this` defaults to the element. You can rely on
-`event.currentTarget`/`event.srcElement` even if the handler awaits between import and execution.
+Scope mount and unmount handlers still receive `(this, event, signal)`. In the promoted
+`client.scope()` path, `this` is the scope bind object and `event.currentTarget` is the scope anchor
+element. Use refs on `this` for local state and DOM access.
 
 Use `client.scope()` as the primary interaction API. `on={...}` has been removed.
 
@@ -298,7 +291,6 @@ export default function (ev: Event, signal: AbortSignal) {
 Notes:
 
 - `scope.mount(...)` registers a `mount` handler for that component instance.
-- `scope.run(...)` remains as a mount alias.
 - `scope.unmount(...)` registers cleanup for when the anchor element leaves the DOM.
 - By default, the first emitted intrinsic element becomes the scope anchor.
 - Use `scope.props()` when you need to anchor a later element explicitly.

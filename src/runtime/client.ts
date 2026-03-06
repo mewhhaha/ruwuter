@@ -49,66 +49,11 @@ interface ElementContext {
   refs: RefObject[];
 }
 
-interface SyntheticEventInit {
-  currentTarget?: EventTarget | null;
-}
-
-type EventLike = Event & {
-  currentTarget?: EventTarget | null;
-  srcElement?: EventTarget | null;
-  relatedTarget?: EventTarget | null;
-  submitter?: HTMLElement | null;
-  newState?: string;
-  oldState?: string;
-  source?: Element | null;
-};
-
 type BoundEventMethod = (...args: unknown[]) => unknown;
 type RefAttrBinding = { attr: string; id: string };
 
 const REF_TEXT_ATTR = "data-rw-ref-text";
 const REF_ATTR_BINDINGS_ATTR = "data-rw-ref-attr";
-
-function synthesizeEvent<E extends Event>(event: E, init?: SyntheticEventInit): E {
-  // Shallow wrapper whose prototype chain includes the original event.
-  const baseEvent = event as EventLike;
-  const snap = Object.create(event) as Record<string, unknown>;
-  const define = (key: string, value: unknown) => {
-    Object.defineProperty(snap, key, { value, configurable: true });
-  };
-
-  const currentTarget = init?.currentTarget ?? baseEvent.currentTarget ?? null;
-  define("currentTarget", currentTarget);
-
-  if ("srcElement" in baseEvent) {
-    define("srcElement", baseEvent.srcElement ?? currentTarget);
-  }
-
-  // Freeze commonly inspected, timing-sensitive properties
-  define("eventPhase", event.eventPhase);
-
-  if (typeof event.composedPath === "function") {
-    const path = event.composedPath();
-    define("composedPath", () => (path ? path.slice() : []));
-  }
-
-  if ("relatedTarget" in baseEvent) {
-    define("relatedTarget", baseEvent.relatedTarget);
-  }
-
-  if ("submitter" in baseEvent) {
-    define("submitter", baseEvent.submitter ?? null);
-  }
-
-  // Popover toggle fields if present
-  if (typeof baseEvent.newState === "string" || typeof baseEvent.oldState === "string") {
-    define("newState", baseEvent.newState);
-    define("oldState", baseEvent.oldState);
-    define("source", baseEvent.source ?? null);
-  }
-
-  return snap as E;
-}
 
 function synthesizeLifecycleEvent(el: Element, type: "mount" | "unmount"): Event {
   const ev = new Event(type);
@@ -268,14 +213,7 @@ function initializeClientRuntime(): void {
   async function resolveEntry(entry?: ModuleEntry): Promise<ClientFn | undefined> {
     if (!entry || entry.t !== "m") return undefined;
     const mod = await loadModule(entry.s);
-    const candidate = entry.x && entry.x in mod && typeof mod[entry.x] === "function"
-      ? (mod[entry.x] as ClientFn)
-      : typeof mod.default === "function"
-      ? (mod.default as ClientFn)
-      : typeof mod === "function"
-      ? (mod as unknown as ClientFn)
-      : undefined;
-    return candidate;
+    return typeof mod.default === "function" ? (mod.default as ClientFn) : undefined;
   }
 
   function getContext(el: Element): ElementContext {
@@ -418,7 +356,7 @@ function initializeClientRuntime(): void {
 
   function attachHandler(el: Element, entry: ModuleEntry): void {
     if (!entry || entry.t !== "m") return;
-    const type = entry.ev && entry.ev.length > 0 ? entry.ev : "click";
+    const type = entry.ev;
     const controllerKey = `${type}:${controllerSequence++}`;
 
     if (type === "mount") {
@@ -433,18 +371,7 @@ function initializeClientRuntime(): void {
       ctx.unmount.push({ controllerKey, entry });
       return;
     }
-    const listenerOptions: AddEventListenerOptions = {
-      signal: ctx.listenerController.signal,
-    };
-    if (entry.opt?.capture === true) listenerOptions.capture = true;
-    if (entry.opt?.once === true) listenerOptions.once = true;
-    if (entry.opt?.passive === true) listenerOptions.passive = true;
-    const preventDefault = entry.opt?.preventDefault === true && entry.opt.passive !== true;
-    el.addEventListener(type, (event) => {
-      if (preventDefault && event.cancelable) event.preventDefault();
-      const synthetic = synthesizeEvent(event, { currentTarget: el });
-      void invokeEntry(el, entry, synthetic, controllerKey);
-    }, listenerOptions);
+    throw new TypeError(`[ruwuter] Unsupported serialized lifecycle entry "${type}".`);
   }
 
   function hydratePayload(el: Element, payload: HydrationPayload): void {

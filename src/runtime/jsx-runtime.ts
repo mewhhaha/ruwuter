@@ -65,7 +65,7 @@ const voidElements = new Set([
   "wbr",
 ]);
 
-// Sequence for JSON hydration ids for `on` handlers
+// Sequence for JSON hydration ids for client-scope hydration payloads
 let HYDRATE_SEQ = 0;
 
 type HydrationPayload = Omit<HydrationPayloadBase, "ref"> & {
@@ -231,7 +231,7 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
       continue;
     }
 
-    // Legacy onX handlers removed; use `on` prop instead
+    // Legacy inline onX handlers are unsupported; use client.scope() instead
 
     // Handle dangerouslySetInnerHTML
     if (
