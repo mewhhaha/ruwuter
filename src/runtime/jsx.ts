@@ -1,8 +1,6 @@
 // deno-lint-ignore-file no-namespace
 import type { Html } from "./node.ts";
 import type { Ref as ClientRef } from "../components/client.ts";
-import type { ClientEventList, EventComposerHelpers } from "@mewhhaha/ruwuter/events";
-
 type ElementForTag<Tag extends string> = Tag extends keyof HTMLElementTagNameMap
   ? HTMLElementTagNameMap[Tag]
   : Tag extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[Tag]
@@ -19,14 +17,6 @@ type OpenString = string & Record<never, never>;
  * JSX namespace containing type definitions for JSX elements and attributes.
  */
 export namespace JSX {
-  type HtmlEventComposer = (helpers: EventComposerHelpers) => unknown;
-  // Accept finalized event lists, composer functions, or nested arrays of both
-  type HtmlEventBindings =
-    // deno-lint-ignore no-explicit-any
-    | ClientEventList<any>
-    | HtmlEventComposer
-    | readonly HtmlEventBindings[];
-
   interface AriaAttributes {
     // ARIA attributes
     "aria-activedescendant"?: string | undefined;
@@ -119,7 +109,7 @@ export namespace JSX {
   // Base HTML tag attributes + Ruwuter client additions
   export interface HtmlTag extends AriaAttributes {
     // Ruwuter client additions
-    on?: HtmlEventBindings | undefined;
+    __clientScope?: unknown;
   }
   export interface HtmlBodyTag {
     onAfterprint?: undefined | string;

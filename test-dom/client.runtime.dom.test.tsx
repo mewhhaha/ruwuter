@@ -4,8 +4,7 @@ import { makeCtx } from "../test-support/ctx.ts";
 import "./setup.ts";
 import { DOMParser } from "@b-fuze/deno-dom";
 import { type Env, type fragment, Router } from "../src/router.ts";
-import { Client, ref } from "../src/components/client.ts";
-import { event, events } from "../src/events.ts";
+import { Client, client } from "../src/components/client.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 
 const nextRuntimeUrl = () => nextClientRuntimeUrl();
@@ -92,7 +91,6 @@ function setupDomEnvironment(html: string) {
   doc.querySelectorAll("*").forEach((el) => patchRemove(el as any));
 
   return {
-    window,
     doc,
     patchRemove,
     cleanup() {
@@ -128,186 +126,339 @@ function setupDomEnvironment(html: string) {
 }
 
 describe("Client runtime DOM behaviour", () => {
-  it(
-    "calls mount and unmount handlers and maintains per-element context",
-    async () => {
-      const mountHref = `data:text/javascript,${
-        encodeURIComponent(
-          'export default function(ev, signal){ const b=document.body; const n=Number(b.getAttribute("data-mounted")||"0"); b.setAttribute("data-mounted", String(n+1)); }',
-        )
-      }`;
-      const unmountHref = `data:text/javascript,${
-        encodeURIComponent(
-          'export default function(ev, signal){ const b=document.body; const n=Number(b.getAttribute("data-unmounted")||"0"); b.setAttribute("data-unmounted", String(n+1)); }',
-        )
-      }`;
-
-      const pattern = new URLPattern({ pathname: "/" });
-      const fragments: fragment[] = [
-        {
-          id: "root",
-          mod: {
-            default: () => (
-              <html>
-                <body>
-                  <div id="m" on={events({ touched: false }, event.mount(mountHref))}></div>
-                  <div id="u" on={[event.unmount(unmountHref)]}></div>
-                  <Client />
-                </body>
-              </html>
-            ),
-          },
-        },
-      ];
-
-      const router = Router([[pattern, fragments]]);
-      const { ctx } = makeCtx();
-      const res = await router.handle(
-        new Request("https://example.com/"),
-        {} as Env,
-        ctx,
-      );
-      const html = await res.text();
-
-      const { window: _window, doc, patchRemove, cleanup } = setupDomEnvironment(html);
-      try {
-        await import(nextRuntimeUrl());
-
-        doc.dispatchEvent(new Event("DOMContentLoaded"));
-
-        await waitFor(() => doc.body.getAttribute("data-mounted") === "1", 1000);
-        expect(doc.body.getAttribute("data-mounted")).toBe("1");
-
-        const un = doc.getElementById("u")!;
-        patchRemove(un as any);
-        un.remove();
-        await new Promise((r) => setTimeout(r, 0));
-        expect(Number(doc.body.getAttribute("data-unmounted") || "0")).toBeGreaterThanOrEqual(1);
-      } finally {
-        cleanup();
-      }
-    },
-  );
-
-  it("runs sibling handlers bound to the same event without aborting each other", async () => {
-    const slowHref = `data:text/javascript,${
+  it("runs scope mount and unmount handlers", async () => {
+    const mountHref = `data:text/javascript,${
       encodeURIComponent(
-        'export default async function(_ev, signal){ await new Promise((r)=>setTimeout(r,20)); if (signal.aborted) return; const b=document.body; const n=Number(b.getAttribute("data-slow")||"0"); b.setAttribute("data-slow", String(n+1)); }',
+        'export default function(){ const b=document.body; const n=Number(b.getAttribute("data-mounted")||"0"); b.setAttribute("data-mounted", String(n+1)); }',
       )
     }`;
-    const fastHref = `data:text/javascript,${
+    const unmountHref = `data:text/javascript,${
       encodeURIComponent(
-        'export default function(){ const b=document.body; const n=Number(b.getAttribute("data-fast")||"0"); b.setAttribute("data-fast", String(n+1)); }',
+        'export default function(){ const b=document.body; const n=Number(b.getAttribute("data-unmounted")||"0"); b.setAttribute("data-unmounted", String(n+1)); }',
       )
     }`;
 
     const pattern = new URLPattern({ pathname: "/" });
-    const fragments: fragment[] = [
-      {
-        id: "root",
-        mod: {
-          default: () => (
+    const fragments: fragment[] = [{
+      id: "root",
+      mod: {
+        default: () => {
+          const scope = client.scope();
+          scope.mount(mountHref);
+          scope.unmount(unmountHref);
+          return (
             <html>
               <body>
-                <button id="multi" type="button" on={[event.click(slowHref), event.click(fastHref)]}>
-                  multi
-                </button>
+                <section id="scope-root"></section>
                 <Client />
               </body>
             </html>
-          ),
+          );
         },
       },
-    ];
+    }];
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
     const html = await res.text();
 
-    const { window: _window, doc, patchRemove: _patchRemove, cleanup } = setupDomEnvironment(html);
+    const { doc, patchRemove, cleanup } = setupDomEnvironment(html);
     try {
       await import(nextRuntimeUrl());
       doc.dispatchEvent(new Event("DOMContentLoaded"));
 
-      const button = doc.getElementById("multi");
-      if (!button) throw new Error("expected multi button");
-      button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
-
-      await waitFor(() => doc.body.getAttribute("data-fast") === "1", 1000);
-      await waitFor(() => doc.body.getAttribute("data-slow") === "1", 1000);
-      expect(doc.body.getAttribute("data-fast")).toBe("1");
-      expect(doc.body.getAttribute("data-slow")).toBe("1");
+      await waitFor(() => doc.body.getAttribute("data-mounted") === "1", 1000);
+      const section = doc.getElementById("scope-root");
+      if (!section) throw new Error("expected scope root");
+      patchRemove(section as any);
+      section.remove();
+      await waitFor(() => doc.body.getAttribute("data-unmounted") === "1", 1000);
+      expect(doc.body.getAttribute("data-unmounted")).toBe("1");
     } finally {
       cleanup();
     }
   });
 
-  it("hydrates ref props and clears them on unmount", async () => {
-    const buttonRef = ref<HTMLButtonElement | null>(null);
-    const mountHref = `data:text/javascript,${
+  it("runs sibling scope unmount handlers without cross-aborting their signals", async () => {
+    const slowUnmountHref = `data:text/javascript,${
       encodeURIComponent(
-        'export default function(ev, signal){ const ok = this && this.get && this.get()===ev.currentTarget; ev.currentTarget.setAttribute("data-ref-ok", ok?"1":"0"); }',
+        'export default async function(_ev, signal){ await new Promise((r)=>setTimeout(r,20)); const b=document.body; b.setAttribute("data-unmount-slow-aborted", String(signal.aborted)); if (signal.aborted) return; const n=Number(b.getAttribute("data-unmount-slow")||"0"); b.setAttribute("data-unmount-slow", String(n+1)); }',
       )
     }`;
-    const unmountHref = `data:text/javascript,${
+    const fastUnmountHref = `data:text/javascript,${
       encodeURIComponent(
-        'export default function(ev, signal){ setTimeout(()=>{ document.body.setAttribute("data-ref-cleared", "true"); }, 0); }',
+        'export default function(){ const b=document.body; const n=Number(b.getAttribute("data-unmount-fast")||"0"); b.setAttribute("data-unmount-fast", String(n+1)); }',
       )
     }`;
 
     const pattern = new URLPattern({ pathname: "/" });
-    const fragments: fragment[] = [
-      {
-        id: "root",
-        mod: {
-          default: () => (
+    const fragments: fragment[] = [{
+      id: "root",
+      mod: {
+        default: () => {
+          const scope = client.scope();
+          scope.unmount(slowUnmountHref);
+          scope.unmount(fastUnmountHref);
+          return (
             <html>
               <body>
-                <button
-                  id="target"
-                  type="button"
-                  ref={buttonRef}
-                  on={events(buttonRef, event.mount(mountHref), event.unmount(unmountHref))}
-                >
-                  ref target
-                </button>
+                <section id="scope-root"></section>
                 <Client />
               </body>
             </html>
-          ),
+          );
         },
       },
-    ];
+    }];
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
     const html = await res.text();
 
-    const { window: _window, doc, patchRemove, cleanup } = setupDomEnvironment(html);
+    const { doc, patchRemove, cleanup } = setupDomEnvironment(html);
     try {
       await import(nextRuntimeUrl());
       doc.dispatchEvent(new Event("DOMContentLoaded"));
 
-      const btn = doc.getElementById("target") as HTMLButtonElement | null;
-      if (!btn) throw new Error("expected target button to exist");
-      await waitFor(() => btn.getAttribute("data-ref-ok") === "1", 1000);
-      expect(btn.getAttribute("data-ref-ok")).toBe("1");
+      const section = doc.getElementById("scope-root");
+      if (!section) throw new Error("expected scope root");
+      patchRemove(section as any);
+      section.remove();
 
-      patchRemove(btn as any);
-      btn.remove();
+      await waitFor(() => doc.body.getAttribute("data-unmount-fast") === "1", 1000);
+      await waitFor(() => doc.body.getAttribute("data-unmount-slow") === "1", 1000);
+      expect(doc.body.getAttribute("data-unmount-fast")).toBe("1");
+      expect(doc.body.getAttribute("data-unmount-slow")).toBe("1");
+      expect(doc.body.getAttribute("data-unmount-slow-aborted")).toBe("false");
+    } finally {
+      cleanup();
+    }
+  });
 
-      await waitFor(() => doc.body.getAttribute("data-ref-cleared") === "true", 1000);
-      expect(doc.body.getAttribute("data-ref-cleared")).toBe("true");
+  it("updates ref-bound text and data/aria attrs when scope listeners mutate refs", async () => {
+    const clientModuleUrl = `file://${Deno.cwd()}/src/components/client.ts`;
+    const mountHref = `data:text/javascript,${
+      encodeURIComponent(
+        `import { on } from ${JSON.stringify(clientModuleUrl)};\n` +
+          `export default function(ev, signal){\n` +
+          `  const root = ev.currentTarget;\n` +
+          `  if (root && root.setAttribute) root.setAttribute("data-scope-ready", "yes");\n` +
+          `  on(this.button).click(() => {\n` +
+          `    this.label.set("running");\n` +
+          `    this.state.set("active");\n` +
+          `    this.aria.set("live");\n` +
+          `  }, { signal });\n` +
+          `}`,
+      )
+    }`;
+
+    const pattern = new URLPattern({ pathname: "/" });
+    const fragments: fragment[] = [{
+      id: "root",
+      mod: {
+        default: () => {
+          const scope = client.scope();
+          const label = scope.ref("label", "idle");
+          const state = scope.ref("state", "initial-state");
+          const aria = scope.ref("aria", "off");
+          const button = scope.ref("button", null as HTMLButtonElement | null);
+          scope.mount(mountHref);
+          return (
+            <html>
+              <body>
+                <section>
+                  <div
+                    id="bound"
+                    data-state={state as unknown as string}
+                    aria-label={aria as unknown as string}
+                  >
+                    {label}
+                  </div>
+                  <button id="mutator" type="button" ref={button}>update</button>
+                </section>
+                <Client />
+              </body>
+            </html>
+          );
+        },
+      },
+    }];
+
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
+    const html = await res.text();
+
+    const { doc, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+      doc.dispatchEvent(new Event("DOMContentLoaded"));
+
+      const bound = doc.getElementById("bound") as HTMLDivElement | null;
+      const button = doc.getElementById("mutator") as HTMLButtonElement | null;
+      const section = button?.parentElement;
+      if (!bound || !button) throw new Error("expected runtime test elements");
+      await waitFor(() => section?.getAttribute("data-scope-ready") === "yes", 1000);
+
+      button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+
+      await waitFor(() => bound.textContent === "running", 1000);
+      expect(bound.textContent).toBe("running");
+      expect(bound.getAttribute("data-state")).toBe("active");
+      expect(bound.getAttribute("aria-label")).toBe("live");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("does not mutate detached bound nodes after removal and does not crash on later ref.set", async () => {
+    const clientModuleUrl = `file://${Deno.cwd()}/src/components/client.ts`;
+    const mountHref = `data:text/javascript,${
+      encodeURIComponent(
+        `import { on } from ${JSON.stringify(clientModuleUrl)};\n` +
+          `export default function(ev, signal){\n` +
+          `  const root = ev.currentTarget;\n` +
+          `  if (root && root.setAttribute) root.setAttribute("data-scope-ready", "yes");\n` +
+          `  on(this.button).click(() => {\n` +
+          `    this.label.set("changed");\n` +
+          `    this.state.set("running");\n` +
+          `    this.aria.set("yes");\n` +
+          `    const body = document.body;\n` +
+          `    const next = Number(body.getAttribute("data-updated") || "0") + 1;\n` +
+          `    body.setAttribute("data-updated", String(next));\n` +
+          `  }, { signal });\n` +
+          `}`,
+      )
+    }`;
+
+    const pattern = new URLPattern({ pathname: "/" });
+    const fragments: fragment[] = [{
+      id: "root",
+      mod: {
+        default: () => {
+          const scope = client.scope();
+          const label = scope.ref("label", "initial");
+          const state = scope.ref("state", "paused");
+          const aria = scope.ref("aria", "no");
+          const button = scope.ref("button", null as HTMLButtonElement | null);
+          scope.mount(mountHref);
+          return (
+            <html>
+              <body>
+                <section id="scope-root">
+                  <div
+                    id="bound"
+                    data-state={state as unknown as string}
+                    aria-label={aria as unknown as string}
+                  >
+                    {label}
+                  </div>
+                  <button id="mutator" type="button" ref={button}>mutate</button>
+                </section>
+                <Client />
+              </body>
+            </html>
+          );
+        },
+      },
+    }];
+
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
+    const html = await res.text();
+
+    const { doc, patchRemove, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+      doc.dispatchEvent(new Event("DOMContentLoaded"));
+
+      const bound = doc.getElementById("bound") as HTMLDivElement | null;
+      const button = doc.getElementById("mutator") as HTMLButtonElement | null;
+      const section = button?.parentElement;
+      if (!bound || !button) throw new Error("expected runtime test elements");
+      await waitFor(() => section?.getAttribute("data-scope-ready") === "yes", 1000);
+
+      patchRemove(bound as any);
+      bound.remove();
+
+      const initialText = bound.textContent;
+      const initialState = bound.getAttribute("data-state");
+      const initialAria = bound.getAttribute("aria-label");
+
+      button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+      await waitFor(() => doc.body.getAttribute("data-updated") === "1", 1000);
+
+      expect(doc.body.getAttribute("data-updated")).toBe("1");
+      expect(bound.textContent).toBe(initialText);
+      expect(bound.getAttribute("data-state")).toBe(initialState);
+      expect(bound.getAttribute("aria-label")).toBe(initialAria);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("auto-anchors client.scope runs and supports on(ref) listener wiring", async () => {
+    const clientModuleUrl = `file://${Deno.cwd()}/src/components/client.ts`;
+    const mountHref = `data:text/javascript,${
+      encodeURIComponent(
+        `import { on } from ${JSON.stringify(clientModuleUrl)};\n` +
+          `export default function(ev, signal){\n` +
+          `  const root = ev.currentTarget;\n` +
+          `  if (root && root.setAttribute) root.setAttribute("data-scope-ready", "yes");\n` +
+          `  on(this.button).click(() => {\n` +
+          `    const field = this.input.get();\n` +
+          `    if (field) field.setAttribute("data-focused", "yes");\n` +
+          `  }, { signal });\n` +
+          `}`,
+      )
+    }`;
+
+    const pattern = new URLPattern({ pathname: "/" });
+    const fragments: fragment[] = [{
+      id: "root",
+      mod: {
+        default: () => {
+          const scope = client.scope();
+          const input = scope.ref("input", null as HTMLInputElement | null);
+          const button = scope.ref("button", null as HTMLButtonElement | null);
+          scope.mount(mountHref);
+          return (
+            <html>
+              <body>
+                <section>
+                  <input id="focus-input" ref={input} />
+                  <button id="focus-button" type="button" ref={button}>Focus</button>
+                </section>
+                <Client />
+              </body>
+            </html>
+          );
+        },
+      },
+    }];
+
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
+    const html = await res.text();
+
+    const { doc, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+      doc.dispatchEvent(new Event("DOMContentLoaded"));
+
+      const inputEl = doc.getElementById("focus-input") as HTMLInputElement | null;
+      const button = doc.getElementById("focus-button") as HTMLButtonElement | null;
+      const section = button?.parentElement;
+      if (!inputEl || !button) throw new Error("expected scope test elements");
+      await waitFor(() => section?.getAttribute("data-scope-ready") === "yes", 1000);
+
+      button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+      await waitFor(() => inputEl.getAttribute("data-focused") === "yes", 1000);
+      expect(inputEl.getAttribute("data-focused")).toBe("yes");
     } finally {
       cleanup();
     }

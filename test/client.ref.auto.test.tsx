@@ -1,31 +1,32 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
-import { Client, ref } from "../src/components/client.ts";
-import { event, events } from "../src/events.ts";
+import { Client, client } from "../src/components/client.ts";
 
 describe("Ref sharing", () => {
-  it("hydrates ref in bind payload", async () => {
-    const count = ref(7);
-
-    // Handler via unified on + bind
-    const clickHref = "./handlers/click.client.js";
+  it("hydrates scope-bound refs in the payload", async () => {
+    const noopHref = `data:text/javascript,${encodeURIComponent("export default function(){}")}`;
 
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
       {
         id: "root",
         mod: {
-          default: () => (
-            <html>
-              <body>
-                <button id="btn" type="button" on={events({ count }, event.click(clickHref))}>
-                  {count}
-                </button>
-                <Client />
-              </body>
-            </html>
-          ),
+          default: () => {
+            const scope = client.scope();
+            const count = scope.ref("count", 7);
+            scope.mount(noopHref);
+            return (
+              <html>
+                <body>
+                  <section>
+                    <button id="btn" type="button">{count}</button>
+                  </section>
+                  <Client />
+                </body>
+              </html>
+            );
+          },
         },
       },
     ];
@@ -39,7 +40,47 @@ describe("Ref sharing", () => {
     );
     const html = await res.text();
 
-    // Should inject hydration script payload (ref-based)
-    expect(html).toMatch(/<script type="application\/json" data-hydrate="h/);
+    expect(html).toMatch(/<script type="application\/json" data-hydrate="h_/);
+    expect(html).toContain('"count"');
+  });
+
+  it("renders ref-backed text children with a data-rw-ref-text marker", async () => {
+    const noopHref = `data:text/javascript,${encodeURIComponent("export default function(){}")}`;
+
+    const pattern = new URLPattern({ pathname: "/" });
+    const fragments: fragment[] = [
+      {
+        id: "root",
+        mod: {
+          default: () => {
+            const scope = client.scope();
+            const label = scope.ref("label", "initial");
+            scope.mount(noopHref);
+            return (
+              <html>
+                <body>
+                  <section>
+                    <div id="label">{label}</div>
+                  </section>
+                  <Client />
+                </body>
+              </html>
+            );
+          },
+        },
+      },
+    ];
+
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(
+      new Request("https://example.com/"),
+      {} as Env,
+      ctx,
+    );
+    const html = await res.text();
+
+    expect(html).toContain("data-rw-ref-text");
+    expect(html).toMatch(/<script type="application\/json" data-hydrate="h_/);
   });
 });

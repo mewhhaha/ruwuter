@@ -24,7 +24,7 @@ import type { JSX } from "./runtime/jsx.ts";
 import { type Html, into, isHtml } from "./runtime/node.ts";
 // SuspenseProvider must be applied by the consumer in their layout/document.
 import { bindContext, runWithContextStore } from "./components/context.ts";
-import { runWithHooksStore } from "./runtime/hooks.ts";
+import { runWithHooksStore, withHookFrame } from "./runtime/hooks.ts";
 
 export type { Html } from "./runtime/node.ts";
 export type { JSX } from "./runtime/jsx.ts";
@@ -379,14 +379,16 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
       return childHtml;
     }
 
-    const result = isHtmlComponent(Component)
-      ? await Component({
-        children: childHtml,
-        request: ctx.request,
-        params: ctx.params,
-        context: ctx.context,
-      })
-      : await (Component as renderer)({ loaderData, children: childHtml });
+    const result = await withHookFrame(() =>
+      isHtmlComponent(Component)
+        ? Component({
+          children: childHtml,
+          request: ctx.request,
+          params: ctx.params,
+          context: ctx.context,
+        })
+        : (Component as renderer)({ loaderData, children: childHtml })
+    );
 
     if (result instanceof Response) {
       throw result;

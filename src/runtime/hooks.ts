@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { into } from "./node.ts";
 import type { JSX } from "@mewhhaha/ruwuter/jsx-runtime";
 
-type HookFrame = { index: number; values: unknown[] };
+type HookFrame = { index: number; values: unknown[]; meta: Map<symbol, unknown> };
 type HookStack = HookFrame[];
 
 const storage = new AsyncLocalStorage<HookStack>();
@@ -23,7 +23,7 @@ export function runWithHooksStore<T>(fn: () => T): T {
 function pushFrame(): () => void {
   const stack = getStack();
   if (!stack) return () => {};
-  stack.push({ index: 0, values: [] });
+  stack.push({ index: 0, values: [], meta: new Map() });
   return () => {
     stack.pop();
   };
@@ -59,6 +59,25 @@ export function withComponentFrame(
   }
 }
 
+export function withHookFrame<T>(fn: () => T): T {
+  const stack = getStack();
+  if (!stack) {
+    return fn();
+  }
+  const release = pushFrame();
+  try {
+    const out = fn();
+    if (isPromise(out)) {
+      return out.finally(release) as T;
+    }
+    release();
+    return out;
+  } catch (e) {
+    release();
+    throw e;
+  }
+}
+
 export function useHook<T>(init: () => T): T {
   const stack = getStack();
   if (!stack || stack.length === 0) return init();
@@ -68,4 +87,23 @@ export function useHook<T>(init: () => T): T {
   const v = init();
   frame.values.push(v);
   return v;
+}
+
+export function useFrameMeta<T>(key: symbol, init: () => T): T {
+  const stack = getStack();
+  if (!stack || stack.length === 0) return init();
+  const frame = stack[stack.length - 1];
+  if (frame.meta.has(key)) {
+    return frame.meta.get(key) as T;
+  }
+  const value = init();
+  frame.meta.set(key, value);
+  return value;
+}
+
+export function peekFrameMeta<T>(key: symbol): T | undefined {
+  const stack = getStack();
+  if (!stack || stack.length === 0) return undefined;
+  const frame = stack[stack.length - 1];
+  return frame.meta.get(key) as T | undefined;
 }

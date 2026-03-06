@@ -1,11 +1,14 @@
 /**
  * @module
  *
+ * @deprecated `on={...}` has been removed. Prefer `client.scope()` from `@mewhhaha/ruwuter/components`.
+ *
  * Typed client event helpers used with `on={...}` payloads.
  * This module builds serialized event tuples and strongly typed event aliases for client handlers.
  */
 
 import type { Handler } from "./components/client.ts";
+import { type BoundEventsListMarker, markBoundEventsList } from "./runtime/event-wire.ts";
 
 type BindContext<Bind> = Bind extends undefined ? undefined : Bind;
 type RequiredBind<Bind> = Bind extends undefined ? unknown : Bind;
@@ -213,7 +216,13 @@ function pushBinding<Bind>(
 }
 
 /** Serialized `on` payload shape consumed by the JSX runtime. */
+export type BoundClientEventList<Bind = unknown> =
+  & [Bind, ...EventBinding<Bind>[]]
+  & BoundEventsListMarker;
+
+/** Serialized `on` payload shape consumed by the JSX runtime. */
 export type ClientEventList<Bind = unknown> =
+  | BoundClientEventList<Bind>
   | [Bind, ...EventBinding<Bind>[]]
   | readonly EventBinding<Bind>[]
   | EventBinding<Bind>;
@@ -236,7 +245,7 @@ export const events = <Bind>(
     const value = typeof part === "function" ? (part as EventComposer<Bind>)(helpers) : part;
     pushBinding(bindings, value as EventBindingValue<Bind>);
   });
-  return [bind, ...bindings] as ClientEventList<Bind>;
+  return markBoundEventsList([bind, ...bindings]) as BoundClientEventList<Bind>;
 };
 
 /** Event type by key from the helper registry, with typed `currentTarget`. */

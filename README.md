@@ -7,9 +7,11 @@ cozy, silly, _and_ productive. Think “enterprise ready, but it also sends you 
 ## Features (sparkly bits)
 
 - ✨ Zero dependencies — completely standalone (sparkly vibes guaranteed; smol and proud)
-- 📁 File‑based routing — auto‑generated from your file structure, so no scary boilerplate jumpscares
+- 📁 File‑based routing — auto‑generated from your file structure, so no scary boilerplate
+  jumpscares
 - ⚡️ Streaming HTML — first‑class streaming responses for snappy feels (vroom vroom)
-- 🧩 Custom JSX runtime — no React required (supports dangerouslySetInnerHTML, but only because we trust you uwu)
+- 🧩 Custom JSX runtime — no React required (supports dangerouslySetInnerHTML, but only because we
+  trust you uwu)
 - ☁️ Workers‑first — optimized for Cloudflare deployments with extra cozy cloud pillows
 - 🧪 Type‑safe — great DX with TypeScript, happy typings happy life (they did their skincare)
 - 🚀 Fast — minimal overhead, maximum performance, zoom zoom~ now with bonus sparkles
@@ -92,13 +94,14 @@ app/
 
 ```tsx
 // app/_index.tsx
-import { Client, ref, SuspenseProvider } from "@mewhhaha/ruwuter/components";
-import { event, events } from "@mewhhaha/ruwuter/events";
+import { Client, client, SuspenseProvider, type Ref } from "@mewhhaha/ruwuter/components";
 import clickHref from "./click.client.ts?url&no-inline";
 import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
 
 export default function HomePage() {
-  const greeting = ref("hai~");
+  const scope = client.scope();
+  const button = scope.ref("button", null as HTMLButtonElement | null);
+  scope.mount(clickHref);
   return (
     <html>
       <head>
@@ -111,8 +114,7 @@ export default function HomePage() {
           <div class="container">
             <h1>Hello, World!</h1>
             <p>Welcome to your new @mewhhaha/ruwuter app.</p>
-            {/* Client example using URL-based handler modules. */}
-            <button on={events({ msg: greeting }, event.click(clickHref))}>
+            <button type="button" ref={button}>
               Click me (client)
             </button>
           </div>
@@ -123,18 +125,27 @@ export default function HomePage() {
 }
 
 // app/click.client.ts
-export default function click(this: { msg: { get(): string } }, _ev: Event, _signal: AbortSignal) {
-  alert(this.msg.get());
+import { on, type Ref } from "@mewhhaha/ruwuter/components";
+
+export default function click(
+  this: { button: Ref<HTMLButtonElement | null> },
+  _ev: Event,
+  signal: AbortSignal,
+) {
+  on(this.button).click(() => {
+    alert("hai~");
+  }, { signal });
 }
 ```
 
-## Client Events
+## Client Interaction Runtime
 
-Client events are like shy kittens: they scamper in when needed and might blink once before pouncing.
-Client handler modules load on demand, so the first interaction usually crosses an async boundary
-while the module is importing. Native DOM events reset `currentTarget`, `srcElement`, and dispatch
-internals (like `eventPhase` and `composedPath()`) once the synchronous listener stack unwinds. That
-can make the first click see `event.currentTarget === null` even though subsequent clicks behave.
+Client events are like shy kittens: they scamper in when needed and might blink once before
+pouncing. Client handler modules load on demand, so the first interaction usually crosses an async
+boundary while the module is importing. Native DOM events reset `currentTarget`, `srcElement`, and
+dispatch internals (like `eventPhase` and `composedPath()`) once the synchronous listener stack
+unwinds. That can make the first click see `event.currentTarget === null` even though subsequent
+clicks behave.
 
 To keep those values stable we wrap each event in a tiny snapshot before invoking your handler. The
 snapshot fixes timing‑sensitive fields (e.g., `currentTarget`, `relatedTarget`, `srcElement`,
@@ -144,8 +155,10 @@ like the native event. Methods such as `preventDefault()` still hit the real eve
 MouseEvent`/`KeyboardEvent` continues to work.
 
 Handler signatures remain `(this: unknown, event: Event, signal: AbortSignal)`. When you don’t pass
-a bind value, `this` defaults to the element. You can rely on `event.currentTarget`/`event.srcElement`
-even if the handler awaits between import and execution.
+a bind value, `this` defaults to the element. You can rely on
+`event.currentTarget`/`event.srcElement` even if the handler awaits between import and execution.
+
+Use `client.scope()` as the primary interaction API. `on={...}` has been removed.
 
 ### 4. Generate the router and type helpers
 
@@ -192,6 +205,166 @@ The payload uses the same ref marker format as other client-side bindings (`__re
 hydrate-time the client runtime revives that marker, points it at the rendered element, and later
 resets the value to `null` when the DOM node unmounts.
 
+### Reactive ref bindings
+
+Refs can be rendered as children too. Whenever a `Ref` is used as child content, the server emits an
+auto-binding marker span, and the client keeps that text node in sync when you call `ref.set(...)`.
+
+```tsx
+import { Client, client } from "@mewhhaha/ruwuter/components";
+
+export default function Page() {
+  const scope = client.scope();
+  const msg = scope.ref("msg", "ready");
+  scope.mount("./noop.client.ts?url");
+
+  return (
+    <html>
+      <body>
+        <section>{msg}</section>
+        <Client />
+      </body>
+    </html>
+  );
+}
+```
+
+Similarly, `data-*` and `aria-*` attributes can be bound through refs and will update live from the
+same `ref.set(...)` signal.
+
+```tsx
+const label = ref("idle");
+const state = ref("ready");
+
+return (
+  <div data-state={state} aria-label={label}>...</div>
+);
+```
+
+The runtime uses reserved marker attributes for these bindings:
+
+- `data-rw-ref-text` for text-node bindings.
+- `data-rw-ref-attr` for bound `data-*`/`aria-*` attribute updates.
+
+Treat these as internal and avoid using them as application attributes.
+
+### Component-scoped client behavior
+
+For component-local browser behavior, use `client.scope()` to register named refs plus mount and
+unmount client modules for that rendered instance.
+
+```tsx
+import { Client, client } from "@mewhhaha/ruwuter/components";
+import focusScopeHref from "./focus-scope.ts?url";
+import cleanupScopeHref from "./cleanup-scope.ts?url";
+
+export default function Page() {
+  const scope = client.scope();
+  const input = scope.ref("input", null as HTMLInputElement | null);
+  const button = scope.ref("button", null as HTMLButtonElement | null);
+
+  scope.mount(focusScopeHref);
+  scope.unmount(cleanupScopeHref);
+
+  return (
+    <html>
+      <body>
+        <section>
+          <input ref={input} />
+          <button type="button" ref={button}>Focus</button>
+        </section>
+        <Client />
+      </body>
+    </html>
+  );
+}
+```
+
+Inside the client module, `this` is the scope bind object and `ev.currentTarget` is the scope
+anchor element.
+
+```ts
+"use client";
+
+import { on } from "@mewhhaha/ruwuter/components";
+
+export default function (ev: Event, signal: AbortSignal) {
+  on(this.button).click(() => {
+    this.input.get()?.focus();
+  }, { signal });
+}
+```
+
+Notes:
+
+- `scope.mount(...)` registers a `mount` handler for that component instance.
+- `scope.run(...)` remains as a mount alias.
+- `scope.unmount(...)` registers cleanup for when the anchor element leaves the DOM.
+- By default, the first emitted intrinsic element becomes the scope anchor.
+- Use `scope.props()` when you need to anchor a later element explicitly.
+- `on(refOrElement)` is a thin typed `addEventListener` helper for client modules.
+- Transformed `"use client"` bindings can be passed directly when your build attaches `clientHref`
+  (or `href`) to the function value.
+- Raw inline `scope.mount(function () { "use client"; ... })` still requires an external transform;
+  this repo does not ship that compiler step.
+
+### Native modal and popover patterns
+
+`client.scope()` works well with native primitives where the browser handles most interaction
+mechanics and the scope only adds small polish.
+
+```tsx
+import { Client, client } from "@mewhhaha/ruwuter/components";
+import openPalette from "./open-palette.ts?url";
+
+export default function CommandPalette() {
+  const scope = client.scope();
+  const dialog = scope.ref("dialog", null as HTMLDialogElement | null);
+  const button = scope.ref("button", null as HTMLButtonElement | null);
+
+  scope.mount(openPalette);
+
+  return (
+    <html>
+      <body>
+        <section>
+          <button type="button" ref={button} commandfor="palette" command="show-modal">
+            Open palette
+          </button>
+          <dialog id="palette" ref={dialog}>
+            <form method="dialog">
+              <input autofocus placeholder="Type a command" />
+              <button value="cancel">Close</button>
+            </form>
+          </dialog>
+        </section>
+        <Client />
+      </body>
+    </html>
+  );
+}
+```
+
+```ts
+"use client";
+
+import { on } from "@mewhhaha/ruwuter/components";
+
+export default function (_ev: Event, signal: AbortSignal) {
+  on(this.button).click(() => {
+    this.dialog.get()?.showModal();
+  }, { signal });
+}
+```
+
+Use the same pattern for popovers with `popover`, `popovertarget`, and `toggle`/`beforetoggle`
+handlers when you need analytics, focus nudges, or small visual state sync without moving ownership
+out of the server-rendered HTML.
+
+The same pair lives under [`examples/client-scope-dialog.tsx`](./examples/client-scope-dialog.tsx)
+and [`examples/open-palette.client.ts`](./examples/open-palette.client.ts), which can serve as the
+reference shape for `client.scope()` plus native dialog/palette flows.
+
 The generator returns the route table and declaration artifacts so you can decide where to write
 them.
 
@@ -235,17 +408,17 @@ Send your components on lil field trips as predictable HTML exports.
 
 Components exported from a route module are exposed at predictable URLs. Each named export must
 begin with an uppercase letter, so `export function Hello()` becomes `/products/Hello.html` and
-`export const ProductCard` resolves to `/products/ProductCard.html`.
-HTML asset endpoints may return `Response` from loaders or exports (useful for cookies/headers).
+`export const ProductCard` resolves to `/products/ProductCard.html`. HTML asset endpoints may return
+`Response` from loaders or exports (useful for cookies/headers).
 
-Use the `html` helper to opt-in explicit HTML exports. It marks the component as routable and
-passes the request context (`request`, `params`, and the `[env, ctx]` tuple) straight into your
-render function. HTML exports can be async—await inside and return JSX when you’re done, and they’re
+Use the `html` helper to opt-in explicit HTML exports. It marks the component as routable and passes
+the request context (`request`, `params`, and the `[env, ctx]` tuple) straight into your render
+function. HTML exports can be async—await inside and return JSX when you’re done, and they’re
 responsible for loading their own data.
 
 ```tsx
 // app/routes/products.tsx
-import { html, type ctx } from "@mewhhaha/ruwuter";
+import { type ctx, html } from "@mewhhaha/ruwuter";
 import type { Route } from "./+types.products.ts";
 
 import { getProduct, getProductInsights } from "../lib/data.ts";
@@ -288,7 +461,8 @@ down so the client can fetch and inject the markup:
 
 ```tsx
 // app/routes/products.tsx
-import { event, events } from "@mewhhaha/ruwuter/events";
+import { client } from "@mewhhaha/ruwuter/components";
+import addHelloHref from "./handlers/add-hello.client.ts?url&no-inline";
 
 export async function loader({ request }) {
   const url = new URL(request.url);
@@ -296,18 +470,14 @@ export async function loader({ request }) {
 }
 
 export default function Products({ loaderData: { helloUrl } }) {
+  const scope = client.scope();
+  const button = scope.ref("button", null as HTMLButtonElement | null);
+  const helloUrlRef = scope.ref("helloUrl", helloUrl);
+  scope.mount(addHelloHref);
+
   return (
     <>
-      <button
-        on={events(
-          { helloUrl },
-          event.click("./handlers/add-hello.client.ts?url&no-inline", {
-            preventDefault: true,
-          }),
-        )}
-      >
-        Add Hello
-      </button>
+      <button type="button" ref={button}>Add Hello</button>
       <ul id="items"></ul>
     </>
   );
@@ -316,11 +486,19 @@ export default function Products({ loaderData: { helloUrl } }) {
 // app/routes/handlers/add-hello.client.ts
 "use client";
 
-export default async function addHello(this: { helloUrl: string }) {
-  await window.swap?.(fetch(this.helloUrl, { method: "POST" }), {
-    target: "#items",
-    write: "beforeend",
-  });
+import { on, type Ref } from "@mewhhaha/ruwuter/components";
+
+export default function addHello(
+  this: { button: Ref<HTMLButtonElement | null>; helloUrl: Ref<string> },
+  _ev: Event,
+  signal: AbortSignal,
+) {
+  on(this.button).click(async () => {
+    await window.swap?.(fetch(this.helloUrl.get(), { method: "POST" }), {
+      target: "#items",
+      write: "beforeend",
+    });
+  }, { signal });
 }
 ```
 
@@ -466,10 +644,9 @@ Mix your routing friendship bracelets however you like.
   - `SuspenseProvider` appends a single `<Resolve />` after its children; do not add another one.
   - Include the resolve runtime module yourself (e.g. a `<script type="module">` that imports
     `@mewhhaha/ruwuter/resolve.js`).
-- Handlers used with `on={...}` should import their modules with `?url`/`?url&no-inline` and be
-  wrapped with the helpers in `@mewhhaha/ruwuter/events` (e.g. `event.click(handlerHref)`).
-- Stick to HTML-native attribute values; dynamic state flows through the `on` event list (optionally
-  prefixed with your bound state) plus client handlers rather than function-valued props.
+- Use `client.scope()` as the only supported client interaction API for component-local behavior.
+- Stick to HTML-native attribute values; dynamic state flows through refs plus mounted client
+  handlers rather than function-valued props.
 
 ### Client runtime vibes
 
@@ -477,8 +654,6 @@ Mix your routing friendship bracelets however you like.
 - Keep server work on the server: let loaders/actions handle data, and ship tiny sidecar
   `*.client.ts` handlers for UI polish.
 - Keep client handlers small and self-contained; import their URLs with `?url`/`?url&no-inline`.
-- Use `event.click(handlerHref, { preventDefault: true })` when you need to cancel default browser
-  behavior before the module finishes loading.
 - For strict CSP, use `<Client nonce={cspNonce} />`.
 
 ### Shipping the Client Runtime
@@ -525,49 +700,14 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 }
 ```
 
-### Client Interactions and Refs (New)
+### Removed `on={...}` API
 
-Ruwuter ships a tiny client interaction runtime with a unified `on` prop that consumes tuples
-produced by `@mewhhaha/ruwuter/events`. Keep handlers in sidecar `*.client.ts` files, import their
-URLs with `?url`, and build tuples like `event.click(handlerHref)`. Use
-`events(bind, event.click(...))` (or the builder form `events(bind, on => on.click(...))` when
-composing dynamically) to prepend the object (or ref) you want as `this`. Those values can include
-shared `ref()` objects.
+`on={...}` has been removed. Migrate element-bound handlers to `client.scope()`:
 
-```tsx
-// app/click.client.ts
-export default function click(
-  this: { count: { set(updater: (v: number) => number): void } },
-  _ev: Event,
-) {
-  this.count.set((v) => v + 1);
-}
-
-// app/_index.tsx
-import { Client, ref } from "@mewhhaha/ruwuter/components";
-import { event, events } from "@mewhhaha/ruwuter/events";
-import clickHref from "./click.client.ts?url";
-
-export default function HomePage() {
-  const count = ref(0);
-  return (
-    <html>
-      <body>
-        <button on={events({ count }, event.click(clickHref))}>
-          +1
-        </button>
-        <Client />
-      </body>
-    </html>
-  );
-}
-```
-
-- Lifecycle: `on={[event.mount(mountHref), event.unmount(unmountHref)]}`. `mount` fires as soon as the
-  runtime hydrates the element (queued microtask); `unmount` fires when the element is removed.
-- Add event options as the third tuple entry, e.g.
-  `event.click(clickHref, { preventDefault: true })` to cancel default browser behavior before the
-  handler module finishes loading.
+- Move shared values into `scope.ref("name", initial)`.
+- Register setup in `scope.mount(handlerHref)` and cleanup in `scope.unmount(handlerHref)`.
+- Attach DOM listeners inside the client module with `on(this.someRef).click(...)`.
+- Keep the server-rendered element tree as the source of truth; use refs for local client state.
 
 ### Hydration Payload
 
@@ -578,6 +718,7 @@ element:
 <button>+1</button>
 <script type="application/json" data-hydrate="h_0">
   {
+    "v": 1,
     "bind": { "count": { "__ref": true, "i": "r1", "v": 0 } },
     "ref": { "__ref": true, "i": "btn", "v": null },
     "on": [
