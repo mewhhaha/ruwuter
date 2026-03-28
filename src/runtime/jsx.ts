@@ -11,7 +11,35 @@ type WithRef<Name extends string, Props> = Props & {
   ref?: ClientRef<ElementForTag<Name> | null> | undefined;
 };
 
-type OpenString = string & Record<never, never>;
+type CustomCommand = `--${string}`;
+type AutoCapitalize =
+  | "characters"
+  | "none"
+  | "off"
+  | "on"
+  | "sentences"
+  | "words";
+type ContentEditable = boolean | "false" | "plaintext-only" | "true";
+type Dir = "auto" | "ltr" | "rtl";
+type Draggable = boolean | "false" | "true";
+type EnterKeyHint = "done" | "enter" | "go" | "next" | "previous" | "search" | "send";
+type FetchPriority = "auto" | "high" | "low";
+type Hidden = boolean | "hidden" | "until-found";
+type InputMode = "decimal" | "email" | "none" | "numeric" | "search" | "tel" | "text" | "url";
+type PopoverTargetAction = "hide" | "show" | "toggle";
+type ReferrerPolicy =
+  | "no-referrer"
+  | "no-referrer-when-downgrade"
+  | "origin"
+  | "origin-when-cross-origin"
+  | "same-origin"
+  | "strict-origin"
+  | "strict-origin-when-cross-origin"
+  | "unsafe-url";
+type Spellcheck = boolean | "false" | "true";
+type Translate = boolean | "no" | "yes";
+type VirtualKeyboardPolicy = "auto" | "manual";
+type WritingSuggestions = boolean | "false" | "true";
 
 /**
  * JSX namespace containing type definitions for JSX elements and attributes.
@@ -203,31 +231,47 @@ export namespace JSX {
 
   export interface HtmlTag {
     accesskey?: string | undefined;
+    anchor?: string | undefined;
+    autocapitalize?: AutoCapitalize | undefined;
+    autocorrect?: "off" | "on" | undefined;
+    autofocus?: boolean | undefined;
     class?: string | undefined;
-    contenteditable?: string | undefined;
-    dir?: string | undefined;
-    hidden?: string | boolean | undefined;
+    contenteditable?: ContentEditable | undefined;
+    dir?: Dir | undefined;
+    exportparts?: string | undefined;
+    hidden?: Hidden | undefined;
     inert?: string | boolean | undefined;
+    inputmode?: InputMode | undefined;
+    is?: string | undefined;
     popover?: "auto" | "hint" | "manual";
     popovertarget?: string | undefined;
-    popoveraction?: "close" | "open" | "toggle" | OpenString | undefined;
+    popovertargetaction?: PopoverTargetAction | undefined;
+    popoveraction?: PopoverTargetAction | undefined;
     id?: string | undefined;
     role?: string | undefined;
     lang?: string | undefined;
-    draggable?: string | boolean | undefined;
-    spellcheck?: string | boolean | undefined;
+    draggable?: Draggable | undefined;
+    nonce?: string | undefined;
+    part?: string | undefined;
+    slot?: string | undefined;
+    spellcheck?: Spellcheck | undefined;
     style?: string | undefined;
-    tabindex?: string | undefined;
+    tabindex?: number | `${number}` | undefined;
     title?: string | undefined;
-    translate?: string | boolean | undefined;
+    translate?: Translate | undefined;
+    enterkeyhint?: EnterKeyHint | undefined;
+    virtualkeyboardpolicy?: VirtualKeyboardPolicy | undefined;
+    writingsuggestions?: WritingSuggestions | undefined;
     children?: HtmlNode;
     dangerouslySetInnerHTML?: { __html: string } | undefined;
+    [dataAttr: `data-${string}`]: string | number | boolean | undefined;
   }
   export interface HtmlAnchorTag extends HtmlTag {
     href?: string | undefined;
     target?: string | undefined;
     download?: string | undefined;
     ping?: string | undefined;
+    referrerpolicy?: ReferrerPolicy | undefined;
     rel?: string | undefined;
     media?: string | undefined;
     hreflang?: string | undefined;
@@ -240,6 +284,7 @@ export namespace JSX {
     href?: string | undefined;
     target?: string | undefined;
     ping?: string | undefined;
+    referrerpolicy?: ReferrerPolicy | undefined;
     rel?: string | undefined;
     media?: string | undefined;
     hreflang?: string | undefined;
@@ -261,10 +306,10 @@ export namespace JSX {
   }
   export interface HtmlBodyTag extends HtmlTag {}
   export interface HtmlButtonTag extends HtmlTag {
-    action?: string | undefined;
-    autofocus?: string | undefined;
+    autofocus?: boolean | undefined;
+    formaction?: string | undefined;
     disabled?: boolean | undefined;
-    enctype?: string | undefined;
+    formenctype?: string | undefined;
     commandfor?: string | undefined;
     command?:
       | "toggle-popover"
@@ -272,14 +317,17 @@ export namespace JSX {
       | "hide-popover"
       | "show-modal"
       | "close"
-      | OpenString
+      | "request-close"
+      | CustomCommand
       | undefined;
     form?: string | undefined;
-    method?: string | undefined;
+    formmethod?: string | undefined;
+    formnovalidate?: string | boolean | undefined;
+    formtarget?: string | undefined;
     name?: string | undefined;
     novalidate?: string | boolean | undefined;
     target?: string | undefined;
-    type?: string | undefined;
+    type?: "button" | "reset" | "submit" | undefined;
     value?: string | undefined;
   }
   export interface HtmlDataListTag extends HtmlTag {}
@@ -319,6 +367,7 @@ export namespace JSX {
   }
 
   export interface HtmlDialogTag extends HtmlTag {
+    closedby?: "any" | "auto" | "closerequest" | "none" | undefined;
     open?: boolean | undefined;
   }
 
@@ -326,6 +375,10 @@ export namespace JSX {
     manifest?: string | undefined;
   }
   export interface HtmlIFrameTag extends HtmlTag {
+    allow?: string | undefined;
+    credentialless?: boolean | undefined;
+    csp?: string | undefined;
+    referrerpolicy?: ReferrerPolicy | undefined;
     src?: string | undefined;
     srcdoc?: string | undefined;
     name?: string | undefined;
@@ -337,6 +390,9 @@ export namespace JSX {
   }
   export interface HtmlImageTag extends HtmlTag {
     alt?: string | undefined;
+    decoding?: "async" | "auto" | "sync" | undefined;
+    fetchpriority?: FetchPriority | undefined;
+    referrerpolicy?: ReferrerPolicy | undefined;
     src?: string | undefined;
     srcset?: string | undefined;
     sizes?: string | undefined;
@@ -349,32 +405,36 @@ export namespace JSX {
   }
   export interface HtmlInputTag extends HtmlTag {
     accept?: string | undefined;
-    action?: string | undefined;
     alt?: string | undefined;
     autocomplete?: string | undefined;
-    autofocus?: string | undefined;
+    autofocus?: boolean | undefined;
     checked?: string | boolean | undefined;
     disabled?: string | boolean | undefined;
-    enctype?: string | undefined;
+    dirname?: string | undefined;
+    formaction?: string | undefined;
+    formenctype?: string | undefined;
     form?: string | undefined;
+    formmethod?: string | undefined;
+    formnovalidate?: boolean | undefined;
+    formtarget?: string | undefined;
     height?: string | undefined;
     list?: string | undefined;
     max?: string | undefined;
     minlength?: number | undefined;
     maxlength?: number | undefined;
-    method?: string | undefined;
     min?: string | undefined;
     multiple?: boolean | undefined;
     name?: string | undefined;
     novalidate?: boolean | boolean | undefined;
     pattern?: string | undefined;
     placeholder?: string | undefined;
+    popovertarget?: string | undefined;
+    popovertargetaction?: PopoverTargetAction | undefined;
     readonly?: boolean | undefined;
     required?: boolean | undefined;
     size?: string | undefined;
     src?: string | undefined;
     step?: string | undefined;
-    target?: string | undefined;
     type?: string | undefined;
     value?: string | undefined;
     width?: string | undefined;
@@ -384,7 +444,7 @@ export namespace JSX {
     datetime?: string | Date | undefined;
   }
   export interface KeygenTag extends HtmlTag {
-    autofocus?: string | undefined;
+    autofocus?: boolean | undefined;
     challenge?: string | undefined;
     disabled?: string | undefined;
     form?: string | undefined;
@@ -399,8 +459,14 @@ export namespace JSX {
     value?: string | number | undefined;
   }
   export interface HtmlLinkTag extends HtmlTag {
+    as?: string | undefined;
+    blocking?: "render" | undefined;
+    fetchpriority?: FetchPriority | undefined;
     href?: string | undefined;
     crossorigin?: string | undefined;
+    imagesizes?: string | undefined;
+    imagesrcset?: string | undefined;
+    referrerpolicy?: ReferrerPolicy | undefined;
     rel?: string | undefined;
     media?: string | undefined;
     hreflang?: string | undefined;
@@ -479,6 +545,8 @@ export namespace JSX {
     label?: string | undefined;
   }
   export interface HtmlScriptTag extends HtmlTag {
+    blocking?: "render" | undefined;
+    fetchpriority?: FetchPriority | undefined;
     src?: string | undefined;
     type?: string | undefined;
     nonce?: string | undefined;
@@ -487,13 +555,15 @@ export namespace JSX {
     defer?: boolean | undefined;
     crossorigin?: string | undefined;
     integrity?: string | undefined;
+    nomodule?: boolean | undefined;
+    referrerpolicy?: ReferrerPolicy | undefined;
     text?: string | undefined;
   }
   export interface HtmlDetailsTag extends HtmlTag {
     open?: boolean | undefined;
   }
   export interface HtmlSelectTag extends HtmlTag {
-    autofocus?: string | undefined;
+    autofocus?: boolean | undefined;
     disabled?: string | undefined;
     form?: string | undefined;
     multiple?: string | undefined;
@@ -507,6 +577,7 @@ export namespace JSX {
     media?: string | undefined;
   }
   export interface HtmlStyleTag extends HtmlTag {
+    blocking?: "render" | undefined;
     media?: string | undefined;
     type?: string | undefined;
     disabled?: string | undefined;
@@ -519,7 +590,7 @@ export namespace JSX {
     headers?: string | undefined;
   }
   export interface HtmlTextAreaTag extends HtmlTag {
-    autofocus?: string | undefined;
+    autofocus?: boolean | undefined;
     cols?: string | undefined;
     dirname?: string | undefined;
     disabled?: string | undefined;
