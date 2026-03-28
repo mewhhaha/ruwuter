@@ -125,6 +125,7 @@ export default function HomePage() {
 }
 
 // app/click.client.ts
+// `on(...)` here is the client-module DOM helper, not the removed JSX `on={...}` prop.
 import { on, type Ref } from "@mewhhaha/ruwuter/components";
 
 export default function click(
@@ -151,7 +152,9 @@ Scope mount and unmount handlers still receive `(this, event, signal)`. In the p
 `client.scope()` path, `this` is the scope bind object and `event.currentTarget` is the scope anchor
 element. Use refs on `this` for local state and DOM access.
 
-Use `client.scope()` as the primary interaction API. `on={...}` has been removed.
+Use `client.scope()` as the primary interaction API. The removed API is the JSX `on={...}` prop.
+The `on(refOrElement)` helper shown in client modules below is still supported for attaching DOM
+listeners after mount.
 
 ### 4. Generate the router and type helpers
 
@@ -279,6 +282,7 @@ anchor element.
 ```ts
 "use client";
 
+// `on(...)` here is the client-module DOM helper, not the removed JSX `on={...}` prop.
 import { on } from "@mewhhaha/ruwuter/components";
 
 export default function (ev: Event, signal: AbortSignal) {
@@ -340,6 +344,7 @@ export default function CommandPalette() {
 ```ts
 "use client";
 
+// `on(...)` here is the client-module DOM helper, not the removed JSX `on={...}` prop.
 import { on } from "@mewhhaha/ruwuter/components";
 
 export default function (_ev: Event, signal: AbortSignal) {
@@ -478,6 +483,7 @@ export default function Products({ loaderData: { helloUrl } }) {
 // app/routes/handlers/add-hello.client.ts
 "use client";
 
+// `on(...)` here is the client-module DOM helper, not the removed JSX `on={...}` prop.
 import { on, type Ref } from "@mewhhaha/ruwuter/components";
 
 export default function addHello(
@@ -692,7 +698,7 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 }
 ```
 
-### Removed `on={...}` API
+### Removed JSX `on={...}` API
 
 `on={...}` has been removed. Migrate element-bound handlers to `client.scope()`:
 
@@ -700,6 +706,9 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 - Register setup in `scope.mount(handlerHref)` and cleanup in `scope.unmount(handlerHref)`.
 - Attach DOM listeners inside the client module with `on(this.someRef).click(...)`.
 - Keep the server-rendered element tree as the source of truth; use refs for local client state.
+
+The `on(refOrElement)` helper is still part of the supported client-module API. Only the JSX prop
+transport was removed.
 
 ### Hydration Payload
 
@@ -719,6 +728,9 @@ element:
   }
 </script>
 ```
+
+The JSON `"on"` key here is an internal hydration field for mounted module entries. It is not the
+removed JSX `on={...}` prop.
 
 - Handlers: module entries `{ t: "m", s: "<href>", x: "default", ev }`.
 - Refs: `{ "__ref": true, i, v }` revive to `{ id, get(), set() }` and stay shared across payloads.

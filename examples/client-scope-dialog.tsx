@@ -6,6 +6,7 @@ export default function CommandPaletteExample() {
   const dialog = scope.ref("dialog", null as HTMLDialogElement | null);
   const button = scope.ref("button", null as HTMLButtonElement | null);
 
+
   scope.mount(openPaletteHref);
 
   return (
