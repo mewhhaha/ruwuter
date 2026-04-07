@@ -18,6 +18,14 @@ class FakeWatcher {
   }
 }
 
+class FakeWebSocket {
+  sent: Array<{ type: "full-reload" }> = [];
+
+  send(payload: { type: "full-reload" }) {
+    this.sent.push(payload);
+  }
+}
+
 const waitFor = async (
   predicate: () => boolean | Promise<boolean>,
   timeoutMs = 1_000,
@@ -63,7 +71,7 @@ describe("ruwuter vite plugin", () => {
     }
   });
 
-  it("regenerates when a watched route file changes", async () => {
+  it("regenerates and triggers a full reload when a watched route file changes", async () => {
     const app = await Deno.makeTempDir();
     const typesRoot = generatedTypesRoot(app);
     try {
@@ -73,6 +81,7 @@ describe("ruwuter vite plugin", () => {
       await Deno.writeTextFile(join(routesDir, "index.tsx"), "export default 1;");
 
       const watcher = new FakeWatcher();
+      const ws = new FakeWebSocket();
       const plugin = ruwuter({ appFolder: app });
 
       plugin.configureServer?.({
@@ -84,6 +93,7 @@ describe("ruwuter vite plugin", () => {
             },
           },
         },
+        ws,
       });
 
       await plugin.buildStart?.();
@@ -94,6 +104,8 @@ describe("ruwuter vite plugin", () => {
         const contents = await Deno.readTextFile(join(app, "routes.ts"));
         return contents.includes('import * as $about from "./routes/about.tsx";');
       });
+
+      await waitFor(() => ws.sent.some((payload) => payload.type === "full-reload"));
     } finally {
       await Deno.remove(app, { recursive: true });
       await Deno.remove(typesRoot, { recursive: true }).catch(() => {});

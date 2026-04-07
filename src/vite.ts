@@ -11,11 +11,16 @@ type ViteLogger = {
   error(message: string, options?: { error?: Error }): void;
 };
 
+type ViteWebSocket = {
+  send(payload: { type: "full-reload" }): void;
+};
+
 type ViteDevServer = {
   watcher: ViteWatcher;
   config?: {
     logger?: ViteLogger;
   };
+  ws?: ViteWebSocket;
 };
 
 export interface RuwuterPluginOptions {
@@ -72,13 +77,17 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
         const resolvedFile = path.resolve(file);
         if (!isWithinFolder(routesFolder, resolvedFile)) return;
 
-        void scheduleRegenerate().catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          server.config?.logger?.error(
-            `[vite-plugin-ruwuter] Failed to regenerate routes for ${appFolder}: ${message}`,
-            error instanceof Error ? { error } : undefined,
-          );
-        });
+        void scheduleRegenerate()
+          .then(() => {
+            server.ws?.send({ type: "full-reload" });
+          })
+          .catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            server.config?.logger?.error(
+              `[vite-plugin-ruwuter] Failed to regenerate routes for ${appFolder}: ${message}`,
+              error instanceof Error ? { error } : undefined,
+            );
+          });
       });
     },
 
