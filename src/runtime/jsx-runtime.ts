@@ -23,8 +23,8 @@
 import { type Html, into, isHtml } from "./node.ts";
 import { withComponentFrame } from "./hooks.ts";
 import {
-  peekAutoClientScope,
   isClientScopeState,
+  peekAutoClientScope,
   type Ref as ClientRef,
 } from "../components/client.ts";
 import {
@@ -211,7 +211,7 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
 
     if (key === "on") {
       throw new TypeError(
-        '[ruwuter] The on prop has been removed. Use client.scope() with scope.mount()/scope.unmount() instead.',
+        "[ruwuter] The on prop has been removed. Use client.scope(bind) with scope.mount()/scope.unmount() instead.",
       );
     }
 
@@ -231,7 +231,7 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
       continue;
     }
 
-    // Legacy inline onX handlers are unsupported; use client.scope() instead
+    // Legacy inline onX handlers are unsupported; use client.scope(bind) instead
 
     // Handle dangerouslySetInnerHTML
     if (
@@ -275,8 +275,7 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
     : peekAutoClientScope(!AUTO_SCOPE_SKIP_TAGS.has(tag));
 
   const attachClientScope = (
-    scope:
-      | { bind: Record<string, unknown>; entries: ModuleEntry[]; anchored?: boolean },
+    scope: { bind: Record<string, unknown>; entries: ModuleEntry[]; anchored?: boolean },
   ) => {
     const hydration = ensureHydration();
     hydration.bind = mergeHydrationBind(hydration.bind, scope.bind);

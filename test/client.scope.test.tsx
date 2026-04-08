@@ -1,6 +1,6 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
-import { Client, client } from "../src/components/client.ts";
+import { Client, client, ref } from "../src/components/client.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 
 describe("client.scope", () => {
@@ -13,8 +13,8 @@ describe("client.scope", () => {
         id: "root",
         mod: {
           default: () => {
-            const scopeState = client.scope();
-            const input = scopeState.ref("input", null as HTMLInputElement | null);
+            const input = ref(null as HTMLInputElement | null);
+            const scopeState = client.scope({ input });
             scopeState.mount(mountHref);
             return (
               <html>
@@ -51,7 +51,7 @@ describe("client.scope", () => {
         id: "root",
         mod: {
           default: () => {
-            const scopeState = client.scope();
+            const scopeState = client.scope({});
             scopeState.mount(mountHref);
             return (
               <html>
@@ -90,7 +90,7 @@ describe("client.scope", () => {
         id: "root",
         mod: {
           default: () => {
-            const scopeState = client.scope();
+            const scopeState = client.scope({});
             scopeState.mount(mountBinding);
             scopeState.unmount(unmountBinding);
             return (
@@ -115,5 +115,42 @@ describe("client.scope", () => {
     expect(html).toContain('"ev":"unmount"');
     expect(html).toContain(mountHref);
     expect(html).toContain(unmountHref);
+  });
+
+  it("accepts initial bind values through client.scope(bind)", async () => {
+    const mountHref = `data:text/javascript,${encodeURIComponent("export default function(){}")}`;
+
+    const pattern = new URLPattern({ pathname: "/" });
+    const fragments: fragment[] = [
+      {
+        id: "root",
+        mod: {
+          default: () => {
+            const input = ref(null as HTMLInputElement | null);
+            const scopeState = client.scope({ input });
+            scopeState.mount(mountHref);
+            return (
+              <html>
+                <body>
+                  <section>
+                    <input ref={input} />
+                  </section>
+                  <Client />
+                </body>
+              </html>
+            );
+          },
+        },
+      },
+    ];
+
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
+    const html = await res.text();
+
+    expect(html).toContain('"input"');
+    expect(html).toContain('"ev":"mount"');
+    expect(html).toContain('data-hydrate="h_');
   });
 });

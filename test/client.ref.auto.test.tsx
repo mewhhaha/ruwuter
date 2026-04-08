@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
-import { Client, client } from "../src/components/client.ts";
+import { Client, client, ref } from "../src/components/client.ts";
 
 describe("Ref sharing", () => {
   it("hydrates scope-bound refs in the payload", async () => {
@@ -13,8 +13,8 @@ describe("Ref sharing", () => {
         id: "root",
         mod: {
           default: () => {
-            const scope = client.scope();
-            const count = scope.ref("count", 7);
+            const count = ref(7);
+            const scope = client.scope({ count });
             scope.mount(noopHref);
             return (
               <html>
@@ -53,8 +53,8 @@ describe("Ref sharing", () => {
         id: "root",
         mod: {
           default: () => {
-            const scope = client.scope();
-            const label = scope.ref("label", "initial");
+            const label = ref("initial");
+            const scope = client.scope({ label });
             scope.mount(noopHref);
             return (
               <html>

@@ -94,13 +94,13 @@ app/
 
 ```tsx
 // app/_index.tsx
-import { Client, client, SuspenseProvider, type Ref } from "@mewhhaha/ruwuter/components";
+import { Client, client, type Ref, ref, SuspenseProvider } from "@mewhhaha/ruwuter/components";
 import clickHref from "./click.client.ts?url&no-inline";
 import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
 
 export default function HomePage() {
-  const scope = client.scope();
-  const button = scope.ref("button", null as HTMLButtonElement | null);
+  const button = ref(null as HTMLButtonElement | null);
+  const scope = client.scope({ button });
   scope.mount(clickHref);
   return (
     <html>
@@ -149,10 +149,10 @@ unwinds. That can make the first click see `event.currentTarget === null` even t
 clicks behave.
 
 Scope mount and unmount handlers still receive `(this, event, signal)`. In the promoted
-`client.scope()` path, `this` is the scope bind object and `event.currentTarget` is the scope anchor
-element. Use refs on `this` for local state and DOM access.
+`client.scope(bind)` path, `this` is the scope bind object and `event.currentTarget` is the scope
+anchor element. Use refs on `this` for local state and DOM access.
 
-Use `client.scope()` as the primary interaction API. The removed API is the JSX `on={...}` prop.
+Use `client.scope(bind)` as the primary interaction API. The removed API is the JSX `on={...}` prop.
 The `on(refOrElement)` helper shown in client modules below is still supported for attaching DOM
 listeners after mount.
 
@@ -193,7 +193,7 @@ markup:
 ```html
 <button>Focus me later</button>
 <script type="application/json" data-hydrate="h_7">
-  { "ref": { "__ref": true, "i": "r_0nlm88cjmni", "v": null } }
+{ "ref": { "__ref": true, "i": "r_0nlm88cjmni", "v": null } }
 </script>
 ```
 
@@ -207,11 +207,11 @@ Refs can be rendered as children too. Whenever a `Ref` is used as child content,
 auto-binding marker span, and the client keeps that text node in sync when you call `ref.set(...)`.
 
 ```tsx
-import { Client, client } from "@mewhhaha/ruwuter/components";
+import { Client, client, ref } from "@mewhhaha/ruwuter/components";
 
 export default function Page() {
-  const scope = client.scope();
-  const msg = scope.ref("msg", "ready");
+  const msg = ref("ready");
+  const scope = client.scope({ msg });
   scope.mount("./noop.client.ts?url");
 
   return (
@@ -232,9 +232,7 @@ same `ref.set(...)` signal.
 const label = ref("idle");
 const state = ref("ready");
 
-return (
-  <div data-state={state} aria-label={label}>...</div>
-);
+return <div data-state={state} aria-label={label}>...</div>;
 ```
 
 The runtime uses reserved marker attributes for these bindings:
@@ -246,18 +244,18 @@ Treat these as internal and avoid using them as application attributes.
 
 ### Component-scoped client behavior
 
-For component-local browser behavior, use `client.scope()` to register named refs plus mount and
-unmount client modules for that rendered instance.
+For component-local browser behavior, use `client.scope(bind)` to register mount and unmount client
+modules for that rendered instance. Create refs with `ref(...)` and pass them in the bind object.
 
 ```tsx
-import { Client, client } from "@mewhhaha/ruwuter/components";
+import { Client, client, ref } from "@mewhhaha/ruwuter/components";
 import focusScopeHref from "./focus-scope.ts?url";
 import cleanupScopeHref from "./cleanup-scope.ts?url";
 
 export default function Page() {
-  const scope = client.scope();
-  const input = scope.ref("input", null as HTMLInputElement | null);
-  const button = scope.ref("button", null as HTMLButtonElement | null);
+  const input = ref(null as HTMLInputElement | null);
+  const button = ref(null as HTMLButtonElement | null);
+  const scope = client.scope({ input, button });
 
   scope.mount(focusScopeHref);
   scope.unmount(cleanupScopeHref);
@@ -276,8 +274,8 @@ export default function Page() {
 }
 ```
 
-Inside the client module, `this` is the scope bind object and `ev.currentTarget` is the scope
-anchor element.
+Inside the client module, `this` is the scope bind object and `ev.currentTarget` is the scope anchor
+element.
 
 ```ts
 "use client";
@@ -306,17 +304,17 @@ Notes:
 
 ### Native modal and popover patterns
 
-`client.scope()` works well with native primitives where the browser handles most interaction
+`client.scope(bind)` works well with native primitives where the browser handles most interaction
 mechanics and the scope only adds small polish.
 
 ```tsx
-import { Client, client } from "@mewhhaha/ruwuter/components";
+import { Client, client, ref } from "@mewhhaha/ruwuter/components";
 import openPalette from "./open-palette.ts?url";
 
 export default function CommandPalette() {
-  const scope = client.scope();
-  const dialog = scope.ref("dialog", null as HTMLDialogElement | null);
-  const button = scope.ref("button", null as HTMLButtonElement | null);
+  const dialog = ref(null as HTMLDialogElement | null);
+  const button = ref(null as HTMLButtonElement | null);
+  const scope = client.scope({ dialog, button });
 
   scope.mount(openPalette);
 
@@ -360,7 +358,7 @@ out of the server-rendered HTML.
 
 The same pair lives under [`examples/client-scope-dialog.tsx`](./examples/client-scope-dialog.tsx)
 and [`examples/open-palette.client.ts`](./examples/open-palette.client.ts), which can serve as the
-reference shape for `client.scope()` plus native dialog/palette flows.
+reference shape for `client.scope(bind)` plus native dialog/palette flows.
 
 The generator returns the route table and declaration artifacts so you can decide where to write
 them.
@@ -467,9 +465,9 @@ export async function loader({ request }) {
 }
 
 export default function Products({ loaderData: { helloUrl } }) {
-  const scope = client.scope();
-  const button = scope.ref("button", null as HTMLButtonElement | null);
-  const helloUrlRef = scope.ref("helloUrl", helloUrl);
+  const button = ref(null as HTMLButtonElement | null);
+  const helloUrlRef = ref(helloUrl);
+  const scope = client.scope({ button, helloUrl: helloUrlRef });
   scope.mount(addHelloHref);
 
   return (
@@ -642,7 +640,8 @@ Mix your routing friendship bracelets however you like.
   - `SuspenseProvider` appends a single `<Resolve />` after its children; do not add another one.
   - Include the resolve runtime module yourself (e.g. a `<script type="module">` that imports
     `@mewhhaha/ruwuter/resolve.js`).
-- Use `client.scope()` as the only supported client interaction API for component-local behavior.
+- Use `client.scope(bind)` as the only supported client interaction API for component-local
+  behavior.
 - Stick to HTML-native attribute values; dynamic state flows through refs plus mounted client
   handlers rather than function-valued props.
 
@@ -700,9 +699,9 @@ export function HtmlShell({ children }: { children: JSX.Element }) {
 
 ### Removed JSX `on={...}` API
 
-`on={...}` has been removed. Migrate element-bound handlers to `client.scope()`:
+`on={...}` has been removed. Migrate element-bound handlers to `client.scope(bind)`:
 
-- Move shared values into `scope.ref("name", initial)`.
+- Create shared values with `ref(initial)` and pass them into `client.scope({ ... })`.
 - Register setup in `scope.mount(handlerHref)` and cleanup in `scope.unmount(handlerHref)`.
 - Attach DOM listeners inside the client module with `on(this.someRef).click(...)`.
 - Keep the server-rendered element tree as the source of truth; use refs for local client state.
@@ -718,14 +717,14 @@ element:
 ```html
 <button>+1</button>
 <script type="application/json" data-hydrate="h_0">
-  {
-    "v": 1,
-    "bind": { "count": { "__ref": true, "i": "r1", "v": 0 } },
-    "ref": { "__ref": true, "i": "btn", "v": null },
-    "on": [
-      { "t": "m", "s": "./click.js", "x": "default", "ev": "click" }
-    ]
-  }
+{
+  "v": 1,
+  "bind": { "count": { "__ref": true, "i": "r1", "v": 0 } },
+  "ref": { "__ref": true, "i": "btn", "v": null },
+  "on": [
+    { "t": "m", "s": "./click.js", "x": "default", "ev": "click" }
+  ]
+}
 </script>
 ```
 

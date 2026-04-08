@@ -4,7 +4,7 @@
  * Client‑side interaction helpers and shared refs for Ruwuter.
  * Provides:
  * - `ref(initial)` to create small shared refs across hydration boundaries
- * - `client.scope()` to register component-scoped client behavior
+ * - `client.scope(bind)` to register component-scoped client behavior
  * - `on(ref)` to attach typed DOM listeners inside client scopes
  * - `Client` to inject the small browser runtime as a module script
  * - `Handler` type used by the client events helpers
@@ -83,7 +83,10 @@ type OnRegistry<Target extends EventTarget> =
   }
   & Record<
     string,
-    (listener: (ev: TargetedRuntimeEvent<Event, Target>) => unknown, options?: ListenerOptions) => () => void
+    (
+      listener: (ev: TargetedRuntimeEvent<Event, Target>) => unknown,
+      options?: ListenerOptions,
+    ) => () => void
   >;
 
 function normalizeHandlerReference<Fn = Handler>(
@@ -107,9 +110,11 @@ function getClientScopeFrameState(): ClientScopeFrameState {
   return useFrameMeta(CLIENT_SCOPE_FRAME_KEY, () => ({}));
 }
 
-function createScopeState(): ClientScopeState<Record<string, unknown>> {
+function createScopeState<Bind extends Record<string, unknown>>(
+  bind: Bind,
+): ClientScopeState<Bind> {
   return {
-    bind: {},
+    bind: { ...bind },
     entries: [],
     anchored: false,
     explicit: false,
@@ -178,9 +183,6 @@ export function ref<T>(initial: T): Ref<T> {
 }
 
 export type ClientScope<Bind extends Record<string, unknown> = Record<string, unknown>> = {
-  ref<Name extends string, T>(name: Name, initial: T): Ref<T> & {
-    readonly __scopeName?: Name;
-  };
   mount(
     href: HandlerReference<Handler<Bind, Event, unknown | Promise<unknown>>>,
   ): void;
@@ -193,7 +195,7 @@ export type ClientScope<Bind extends Record<string, unknown> = Record<string, un
 function registerScopeState(state: ClientScopeState<Record<string, unknown>>): void {
   const frame = getClientScopeFrameState();
   if (frame.scope && frame.scope !== state) {
-    throw new Error("Only one client.scope() may be registered per component frame.");
+    throw new Error("Only one client.scope(bind) may be registered per component frame.");
   }
   frame.scope = state;
 }
@@ -222,17 +224,15 @@ export function peekAutoClientScope(
   return scope;
 }
 
-export function scope<Bind extends Record<string, unknown> = Record<string, unknown>>(): ClientScope<Bind> {
+export function scope<Bind extends Record<string, unknown>>(bind: Bind): ClientScope<Bind>;
+export function scope<Bind extends Record<string, unknown>>(
+  bind: Bind,
+): ClientScope<Bind> {
   return useHook(() => {
-    const state = createScopeState();
-    registerScopeState(state);
+    const state = createScopeState(bind);
+    registerScopeState(state as ClientScopeState<Record<string, unknown>>);
 
     return {
-      ref<Name extends string, T>(name: Name, initial: T) {
-        const value = ref(initial) as Ref<T> & { readonly __scopeName?: Name };
-        (state.bind as Record<string, unknown>)[name] = value;
-        return value;
-      },
       mount(href) {
         const normalized = normalizeHandlerReference("scope.mount()", href);
         state.entries.push({ t: "m", s: normalized, ev: "mount" });
