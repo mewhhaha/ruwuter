@@ -1,6 +1,6 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
-import { Client, client, ref } from "../src/components/client.ts";
+import { client, ref } from "../src/components/client.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 
 describe("client.scope", () => {
@@ -22,7 +22,7 @@ describe("client.scope", () => {
                   <section>
                     <input ref={input} />
                   </section>
-                  <Client />
+                  <script type="module" src="@mewhhaha/ruwuter/client.js"></script>
                 </body>
               </html>
             );
@@ -60,7 +60,7 @@ describe("client.scope", () => {
                   <section {...scopeState.props()}>
                     content
                   </section>
-                  <Client />
+                  <script type="module" src="@mewhhaha/ruwuter/client.js"></script>
                 </body>
               </html>
             );
@@ -97,7 +97,7 @@ describe("client.scope", () => {
               <html>
                 <body>
                   <section>content</section>
-                  <Client />
+                  <script type="module" src="@mewhhaha/ruwuter/client.js"></script>
                 </body>
               </html>
             );
@@ -135,7 +135,7 @@ describe("client.scope", () => {
                   <section>
                     <input ref={input} />
                   </section>
-                  <Client />
+                  <script type="module" src="@mewhhaha/ruwuter/client.js"></script>
                 </body>
               </html>
             );

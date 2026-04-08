@@ -2,7 +2,7 @@
  * @module
  *
  * Public component entrypoint for @mewhhaha/ruwuter.
- * Re-exports the client helpers (Client, ref), context utilities,
+ * Re-exports the client helpers (client, ref, on), context utilities,
  * and Suspense components (Suspense, Resolve, SuspenseProvider).
  */
 

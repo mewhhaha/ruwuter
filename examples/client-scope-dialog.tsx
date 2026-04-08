@@ -1,4 +1,4 @@
-import { Client, client, ref } from "@mewhhaha/ruwuter/components";
+import { client, ref } from "@mewhhaha/ruwuter/components";
 const openPaletteHref = "./open-palette.client.ts?url";
 
 export default function CommandPaletteExample() {
@@ -22,7 +22,7 @@ export default function CommandPaletteExample() {
             </form>
           </dialog>
         </section>
-        <Client />
+        <script type="module" src="@mewhhaha/ruwuter/client.js"></script>
       </body>
     </html>
   );

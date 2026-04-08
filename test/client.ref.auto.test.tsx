@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
-import { Client, client, ref } from "../src/components/client.ts";
+import { client, ref } from "../src/components/client.ts";
 
 describe("Ref sharing", () => {
   it("hydrates scope-bound refs in the payload", async () => {
@@ -22,7 +22,7 @@ describe("Ref sharing", () => {
                   <section>
                     <button id="btn" type="button">{count}</button>
                   </section>
-                  <Client />
+                  <script type="module" src="@mewhhaha/ruwuter/client.js"></script>
                 </body>
               </html>
             );
@@ -62,7 +62,7 @@ describe("Ref sharing", () => {
                   <section>
                     <div id="label">{label}</div>
                   </section>
-                  <Client />
+                  <script type="module" src="@mewhhaha/ruwuter/client.js"></script>
                 </body>
               </html>
             );

@@ -94,8 +94,9 @@ app/
 
 ```tsx
 // app/_index.tsx
-import { Client, client, type Ref, ref, SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import { client, type Ref, ref, SuspenseProvider } from "@mewhhaha/ruwuter/components";
 import clickHref from "./click.client.ts?url&no-inline";
+import clientRuntimeUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
 import resolveUrl from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
 
 export default function HomePage() {
@@ -106,7 +107,7 @@ export default function HomePage() {
     <html>
       <head>
         <title>Welcome to @mewhhaha/ruwuter</title>
-        <Client />
+        <script type="module" src={clientRuntimeUrl}></script>
         <script type="module" src={resolveUrl}></script>
       </head>
       <body>
@@ -167,7 +168,8 @@ All intrinsic JSX elements now accept a `ref` prop that points at a `Ref<HTMLEle
 element:
 
 ```tsx
-import { Client, ref } from "@mewhhaha/ruwuter/components";
+import { ref } from "@mewhhaha/ruwuter/components";
+import clientRuntimeUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
 
 const buttonRef = ref<HTMLButtonElement | null>(null);
 
@@ -176,7 +178,7 @@ export default function Page() {
     <html>
       <body>
         <button ref={buttonRef}>Focus me later</button>
-        <Client />
+        <script type="module" src={clientRuntimeUrl}></script>
       </body>
     </html>
   );
@@ -207,7 +209,8 @@ Refs can be rendered as children too. Whenever a `Ref` is used as child content,
 auto-binding marker span, and the client keeps that text node in sync when you call `ref.set(...)`.
 
 ```tsx
-import { Client, client, ref } from "@mewhhaha/ruwuter/components";
+import { client, ref } from "@mewhhaha/ruwuter/components";
+import clientRuntimeUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
 
 export default function Page() {
   const msg = ref("ready");
@@ -218,7 +221,7 @@ export default function Page() {
     <html>
       <body>
         <section>{msg}</section>
-        <Client />
+        <script type="module" src={clientRuntimeUrl}></script>
       </body>
     </html>
   );
@@ -248,7 +251,8 @@ For component-local browser behavior, use `client.scope(bind)` to register mount
 modules for that rendered instance. Create refs with `ref(...)` and pass them in the bind object.
 
 ```tsx
-import { Client, client, ref } from "@mewhhaha/ruwuter/components";
+import { client, ref } from "@mewhhaha/ruwuter/components";
+import clientRuntimeUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
 import focusScopeHref from "./focus-scope.ts?url";
 import cleanupScopeHref from "./cleanup-scope.ts?url";
 
@@ -267,7 +271,7 @@ export default function Page() {
           <input ref={input} />
           <button type="button" ref={button}>Focus</button>
         </section>
-        <Client />
+        <script type="module" src={clientRuntimeUrl}></script>
       </body>
     </html>
   );
@@ -308,7 +312,8 @@ Notes:
 mechanics and the scope only adds small polish.
 
 ```tsx
-import { Client, client, ref } from "@mewhhaha/ruwuter/components";
+import { client, ref } from "@mewhhaha/ruwuter/components";
+import clientRuntimeUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
 import openPalette from "./open-palette.ts?url";
 
 export default function CommandPalette() {
@@ -332,7 +337,7 @@ export default function CommandPalette() {
             </form>
           </dialog>
         </section>
-        <Client />
+        <script type="module" src={clientRuntimeUrl}></script>
       </body>
     </html>
   );
@@ -651,15 +656,16 @@ Mix your routing friendship bracelets however you like.
 - Keep server work on the server: let loaders/actions handle data, and ship tiny sidecar
   `*.client.ts` handlers for UI polish.
 - Keep client handlers small and self-contained; import their URLs with `?url`/`?url&no-inline`.
-- For strict CSP, use `<Client nonce={cspNonce} />`.
+- For strict CSP, add your own
+  `<script type="module" nonce={cspNonce} src={clientRuntimeUrl}></script>`.
 
 ### Shipping the Client Runtime
 
-Include the runtime so client handlers hydrate in the browser. The convenience components exported
-from `@mewhhaha/ruwuter/components` will emit the correct module scripts for you:
+Include the runtime so client handlers hydrate in the browser by adding the module script yourself:
 
 ```tsx
-import { Client, SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import { SuspenseProvider } from "@mewhhaha/ruwuter/components";
+import clientRuntimeUrl from "@mewhhaha/ruwuter/client.js?url&no-inline";
 
 export default function Document({ children }: { children: JSX.Element }) {
   return (
@@ -668,7 +674,7 @@ export default function Document({ children }: { children: JSX.Element }) {
         <body>
           {children}
           <script type="module" src="@mewhhaha/ruwuter/resolve.js"></script>
-          <Client />
+          <script type="module" src={clientRuntimeUrl}></script>
         </body>
       </html>
     </SuspenseProvider>

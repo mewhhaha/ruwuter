@@ -6,14 +6,11 @@
  * - `ref(initial)` to create small shared refs across hydration boundaries
  * - `client.scope(bind)` to register component-scoped client behavior
  * - `on(ref)` to attach typed DOM listeners inside client scopes
- * - `Client` to inject the small browser runtime as a module script
  * - `Handler` type used by the client events helpers
  */
 
-import { type Html, into } from "../runtime/node.ts";
 import type { ModuleEntry } from "../runtime/event-wire.ts";
 import { useFrameMeta, useHook } from "../runtime/hooks.ts";
-const CLIENT_RUNTIME_MODULE = "@mewhhaha/ruwuter/client";
 const CLIENT_SCOPE_PROP = "__clientScope";
 const CLIENT_SCOPE_FRAME_KEY = Symbol.for("ruwuter.client.scope.frame");
 
@@ -252,11 +249,3 @@ export function scope<Bind extends Record<string, unknown>>(
 export const client = {
   scope,
 } as const;
-
-/** Injects the client runtime as a module script into the page. */
-export const Client = ({ nonce }: { nonce?: string }): Html => {
-  const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
-  return into(
-    `<script type="module"${nonceAttr}>import "${CLIENT_RUNTIME_MODULE}";</script>`,
-  );
-};
