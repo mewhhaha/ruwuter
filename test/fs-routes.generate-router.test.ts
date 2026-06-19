@@ -1,8 +1,16 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { join } from "node:path";
 import { generateRouter } from "../src/fs-routes/generate-router.ts";
+import { bySpecificity } from "../src/fs-routes/sort.ts";
 
 describe("generateRouter", () => {
+  it("sorts catch-all routes with an antisymmetric comparator", () => {
+    const forward = bySpecificity("files.$", "assets.$");
+    const reverse = bySpecificity("assets.$", "files.$");
+
+    expect(Math.sign(forward)).toBe(-Math.sign(reverse));
+  });
+
   it("includes entries for prefixed routes so layouts stay navigable", async () => {
     const app = await Deno.makeTempDir();
     try {
@@ -17,8 +25,8 @@ describe("generateRouter", () => {
       const { contents } = routerFile;
       const patternMatches = contents.match(/new URLPattern/g) ?? [];
       expect(patternMatches.length).toBe(2);
-      expect(contents).toContain('pathname: "/a/b/:__asset');
-      expect(contents).toContain('pathname: "/a/:__asset');
+      expect(contents).toContain('pathname: "/a/b"');
+      expect(contents).toContain('pathname: "/a"');
       expect(contents).toContain("[$document,$$a,$$a_b]");
       expect(contents).toContain("[$document,$$a]]");
     } finally {
@@ -40,8 +48,8 @@ describe("generateRouter", () => {
       const { contents } = routerFile;
       const patternMatches = contents.match(/new URLPattern/g) ?? [];
       expect(patternMatches.length).toBe(1);
-      expect(contents).toContain('pathname: "/b/:__asset');
-      expect(contents).not.toContain('pathname: "(/):__asset');
+      expect(contents).toContain('pathname: "/b"');
+      expect(contents).not.toContain('pathname: "/"');
       expect(contents).toContain("[$document,$$_app,$$_app_b]");
     } finally {
       await Deno.remove(app, { recursive: true });
@@ -62,8 +70,8 @@ describe("generateRouter", () => {
       const { contents } = routerFile;
       const patternMatches = contents.match(/new URLPattern/g) ?? [];
       expect(patternMatches.length).toBe(1);
-      expect(contents).toContain('pathname: "/b/:__asset');
-      expect(contents).not.toContain('pathname: "/c/:__asset');
+      expect(contents).toContain('pathname: "/b"');
+      expect(contents).not.toContain('pathname: "/c"');
       expect(contents).toContain("[$document,$$_a_b]");
       expect(contents).toContain('id: "_a.b._c"'); // remains available for children
     } finally {
@@ -78,7 +86,6 @@ describe("generateRouter", () => {
       await Deno.mkdir(routesDir, { recursive: true });
       const files = [
         "sitemap[.]xml.tsx",
-        "[sitemap.xml].tsx",
         "weird-url.[_index].tsx",
         "dolla-bills-[$].tsx",
         "[[so-weird]].tsx",
@@ -92,11 +99,11 @@ describe("generateRouter", () => {
       if (!routerFile) throw new Error("Router file not generated");
       const { contents } = routerFile;
 
-      expect(contents).toContain('pathname: "/sitemap.xml/:__asset');
-      expect(contents).toContain('pathname: "/weird-url/_index/:__asset');
-      expect(contents).toContain('pathname: "/dolla-bills-$/:__asset');
-      expect(contents).toContain('pathname: "/[so-weird]/:__asset');
-      expect(contents).toContain('pathname: "/reports/:id.pdf/:__asset');
+      expect(contents).toContain('pathname: "/sitemap.xml"');
+      expect(contents).toContain('pathname: "/weird-url/_index"');
+      expect(contents).toContain('pathname: "/dolla-bills-$"');
+      expect(contents).toContain('pathname: "/[so-weird]"');
+      expect(contents).toContain('pathname: "/reports/:id.pdf"');
       expect(contents).toContain('params: ["id"]');
     } finally {
       await Deno.remove(app, { recursive: true });
@@ -115,8 +122,8 @@ describe("generateRouter", () => {
       const { contents } = routerFile;
 
       expect(contents).toContain('import * as $api_users from "./routes/api.users.ts";');
-      expect(contents).not.toContain('./routes/api.users.ts/route.tsx');
-      expect(contents).toContain('pathname: "/api/users/:__asset');
+      expect(contents).not.toContain("./routes/api.users.ts/route.tsx");
+      expect(contents).toContain('pathname: "/api/users"');
     } finally {
       await Deno.remove(app, { recursive: true });
     }
@@ -145,7 +152,7 @@ describe("generateRouter", () => {
       );
 
       const pdfIndex = order.findIndex((value) => value.includes("/reports/:id.pdf"));
-      const paramIndex = order.findIndex((value) => value.includes("/reports/:id/:__asset"));
+      const paramIndex = order.findIndex((value) => value === "/reports/:id");
       const optionalLiteralIndex = order.findIndex((value) => value.includes("/reports/(foo)?"));
 
       expect(pdfIndex).toBeGreaterThanOrEqual(0);
@@ -153,6 +160,68 @@ describe("generateRouter", () => {
       expect(optionalLiteralIndex).toBeGreaterThanOrEqual(0);
       expect(pdfIndex).toBeLessThan(paramIndex);
       expect(optionalLiteralIndex).toBeLessThan(paramIndex);
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("rejects equivalent route patterns", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(routesDir, "sitemap[.]xml.tsx"), "export default 1;");
+      await Deno.writeTextFile(join(routesDir, "[sitemap.xml].tsx"), "export default 2;");
+
+      let error: unknown;
+      try {
+        await generateRouter(app);
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error instanceof Error).toBe(true);
+      expect((error as Error).message).toContain('Route pattern "/sitemap.xml"');
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("rejects route patterns that differ only by param name", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(routesDir, "users.$id.tsx"), "export default 1;");
+      await Deno.writeTextFile(join(routesDir, "users.$slug.tsx"), "export default 2;");
+
+      let error: unknown;
+      try {
+        await generateRouter(app);
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error instanceof Error).toBe(true);
+      expect((error as Error).message).toContain('Route pattern "/users/:');
+      expect((error as Error).message).toContain("users.$id");
+      expect((error as Error).message).toContain("users.$slug");
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("serializes route ids as JSON string literals", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(routesDir, 'quote["].tsx'), "export default 1;");
+
+      const [routerFile] = await generateRouter(app);
+
+      expect(routerFile.contents).toContain(`id: ${JSON.stringify('quote["]')}`);
+      expect(routerFile.contents).not.toContain('id: "quote""');
     } finally {
       await Deno.remove(app, { recursive: true });
     }

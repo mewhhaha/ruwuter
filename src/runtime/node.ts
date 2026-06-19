@@ -19,7 +19,7 @@ export type Html = {
   [N]: true;
   generator: AsyncGenerator<string>;
   toPromise: () => Promise<string>;
-  toReadableStream: () => ReadableStream<Uint8Array>;
+  toReadableStream: (options?: { signal?: AbortSignal }) => ReadableStream<Uint8Array>;
 };
 
 async function toPromise(this: Html): Promise<string> {
@@ -30,19 +30,43 @@ async function toPromise(this: Html): Promise<string> {
   return result;
 }
 
-function toReadableStream(this: Html): ReadableStream<Uint8Array> {
+function toReadableStream(
+  this: Html,
+  options: { signal?: AbortSignal } = {},
+): ReadableStream<Uint8Array> {
   const generator = this.generator;
+  let closed = false;
+
+  const closeGenerator = async () => {
+    if (closed) return;
+    closed = true;
+    await generator.return(undefined).catch(() => {});
+  };
 
   return new ReadableStream({
-    async start(controller) {
+    async pull(controller) {
       try {
-        for await (const chunk of generator) {
-          controller.enqueue(encoder.encode(chunk));
+        if (options.signal?.aborted) {
+          await closeGenerator();
+          options.signal.throwIfAborted?.();
+          throw new DOMException("The operation was aborted.", "AbortError");
         }
-        controller.close();
+
+        const next = await generator.next();
+        if (next.done) {
+          closed = true;
+          controller.close();
+          return;
+        }
+
+        controller.enqueue(encoder.encode(next.value));
       } catch (error) {
+        await closeGenerator();
         controller.error(error);
       }
+    },
+    async cancel() {
+      await closeGenerator();
     },
   });
 }

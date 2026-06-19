@@ -1,14 +1,17 @@
 // deno-lint-ignore-file no-namespace
 import type { Html } from "./node.ts";
-import type { Ref as ClientRef } from "../components/client.ts";
-type ElementForTag<Tag extends string> = Tag extends keyof HTMLElementTagNameMap
-  ? HTMLElementTagNameMap[Tag]
-  : Tag extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[Tag]
-  : Tag extends keyof MathMLElementTagNameMap ? MathMLElementTagNameMap[Tag]
-  : globalThis.Element;
+import type { ControllerRefToken } from "../components/client.ts";
+
+type ElementForTag<Name extends string> = Name extends keyof HTMLElementTagNameMap
+  ? HTMLElementTagNameMap[Name]
+  : Name extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[Name]
+  : Element;
 
 type WithRef<Name extends string, Props> = Props & {
-  ref?: ClientRef<ElementForTag<Name> | null> | undefined;
+  ref?:
+    | ControllerRefToken<string, ElementForTag<Name>>
+    | ControllerRefToken<string, Element>
+    | undefined;
 };
 
 type CustomCommand = `--${string}`;
@@ -135,94 +138,13 @@ export namespace JSX {
   }
 
   // Base HTML tag attributes + Ruwuter client additions
-  export interface HtmlTag extends AriaAttributes {
-    // Ruwuter client additions
-    __clientScope?: unknown;
-  }
-  export interface HtmlBodyTag {
-    onAfterprint?: undefined | string;
-    onBeforeprint?: undefined | string;
-    onBeforeonload?: undefined | string;
-    onBlur?: undefined | string;
-    onError?: undefined | string;
-    onFocus?: undefined | string;
-    onHaschange?: undefined | string;
-    onLoad?: undefined | string;
-    onMessage?: undefined | string;
-    onOffline?: undefined | string;
-    onOnline?: undefined | string;
-    onPagehide?: undefined | string;
-    onPageshow?: undefined | string;
-    onPopstate?: undefined | string;
-    onRedo?: undefined | string;
-    onResize?: undefined | string;
-    onStorage?: undefined | string;
-    onUndo?: undefined | string;
-    onUnload?: undefined | string;
-  }
-  export interface HtmlTag {
-    onContextmenu?: undefined | string;
-    onKeydown?: undefined | string;
-    onKeypress?: undefined | string;
-    onKeyup?: undefined | string;
-    onClick?: undefined | string;
-    onDblclick?: undefined | string;
-    onDrag?: undefined | string;
-    onDragend?: undefined | string;
-    onDragenter?: undefined | string;
-    onDragleave?: undefined | string;
-    onDragover?: undefined | string;
-    onDragstart?: undefined | string;
-    onDrop?: undefined | string;
-    onMousedown?: undefined | string;
-    onMousemove?: undefined | string;
-    onMouseout?: undefined | string;
-    onMouseover?: undefined | string;
-    onMouseup?: undefined | string;
-    onMousewheel?: undefined | string;
-    onScroll?: undefined | string;
-  }
-  export interface FormEvents {
-    onBlur?: undefined | string;
-    onChange?: undefined | string;
-    onFocus?: undefined | string;
-    onFormchange?: undefined | string;
-    onForminput?: undefined | string;
-    onInput?: undefined | string;
-    onInvalid?: undefined | string;
-    onSelect?: undefined | string;
-    onSubmit?: undefined | string;
-  }
-  export interface HtmlInputTag extends FormEvents {
-    onChange?: undefined | string;
-  }
+  export interface HtmlTag extends AriaAttributes {}
+  export interface HtmlBodyTag extends HtmlTag {}
+  export type FormEvents = Record<never, never>;
+  export interface HtmlInputTag extends FormEvents {}
   export interface HtmlFieldSetTag extends FormEvents {}
   export interface HtmlFormTag extends FormEvents {}
-  export interface MediaEvents {
-    onAbort?: undefined | string;
-    onCanplay?: undefined | string;
-    onCanplaythrough?: undefined | string;
-    onDurationchange?: undefined | string;
-    onEmptied?: undefined | string;
-    onEnded?: undefined | string;
-    onError?: undefined | string;
-    onLoadeddata?: undefined | string;
-    onLoadedmetadata?: undefined | string;
-    onLoadstart?: undefined | string;
-    onPause?: undefined | string;
-    onPlay?: undefined | string;
-    onPlaying?: undefined | string;
-    onProgress?: undefined | string;
-    onRatechange?: undefined | string;
-    onReadystatechange?: undefined | string;
-    onSeeked?: undefined | string;
-    onSeeking?: undefined | string;
-    onStalled?: undefined | string;
-    onSuspend?: undefined | string;
-    onTimeupdate?: undefined | string;
-    onVolumechange?: undefined | string;
-    onWaiting?: undefined | string;
-  }
+  export type MediaEvents = Record<never, never>;
   export interface HtmlAudioTag extends MediaEvents {}
   export interface HtmlEmbedTag extends MediaEvents {}
   export interface HtmlImageTag extends MediaEvents {}
@@ -662,8 +584,6 @@ export namespace JSX {
 
   export type HtmlNode =
     | Element
-    // deno-lint-ignore no-explicit-any
-    | ClientRef<any>
     | string
     | number
     | null

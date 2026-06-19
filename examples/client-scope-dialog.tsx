@@ -1,21 +1,19 @@
-import { client, ref } from "@mewhhaha/ruwuter/components";
-const openPaletteHref = "./open-palette.client.ts?url";
+import { controller, type ControllerHref } from "@mewhhaha/ruwuter/browser";
+import type { OpenPaletteController } from "./open-palette.client.ts";
+
+const openPaletteHref = "./open-palette.client.ts?url" as ControllerHref<OpenPaletteController>;
 
 export default function CommandPaletteExample() {
-  const dialog = ref(null as HTMLDialogElement | null);
-  const button = ref(null as HTMLButtonElement | null);
-  const scope = client.scope({ dialog, button });
-
-  scope.mount(openPaletteHref);
+  const palette = controller(openPaletteHref);
 
   return (
     <html>
       <body>
-        <section>
-          <button type="button" ref={button} commandfor="palette" command="show-modal">
+        <section {...palette.root()}>
+          <button type="button" ref={palette.refs.open} commandfor="palette" command="show-modal">
             Open palette
           </button>
-          <dialog id="palette" ref={dialog}>
+          <dialog id="palette" ref={palette.refs.dialog}>
             <form method="dialog">
               <input autofocus placeholder="Type a command" />
               <button type="submit" value="cancel">Close</button>

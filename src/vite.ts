@@ -29,18 +29,12 @@ export interface RuwuterPluginOptions {
    * @default "./app"
    */
   appFolder?: string;
-  /**
-   * Whether to rewrite import.meta.url references in generated chunks.
-   * @default true
-   */
-  rewriteImportMeta?: boolean;
 }
 
 type RuwuterPlugin = {
   name: string;
   buildStart?: () => Promise<void>;
   configureServer?: (server: ViteDevServer) => void;
-  renderChunk?: (code: string) => string | null;
 };
 
 const isWithinFolder = (folder: string, file: string): boolean => {
@@ -50,7 +44,6 @@ const isWithinFolder = (folder: string, file: string): boolean => {
 export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
   const appFolder = path.normalize(options.appFolder ?? "./app");
   const routesFolder = path.resolve(appFolder, "routes");
-  const rewriteImportMeta = options.rewriteImportMeta ?? true;
 
   let queuedWrite = Promise.resolve();
 
@@ -89,12 +82,6 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
             );
           });
       });
-    },
-
-    renderChunk(code) {
-      if (!rewriteImportMeta) return null;
-      if (!code.includes("import.meta.url")) return null;
-      return code.replaceAll(/\bimport\.meta\.url\b/g, '"file://"');
     },
   };
 };

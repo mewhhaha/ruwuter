@@ -113,7 +113,7 @@ describe("Thrown Response handling", () => {
     expect(await res.text()).toBe("Custom Throw");
   });
 
-  it("returns 404 when a component throws a Response", async () => {
+  it("rejects components that throw Response during rendering", async () => {
     const pattern = new URLPattern({ pathname: "/throw" });
     const fragments: fragment[] = [
       {
@@ -144,8 +144,14 @@ describe("Thrown Response handling", () => {
       ctx,
     );
 
-    expect(res.status).toBe(404);
-    const text = await res.text();
-    expect(text).toContain("Not Found");
+    expect(res.status).toBe(200);
+    let error: unknown;
+    try {
+      await res.text();
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error instanceof TypeError).toBe(true);
+    expect((error as Error).message).toContain("cannot throw Response");
   });
 });
