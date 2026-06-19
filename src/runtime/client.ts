@@ -81,9 +81,10 @@ function initializeActivationRuntime(): void {
       }
       current.cleanup = cleanup;
     } catch (error) {
+      const wasAborted = controller.signal.aborted;
       mounted.delete(root);
       controller.abort();
-      if (!controller.signal.aborted && !isAbortError(error)) {
+      if (!wasAborted && !isAbortError(error)) {
         console.error(error);
       }
     }

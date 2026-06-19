@@ -16,18 +16,10 @@ export type Controller<Props = unknown> = (
   context: ControllerContext<Props>,
 ) => ControllerCleanup | Promise<ControllerCleanup>;
 
-type ControllerModuleLike<Fn = Controller> = (string | URL) & {
-  readonly __ruwuterController?: Fn;
-};
-
-type TransformedControllerBinding<Fn = Controller> = Fn & {
-  readonly clientHref?: string | URL;
-  readonly href?: string | URL;
-};
-
 type ControllerReference<Fn = Controller> =
-  | ControllerModuleLike<Fn>
-  | TransformedControllerBinding<Fn>;
+  | string
+  | URL
+  | (string & { readonly __ruwuterController?: Fn });
 
 export type ControllerAttributes = {
   "data-rw-controller": string;
@@ -65,16 +57,6 @@ type OnRegistry<Target extends EventTarget> =
 function normalizeControllerReference<Fn = Controller>(
   href: ControllerReference<Fn>,
 ): string {
-  if (typeof href === "function") {
-    const transformed = (href as TransformedControllerBinding<Fn>).clientHref ??
-      (href as TransformedControllerBinding<Fn>).href;
-    if (typeof transformed === "string" || transformed instanceof URL) {
-      return transformed.toString();
-    }
-    throw new TypeError(
-      "controller() requires a module URL; received a function without clientHref. Use a transformed 'use client' binding or ?url import.",
-    );
-  }
   return (href as string | URL).toString();
 }
 

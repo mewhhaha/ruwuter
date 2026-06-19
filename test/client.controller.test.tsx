@@ -38,11 +38,11 @@ describe("controller activation attributes", () => {
     expect(html).not.toContain("data-rw-ref-text");
   });
 
-  it("accepts transformed client bindings with clientHref", () => {
+  it("accepts module URL objects", () => {
     const href = `data:text/javascript,${encodeURIComponent("export default function(){}")}`;
-    const binding = Object.assign(function paletteController() {}, { clientHref: href });
+    const moduleUrl = new URL(href);
 
-    const attrs = controller(binding, { value: 1 });
+    const attrs = controller(moduleUrl, { value: 1 });
 
     expect(attrs["data-rw-controller"]).toBe(href);
     expect(attrs["data-rw-props"] ?? "").toContain('"value":1');

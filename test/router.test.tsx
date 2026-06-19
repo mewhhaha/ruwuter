@@ -12,6 +12,7 @@ import {
 } from "../src/router.ts";
 import type { fragment } from "../src/router.ts";
 import { into } from "../src/runtime/node.ts";
+import type { InferHeadersFunction } from "../src/types.ts";
 
 type LayoutProps = { children?: RuwuterJSX.HtmlNode };
 
@@ -23,6 +24,33 @@ describe("Router HTML responses", () => {
     const stream = renderToStream(into("<p>Streamed</p>"));
     const rendered = await new Response(stream).text();
     expect(rendered).toBe("<p>Streamed</p>");
+  });
+
+  it("accepts sync string route renderers through route typing", async () => {
+    const fragments: fragment[] = [{
+      id: "text",
+      mod: {
+        default: () => "Rendered text",
+      },
+    }];
+    const router = Router([[new URLPattern({ pathname: "/text" }), fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(
+      new Request("https://example.com/text"),
+      {} as Env,
+      ctx,
+    );
+
+    expect(await res.text()).toContain("Rendered text");
+  });
+
+  it("types headers loaderData as the awaited loader result", () => {
+    const headers: InferHeadersFunction<
+      Record<never, never>,
+      { loader: () => Promise<{ value: string }> }
+    > = ({ loaderData }) => ({ "x-value": loaderData.value });
+
+    expect(typeof headers).toBe("function");
   });
 
   it("lets handlers return html() responses with status and headers", async () => {

@@ -167,6 +167,31 @@ describe("Activation runtime DOM behaviour", () => {
     }
   });
 
+  it("reports controller activation failures", async () => {
+    const href = `data:text/javascript,${
+      encodeURIComponent(
+        'export default function() { throw new Error("controller failed"); }',
+      )
+    }`;
+
+    const html = await render(href);
+    const { cleanup } = setupDomEnvironment(html);
+    const originalError = console.error;
+    const errors: unknown[] = [];
+    console.error = (...args: unknown[]) => {
+      errors.push(args[0]);
+    };
+    try {
+      await import(nextRuntimeUrl());
+
+      await waitFor(() => errors.length === 1, 1000);
+      expect((errors[0] as Error).message).toBe("controller failed");
+    } finally {
+      console.error = originalError;
+      cleanup();
+    }
+  });
+
   it("aborts the controller signal and runs returned cleanup on removal", async () => {
     const href = `data:text/javascript,${
       encodeURIComponent(

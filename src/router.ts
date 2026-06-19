@@ -55,10 +55,13 @@ export type action<Bindings = Env> = (
   params: RequestContext<Bindings>,
 ) => unknown | Promise<unknown>;
 
+export type Renderable = JSX.HtmlNode | Response;
+export type RenderResult = Renderable | Promise<Renderable>;
+
 export type renderer = (
   // deno-lint-ignore no-explicit-any
   props: any,
-) => JSX.Element | Promise<JSX.Element | string | Response> | Response;
+) => RenderResult;
 
 export type headers<Bindings = Env> = (
   params: RequestContext<Bindings> & {
@@ -71,7 +74,7 @@ export type headers<Bindings = Env> = (
 
 export type FragmentEndpoint<Bindings = Env> = (
   ctx: RequestContext<Bindings>,
-) => JSX.Element | Response | Promise<JSX.Element | Response>;
+) => RenderResult;
 
 export type mod<Bindings = Env> = {
   loader?: loader<Bindings>;

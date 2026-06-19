@@ -67,7 +67,7 @@ export type InferHeadersFunction<
     params: params;
     loaderData: module extends {
       loader: infer loader extends (...args: unknown[]) => unknown;
-    } ? ReturnType<loader>
+    } ? Awaited<ReturnType<loader>>
       : undefined;
   } & Omit<RequestContext<Env>, "params">,
 ) => Promise<Headers | HeadersLike> | Headers | HeadersLike;
