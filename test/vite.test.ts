@@ -1,4 +1,4 @@
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { generatedTypesRoot } from "../src/fs-routes/write.ts";
 import { ruwuter } from "../src/vite.ts";
@@ -39,6 +39,20 @@ const waitFor = async (
 };
 
 describe("ruwuter vite plugin", () => {
+  it("keeps generated type output roots inside .router/types", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const typesRoot = generatedTypesRoot(app);
+      const resolvedTypesRoot = resolve(typesRoot);
+      const allowedRoot = resolve(".router", "types");
+
+      expect(resolvedTypesRoot.startsWith(`${allowedRoot}/`)).toBe(true);
+      expect(typesRoot).not.toContain("..");
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
   it("generates routes and clears stale type outputs during buildStart", async () => {
     const app = await Deno.makeTempDir();
     const typesRoot = generatedTypesRoot(app);
@@ -112,12 +126,90 @@ describe("ruwuter vite plugin", () => {
     }
   });
 
-  it("rewrites import.meta.url only when enabled", () => {
-    const enabled = ruwuter();
-    const disabled = ruwuter({ rewriteImportMeta: false });
-    const code = "const here = import.meta.url;";
+  it("does not rewrite rendered chunks", () => {
+    const plugin = ruwuter();
 
-    expect(enabled.renderChunk?.(code)).toBe('const here = "file://";');
-    expect(disabled.renderChunk?.(code) ?? null).toBe(null);
+    expect("renderChunk" in plugin).toBe(false);
+  });
+
+  it("builds a production SSR entry without rewriting application import.meta.url", async () => {
+    const { build } = await import("vite");
+    const app = await Deno.makeTempDir();
+    const typesRoot = generatedTypesRoot(app);
+
+    try {
+      const routesDir = join(app, "routes");
+      const distDir = join(app, "dist");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(app, "asset.txt"), "asset");
+      await Deno.writeTextFile(
+        join(app, "document.tsx"),
+        `
+export default function Document({ children }: { children?: unknown }) {
+  return children;
+}
+`,
+      );
+      await Deno.writeTextFile(
+        join(routesDir, "index.ts"),
+        `
+export const loader = () => ({ ok: true });
+export default function Index() {
+  return "ok";
+}
+`,
+      );
+      await Deno.writeTextFile(
+        join(app, "entry.ts"),
+        `
+import { Router } from "@mewhhaha/ruwuter";
+import { routes } from "./routes.ts";
+
+export const assetHref = new URL("./asset.txt", import.meta.url).href;
+export const router = Router(routes);
+`,
+      );
+
+      await build({
+        root: app,
+        configFile: false,
+        logLevel: "silent",
+        plugins: [ruwuter({ appFolder: app })],
+        resolve: {
+          alias: [
+            {
+              find: "@mewhhaha/ruwuter/jsx-runtime",
+              replacement: resolve("src/runtime/jsx-runtime.ts"),
+            },
+            {
+              find: "@mewhhaha/ruwuter",
+              replacement: resolve("src/router.ts"),
+            },
+          ],
+        },
+        build: {
+          emptyOutDir: true,
+          minify: false,
+          outDir: distDir,
+          ssr: join(app, "entry.ts"),
+          target: "esnext",
+          rollupOptions: {
+            output: {
+              entryFileNames: "entry.js",
+            },
+          },
+        },
+      });
+
+      const generatedRoutes = await Deno.readTextFile(join(app, "routes.ts"));
+      expect(generatedRoutes).not.toContain("import.meta.url");
+
+      const bundledEntry = await Deno.readTextFile(join(distDir, "entry.js"));
+      expect(bundledEntry).toContain("import.meta.url");
+      expect(bundledEntry).not.toContain('"file://"');
+    } finally {
+      await Deno.remove(app, { recursive: true }).catch(() => {});
+      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+    }
   });
 });

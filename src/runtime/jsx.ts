@@ -1,15 +1,6 @@
 // deno-lint-ignore-file no-namespace
 import type { Html } from "./node.ts";
-import type { Ref as ClientRef } from "../components/client.ts";
-type ElementForTag<Tag extends string> = Tag extends keyof HTMLElementTagNameMap
-  ? HTMLElementTagNameMap[Tag]
-  : Tag extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[Tag]
-  : Tag extends keyof MathMLElementTagNameMap ? MathMLElementTagNameMap[Tag]
-  : globalThis.Element;
-
-type WithRef<Name extends string, Props> = Props & {
-  ref?: ClientRef<ElementForTag<Name> | null> | undefined;
-};
+type WithRef<_Name extends string, Props> = Props;
 
 type CustomCommand = `--${string}`;
 type AutoCapitalize =
@@ -135,10 +126,7 @@ export namespace JSX {
   }
 
   // Base HTML tag attributes + Ruwuter client additions
-  export interface HtmlTag extends AriaAttributes {
-    // Ruwuter client additions
-    __clientScope?: unknown;
-  }
+  export interface HtmlTag extends AriaAttributes {}
   export interface HtmlBodyTag {
     onAfterprint?: undefined | string;
     onBeforeprint?: undefined | string;
@@ -662,8 +650,6 @@ export namespace JSX {
 
   export type HtmlNode =
     | Element
-    // deno-lint-ignore no-explicit-any
-    | ClientRef<any>
     | string
     | number
     | null

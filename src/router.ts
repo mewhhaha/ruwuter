@@ -1,175 +1,135 @@
 /**
  * @module
  *
- * Core router module for Ruwuter - a TypeScript web router designed exclusively for Cloudflare Workers.
- *
- * @example
- * ```typescript
- * import { Router } from "@mewhhaha/ruwuter";
- *
- * const routes = [
- *   [new URLPattern({ pathname: "/" }), [{ id: "home", mod: { default: () => <h1>Home</h1> } }]],
- *   [new URLPattern({ pathname: "/about" }), [{ id: "about", mod: { default: () => <h1>About</h1> } }]],
- * ];
- *
- * const router = Router(routes);
- *
- * export default {
- *   fetch: (request, env, ctx) => router.handle(request, env, ctx),
- * };
- * ```
+ * Core server router for Ruwuter.
  */
 
 import type { JSX } from "./runtime/jsx.ts";
 import { type Html, into, isHtml } from "./runtime/node.ts";
-// SuspenseProvider must be applied by the consumer in their layout/document.
 import { bindContext, runWithContextStore } from "./components/context.ts";
 import { runWithHooksStore, withHookFrame } from "./runtime/hooks.ts";
 
 export type { Html } from "./runtime/node.ts";
 export type { JSX } from "./runtime/jsx.ts";
 
+const encoder = new TextEncoder();
+
 /**
- * Renders an Html value to a string.
- *
- * @param value - The Html value to render
- * @returns The rendered HTML string
+ * Renders an HTML value to a complete string.
  */
-export const render = (value: Html = into("")): string => {
-  return value.toString();
+export const renderToString = (value: unknown = ""): Promise<string> => {
+  return into(value).toPromise();
 };
 
 /**
- * Environment bindings interface. Extend this interface to add your Cloudflare Workers bindings.
+ * Renders an HTML value to a byte stream.
+ */
+export const renderToStream = (
+  value: unknown = "",
+  options: { signal?: AbortSignal } = {},
+): ReadableStream<Uint8Array> => {
+  return into(value).toReadableStream(options);
+};
+
+/**
+ * Environment bindings interface. Extend this interface to add Cloudflare Workers bindings.
  */
 // deno-lint-ignore no-empty-interface
 export interface Env {}
 
-/**
- * Context object passed to loaders, actions, and headers functions.
- */
-export interface ctx {
-  /** The incoming request */
+export interface RequestContext<Bindings = Env> {
   request: Request;
-  /** URL parameters extracted from the route pattern */
   params: Record<string, string>;
-  /** Cloudflare Workers context: [env, executionContext] */
-  context: [Env, ExecutionContext];
+  env: Bindings;
+  executionContext: ExecutionContext;
+  signal: AbortSignal;
 }
 
-/**
- * Loader function for GET requests. Fetches data that will be passed to the component.
- */
-// deno-lint-ignore no-explicit-any
-export type loader = (params: any) => any;
+export type ctx = RequestContext<Env>;
 
-/**
- * Action function for non-GET requests (POST, PUT, DELETE, etc.).
- */
-// deno-lint-ignore no-explicit-any
-export type action = (params: any) => any;
+export type loader<Bindings = Env> = (
+  params: RequestContext<Bindings>,
+) => unknown | Promise<unknown>;
 
-/**
- * Component renderer function that returns JSX.
- */
+export type action<Bindings = Env> = (
+  params: RequestContext<Bindings>,
+) => unknown | Promise<unknown>;
+
 export type renderer = (
   // deno-lint-ignore no-explicit-any
   props: any,
-) => JSX.Element | Promise<JSX.Element | string>;
+) => JSX.Element | Promise<JSX.Element | string | Response> | Response;
 
-/**
- * Headers function to set response headers based on request context and loader data.
- */
-export type headers = (
-  params: ctx & {
-    // deno-lint-ignore no-explicit-any
-    loaderData: any | never;
+export type headers<Bindings = Env> = (
+  params: RequestContext<Bindings> & {
+    loaderData: unknown;
   },
 ) =>
   | Promise<Record<string, string | undefined | null> | Headers>
   | Record<string, string | undefined | null>
   | Headers;
 
-/**
- * Route module that can export loader, action, default component, and headers.
- */
-export type mod = {
-  /** Data loader for GET requests */
-  loader?: loader;
-  /** Action handler for non-GET requests */
-  action?: action;
-  /** Default component to render */
+export type FragmentEndpoint<Bindings = Env> = (
+  ctx: RequestContext<Bindings>,
+) => JSX.Element | Response | Promise<JSX.Element | Response>;
+
+export type mod<Bindings = Env> = {
+  loader?: loader<Bindings>;
+  action?: action<Bindings>;
   default?: renderer;
-  /** Headers to set on the response */
-  headers?: headers;
+  headers?: headers<Bindings>;
+  fragments?: Record<string, FragmentEndpoint<Bindings>>;
 } & Record<string, unknown>;
 
 /**
- * Fragment represents a piece of a route with its associated module.
+ * Fragment represents a matched route module in a nested route stack.
  */
-export type fragment = { id: string; mod: mod; params?: string[] };
-
-/**
- * Route tuple containing a URLPattern and its associated fragments.
- */
-export type route = [pattern: URLPattern, fragments: fragment[]];
-
-const HTML_COMPONENT_MARK = Symbol.for("ruwuter.html");
-
-type HtmlProps = ctx;
-
-type HtmlBrand = { readonly __ruwuterHtml?: true };
-type HtmlRuntimeBrand = { [HTML_COMPONENT_MARK]?: true };
-
-type HtmlComponent =
-  & ((props: HtmlProps) => JSX.Element | Promise<JSX.Element | string>)
-  & HtmlBrand;
-
-const isHtmlComponent = (value: unknown): value is HtmlComponent => {
-  return isFunction(value) && (value as HtmlRuntimeBrand)[HTML_COMPONENT_MARK] === true;
+export type fragment<Bindings = Env> = {
+  id: string;
+  mod: mod<Bindings>;
+  params?: string[];
 };
 
-/**
- * Marks a component as an HTML asset export (`*.html`) for `__asset` responses.
- *
- * @param render - Component receiving router `ctx` props.
- */
-export function html<explicit extends HtmlProps>(
-  render: (props: explicit) => JSX.Element | Promise<JSX.Element | string>,
-): HtmlComponent {
-  function component(
-    props: HtmlProps,
-  ): JSX.Element | Promise<JSX.Element | string> {
-    return render(props as explicit);
+export type route<Bindings = Env> = [
+  pattern: URLPattern,
+  fragments: fragment<Bindings>[],
+];
+
+export type router<Bindings = Env> = {
+  handle: (
+    request: Request,
+    env: Bindings,
+    executionContext: ExecutionContext,
+  ) => Promise<Response>;
+};
+
+export function html(value: unknown, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "text/html; charset=utf-8");
   }
-
-  component[HTML_COMPONENT_MARK] = true;
-  return component;
+  return new Response(renderToStream(value), {
+    ...init,
+    headers,
+  });
 }
 
-function isFunction<Fn extends (...args: unknown[]) => unknown>(
-  value: unknown,
-): value is Fn {
-  return typeof value === "function";
+export function json(value: unknown, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json; charset=utf-8");
+  }
+  return new Response(JSON.stringify(value), {
+    ...init,
+    headers,
+  });
 }
 
-/**
- * Router interface with a handle method for processing requests.
- */
-export type router = {
-  /** Handles incoming requests and returns a Response */
-  handle: (request: Request, ...args: ctx["context"]) => Promise<Response>;
-};
-
-const HTML_HEADERS = {
-  "Content-Type": "text/html; charset=utf-8",
-  "Cache-Control": "no-store",
-} as const;
-
-const resolveComponentName = (asset: string): string | undefined => {
-  const match = /^([A-Z][A-Za-z0-9_$]*)\.html$/.exec(asset);
-  return match?.[1];
-};
+export function fragment<Bindings = Env>(
+  render: FragmentEndpoint<Bindings>,
+): FragmentEndpoint<Bindings> {
+  return render;
+}
 
 const toParams = (
   groups: Record<string, string | undefined>,
@@ -184,173 +144,123 @@ const toParams = (
   return result;
 };
 
-const serveHtmlAsset = async (
-  mod: mod,
-  exportName: string,
-  ctx: ctx,
-): Promise<Response | undefined> => {
-  if (!(Object.hasOwn(mod, exportName))) {
-    return undefined;
+const runWithStores = <T>(fn: () => Promise<T>) => runWithHooksStore(() => runWithContextStore(fn));
+
+const ACTION_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
+
+const methodSetForLeaf = (leaf: mod | undefined): Set<string> => {
+  const methods = new Set<string>();
+  if (!leaf) return methods;
+  if (leaf.default || leaf.loader) {
+    methods.add("GET");
+    methods.add("HEAD");
   }
-
-  const component = mod[exportName];
-  if (!isHtmlComponent(component)) return undefined;
-
-  const loader = isFunction<loader>(mod.loader) ? mod.loader : undefined;
-
-  if (loader) {
-    const result = await loader(ctx);
-    if (result instanceof Response) return result;
+  if (leaf.action) {
+    ACTION_METHODS.forEach((method) => methods.add(method));
   }
-
-  const rendered = await component({
-    params: ctx.params,
-    request: ctx.request,
-    context: ctx.context,
-  });
-
-  if (rendered instanceof Response) return rendered;
-  if (!isHtml(rendered)) {
-    throw new TypeError(
-      `Component export "${exportName}" must return Html or Response when requested via __asset.`,
-    );
+  if (methods.size > 0) {
+    methods.add("OPTIONS");
   }
-  return new Response(rendered.toReadableStream(), {
-    status: 200,
-    headers: HTML_HEADERS,
-  });
+  return methods;
 };
 
-const serveAsset = async (
-  fragments: fragment[],
-  asset: string,
-  ctx: ctx,
+const allowHeader = (methods: Set<string>): string => Array.from(methods).sort().join(", ");
+
+const withoutBody = (response: Response): Response =>
+  new Response(null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+
+const mergeHeaders = (
+  target: Headers,
+  source: Headers | Record<string, string | undefined | null>,
+) => {
+  const entries = source instanceof Headers ? source.entries() : Object.entries(source);
+  for (const [key, value] of entries) {
+    if (value == null) continue;
+    if (key.toLowerCase() === "set-cookie") {
+      target.append(key, value);
+    } else {
+      target.set(key, value);
+    }
+  }
+};
+
+const dataResponse = async (
+  f: action | loader,
+  ctx: RequestContext,
 ): Promise<Response> => {
-  const exportName = resolveComponentName(asset);
-  if (!exportName) return new Response(null, { status: 404 });
-
-  for (let index = fragments.length - 1; index >= 0; index--) {
-    const response = await serveHtmlAsset(fragments[index].mod, exportName, ctx);
-    if (response) return response;
-  }
-
-  return new Response(null, { status: 404 });
-};
-
-const runWithStores = (fn: () => Promise<Response>) =>
-  runWithHooksStore(() => runWithContextStore(fn));
-
-/**
- * Creates a router instance from route tuples.
- *
- * @param routes - Array of `[URLPattern, fragments]` entries.
- * @returns Router object with a `handle(request, env, executionContext)` method.
- */
-export const Router = (routes: route[]): router => {
-  const handle = (
-    request: Request,
-    ...args: ctx["context"]
-  ): Promise<Response> => {
-    return runWithStores(async () => {
-      let fragments: fragment[] | undefined;
-      let params: Record<string, string> | undefined;
-      for (const [pattern, frags] of routes) {
-        const match = pattern.exec(request.url);
-        if (match) {
-          fragments = frags;
-          params = toParams(match.pathname.groups);
-          break;
-        }
-      }
-      if (!fragments || !params) {
-        return new Response(null, { status: 404 });
-      }
-
-      const assetName = params["__asset"];
-
-      const ctx: ctx = {
-        request,
-        params,
-        context: args,
-      };
-
-      if (assetName !== undefined) {
-        return await serveAsset(fragments, assetName, ctx);
-      }
-
-      const leaf = fragments[fragments.length - 1]?.mod;
-      if (!leaf) {
-        return new Response(null, { status: 404 });
-      }
-
-      try {
-        if (request.method === "GET") {
-          if (leaf.default) {
-            return await routeResponse(fragments, ctx);
-          }
-          if (leaf.loader) {
-            return await dataResponse(leaf.loader, ctx);
-          }
-        } else if (leaf.action) {
-          return await dataResponse(leaf.action, ctx);
-        }
-
-        return new Response(null, { status: 404 });
-      } catch (e) {
-        if (e instanceof Response) {
-          return e;
-        }
-
-        if (e instanceof Error) {
-          console.error(e.message);
-        }
-
-        return new Response(null, { status: 500 });
-      }
-    });
-  };
-
-  return {
-    handle,
-  };
-};
-
-const dataResponse = async (f: action | loader, ctx: ctx) => {
   const value = await f(ctx);
   if (value instanceof Response) {
     return value;
   }
-  return Response.json(value);
+  return json(value);
 };
 
-const routeResponse = async (fragments: fragment[], ctx: ctx) => {
-  const loaders: (Promise<unknown> | undefined)[] = fragments.map(
-    (fragment) => fragment.mod.loader ? Promise.resolve(fragment.mod.loader(ctx)) : undefined,
-  );
-  const headers = new Headers({ "Content-Type": "text/html" });
+const streamFromGenerator = (
+  generator: AsyncGenerator<string>,
+  signal: AbortSignal,
+): ReadableStream<Uint8Array> => {
+  let closed = false;
+  const next = bindContext(() => generator.next());
+  const close = bindContext(async () => {
+    if (closed) return;
+    closed = true;
+    await generator.return(undefined).catch(() => {});
+  });
+
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        if (signal.aborted) {
+          await close();
+          signal.throwIfAborted?.();
+          throw new DOMException("The operation was aborted.", "AbortError");
+        }
+
+        const chunk = await next();
+        if (chunk.done) {
+          closed = true;
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(chunk.value));
+      } catch (error) {
+        await close();
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await close();
+    },
+  });
+};
+
+const routeResponse = async (
+  fragments: fragment[],
+  ctx: RequestContext,
+): Promise<Response> => {
+  const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
+  const loaderData: unknown[] = [];
 
   for (let i = 0; i < fragments.length; i++) {
     const { mod } = fragments[i];
-    const loaderData = await loaders[i];
-    if (loaderData instanceof Response) {
-      throw loaderData;
+    const data = mod.loader ? await mod.loader(ctx) : undefined;
+    if (data instanceof Response) {
+      throw data;
     }
+    loaderData[i] = data;
 
-    if (!mod.headers) continue;
-    const h = await mod.headers({
-      request: ctx.request,
-      params: ctx.params,
-      context: ctx.context,
-      loaderData,
-    });
-    if (!h) continue;
-    for (const [k, v] of h instanceof Headers ? h : Object.entries(h)) {
-      if (v != null) headers.append(k, v);
+    if (mod.headers) {
+      const h = await mod.headers({
+        ...ctx,
+        loaderData: data,
+      });
+      if (h) mergeHeaders(headers, h);
     }
   }
-
-  const stream = new TransformStream();
-  const writer = stream.writable.getWriter();
 
   const renderFragment = async (index: number): Promise<Html> => {
     if (index >= fragments.length) {
@@ -359,14 +269,7 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
 
     const { mod } = fragments[index];
     const next = () => renderFragment(index + 1);
-    const loaderData = await loaders[index];
-    if (loaderData instanceof Response) {
-      throw loaderData;
-    }
 
-    // Defer rendering of the child fragment until it is consumed so
-    // outer providers can wrap inner fragments while keeping children
-    // available as an Html instance for components that expect it.
     const childHtml = into(
       (async function* (): AsyncGenerator<string> {
         const inner = await next();
@@ -380,14 +283,10 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
     }
 
     const result = await withHookFrame(() =>
-      isHtmlComponent(Component)
-        ? Component({
-          children: childHtml,
-          request: ctx.request,
-          params: ctx.params,
-          context: ctx.context,
-        })
-        : (Component as renderer)({ loaderData, children: childHtml })
+      Component({
+        loaderData: loaderData[index],
+        children: childHtml,
+      })
     );
 
     if (result instanceof Response) {
@@ -399,55 +298,157 @@ const routeResponse = async (fragments: fragment[], ctx: ctx) => {
 
   const node = await renderFragment(0);
 
-  const htmlStream = node.toReadableStream();
-  const reader = htmlStream.getReader();
-  let firstChunk: Uint8Array | null = null;
+  const body = streamFromGenerator(
+    (async function* (): AsyncGenerator<string> {
+      yield "<!doctype html>";
+      yield* node.generator;
+    })(),
+    ctx.signal,
+  );
 
-  try {
-    const first = await reader.read();
-    if (!first.done && first.value) {
-      firstChunk = first.value;
-    }
-  } catch (e) {
-    if (e instanceof Response) {
-      throw e;
-    }
-    throw e;
-  }
-
-  const startStreaming = async () => {
-    try {
-      const textEncoder = new TextEncoder();
-      await writer.write(textEncoder.encode("<!doctype html>"));
-      if (firstChunk) {
-        await writer.write(firstChunk);
-      }
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        await writer.write(value);
-      }
-    } catch (e) {
-      if (e instanceof Response) {
-        // A Response was thrown during streaming; we cannot change the
-        // already-started response, so swallow to avoid unhandled rejections.
-        return;
-      }
-      if (e instanceof Error) {
-        console.error(e.message);
-      }
-    } finally {
-      reader.releaseLock();
-      await writer.close();
-    }
-  };
-
-  // Start streaming under the captured context to preserve AsyncLocalStorage
-  bindContext(startStreaming)();
-
-  return new Response(stream.readable, {
+  return new Response(body, {
     headers,
     status: 200,
   });
+};
+
+const fragmentPath = (pathname: string): { routeId: string; name: string } | undefined => {
+  const prefix = "/_ruwuter/fragments/";
+  if (!pathname.startsWith(prefix)) return undefined;
+  const [routeId, name, extra] = pathname.slice(prefix.length).split("/");
+  if (!routeId || !name || extra !== undefined) return undefined;
+  return {
+    routeId: decodeURIComponent(routeId),
+    name: decodeURIComponent(name),
+  };
+};
+
+const fragmentResponse = async (
+  routes: route[],
+  request: Request,
+  env: Env,
+  executionContext: ExecutionContext,
+): Promise<Response | undefined> => {
+  const url = new URL(request.url);
+  const match = fragmentPath(url.pathname);
+  if (!match) return undefined;
+
+  const allowed = new Set(["GET", "HEAD", "OPTIONS"]);
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: { Allow: allowHeader(allowed) } });
+  }
+  if (!allowed.has(request.method)) {
+    return new Response(null, { status: 405, headers: { Allow: allowHeader(allowed) } });
+  }
+
+  for (const [, stack] of routes) {
+    const routeFragment = stack.find((item) => item.id === match.routeId);
+    const endpoint = routeFragment?.mod.fragments?.[match.name];
+    if (!endpoint) continue;
+
+    const ctx: RequestContext = {
+      request,
+      params: {},
+      env,
+      executionContext,
+      signal: request.signal,
+    };
+    const result = await endpoint(ctx);
+    const response = result instanceof Response ? result : html(result);
+    return request.method === "HEAD" ? withoutBody(response) : response;
+  }
+
+  return new Response(null, { status: 404 });
+};
+
+export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindings> => {
+  const handle = (
+    request: Request,
+    env: Bindings,
+    executionContext: ExecutionContext,
+  ): Promise<Response> => {
+    return runWithStores(async () => {
+      try {
+        const explicitFragment = await fragmentResponse(
+          routes as route[],
+          request,
+          env as Env,
+          executionContext,
+        );
+        if (explicitFragment) return explicitFragment;
+
+        let fragments: fragment<Bindings>[] | undefined;
+        let params: Record<string, string> | undefined;
+        for (const [pattern, frags] of routes) {
+          const match = pattern.exec(request.url);
+          if (match) {
+            fragments = frags;
+            params = toParams(match.pathname.groups);
+            break;
+          }
+        }
+
+        if (!fragments || !params) {
+          return new Response(null, { status: 404 });
+        }
+
+        const leaf = fragments[fragments.length - 1]?.mod;
+        const allowed = methodSetForLeaf(leaf as mod | undefined);
+        if (allowed.size === 0) {
+          return new Response(null, { status: 404 });
+        }
+
+        if (request.method === "OPTIONS") {
+          return new Response(null, {
+            status: 204,
+            headers: { Allow: allowHeader(allowed) },
+          });
+        }
+
+        if (!allowed.has(request.method)) {
+          return new Response(null, {
+            status: 405,
+            headers: { Allow: allowHeader(allowed) },
+          });
+        }
+
+        const ctx: RequestContext<Bindings> = {
+          request,
+          params,
+          env,
+          executionContext,
+          signal: request.signal,
+        };
+
+        let response: Response;
+        if (request.method === "GET" || request.method === "HEAD") {
+          if (leaf?.default) {
+            response = await routeResponse(fragments as fragment[], ctx as RequestContext);
+          } else if (leaf?.loader) {
+            response = await dataResponse(leaf.loader as loader, ctx as RequestContext);
+          } else {
+            return new Response(null, { status: 404 });
+          }
+        } else if (leaf?.action) {
+          response = await dataResponse(leaf.action as action, ctx as RequestContext);
+        } else {
+          return new Response(null, { status: 404 });
+        }
+
+        return request.method === "HEAD" ? withoutBody(response) : response;
+      } catch (error) {
+        if (error instanceof Response) {
+          return request.method === "HEAD" ? withoutBody(error) : error;
+        }
+
+        if (error instanceof Error) {
+          console.error(error.message);
+        }
+
+        return new Response(null, { status: 500 });
+      }
+    });
+  };
+
+  return { handle };
 };

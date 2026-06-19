@@ -73,7 +73,7 @@ describe("Resolve runtime DOM behaviour", () => {
       <div id="suspense-a">loading</div>
       <template data-rw-target="suspense-a">
         <div id="ready">ready</div>
-        <script type="application/json" data-hydrate="h_1">{"x":1}</script>
+        <script type="application/json" data-test-script="h_1">{"x":1}</script>
       </template>
     `);
 
@@ -90,9 +90,30 @@ describe("Resolve runtime DOM behaviour", () => {
       await import(nextResolveRuntimeUrl());
       expect(doc.getElementById("ready")?.textContent).toContain("ready");
       expect(doc.querySelector("template[data-rw-target]")).toBe(null);
-      expect(doc.querySelector('script[data-hydrate="h_1"]')?.textContent).toContain('"x":1');
+      expect(doc.querySelector('script[data-test-script="h_1"]')?.textContent).toContain('"x":1');
     } finally {
       fragmentProto.cloneNode = originalCloneNode;
+      cleanup();
+    }
+  });
+
+  it("retries templates whose targets appear after another replacement", async () => {
+    const { doc, cleanup } = setupDomEnvironment(`
+      <div id="outer">outer loading</div>
+      <template data-rw-target="inner">
+        <span id="inner-ready">inner ready</span>
+      </template>
+      <template data-rw-target="outer">
+        <section id="inner">inner loading</section>
+      </template>
+    `);
+
+    try {
+      await import(nextResolveRuntimeUrl());
+      expect(doc.getElementById("inner-ready")?.textContent).toContain("inner ready");
+      expect(doc.body.textContent).toContain("inner ready");
+      expect(doc.querySelector("template[data-rw-target]")).toBe(null);
+    } finally {
       cleanup();
     }
   });

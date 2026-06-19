@@ -25,10 +25,12 @@
     "fs-routes": "./src/fs-routes/routes.ts"
   },
   "tasks": {
-    "test": "deno test -A",
-    "test:dom": "deno test -A",
+    "fmt:check": "deno fmt --check",
+    "test": "deno test -A test/",
+    "test:dom": "deno test -A test-dom/",
     "test:workers": "deno run -A npm:vitest run -c vitest.config.ts",
     "typecheck": "deno check src/ test/ test-dom/",
+    "ci": "deno task fmt:check && deno lint && deno task typecheck && deno task test && deno task test:dom",
     "cf-typegen": "wrangler typegen"
   },
   "compilerOptions": {
@@ -65,6 +67,7 @@
     "@mewhhaha/ruwuter/jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.ts",
     "@mewhhaha/ruwuter/swap": "./src/runtime/swap.ts",
     "@std/assert": "jsr:@std/assert@^1.0.18",
-    "urlpattern-polyfill": "npm:urlpattern-polyfill@^10.1.0"
+    "urlpattern-polyfill": "npm:urlpattern-polyfill@^10.1.0",
+    "vite": "npm:vite@8.0.16"
   }
 }

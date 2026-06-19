@@ -66,7 +66,7 @@ export const bySpecificity = (a: string, b: string): number => {
       }
     }
 
-    return 0;
+    return a.localeCompare(b);
   }
 
   return bSegments.length - aSegments.length;

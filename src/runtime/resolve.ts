@@ -12,29 +12,32 @@ function initializeResolveRuntime(): void {
 
   const processed = new WeakSet<HTMLTemplateElement>();
 
-  const processTemplate = (template: HTMLTemplateElement | Element | Node): void => {
-    if (!(template instanceof HTMLTemplateElement) || processed.has(template)) return;
+  const processTemplate = (template: HTMLTemplateElement | Element | Node): boolean => {
+    if (!(template instanceof HTMLTemplateElement) || processed.has(template)) return false;
 
     const targetId = template.getAttribute("data-rw-target");
-    if (!targetId) return;
+    if (!targetId) return false;
 
     const target = document.getElementById(targetId);
-    if (!target) return;
+    if (!target) return false;
 
     // Move nodes out of the template directly rather than cloning.
     // Cloning template content that includes <script> can trip TT script enforcement.
     target.replaceWith(template.content);
     processed.add(template);
     template.remove();
+    return true;
   };
 
   const scanRoot = (root: Document | DocumentFragment | Element): void => {
     const nodeList = root.querySelectorAll?.("template[data-rw-target]");
+    let replaced = false;
     nodeList?.forEach((node) => {
       if (node instanceof HTMLTemplateElement) {
-        processTemplate(node);
+        replaced = processTemplate(node) || replaced;
       }
     });
+    if (replaced) scanRoot(document);
   };
 
   scanRoot(document);
@@ -44,12 +47,11 @@ function initializeResolveRuntime(): void {
       mutation.addedNodes?.forEach((node) => {
         if (node instanceof HTMLTemplateElement) {
           processTemplate(node);
-          return;
-        }
-        if (node instanceof Element) {
+        } else if (node instanceof Element) {
           scanRoot(node);
         }
       });
+      scanRoot(document);
     }
   });
 

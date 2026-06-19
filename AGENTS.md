@@ -10,8 +10,8 @@ repository.
   module injected in the HTML.
 - File‑system routes live in your application (e.g. `app/`) and are processed by `src/fs-routes` to
   generate a static route table.
-- HTML asset endpoints (`/__asset` and `*.html` exports) may return `Response` from loaders or
-  exports (for cookies/headers or data responses).
+- Explicit fragment endpoints live under `/_ruwuter/fragments/<route-id>/<name>` and are declared
+  with route-module `fragments`.
 
 ## Client Runtime
 
@@ -20,15 +20,11 @@ repository.
 - No IIFE is needed; modules execute at top level. The file initializes itself immediately when
   loaded in the browser.
 - Must support:
-  - `on={...}` handlers loaded on demand via ESM `import()` using module hrefs (see “Client
-    Handlers” below).
-  - Optional leading bind values inside the `on` list that are passed as `this` for handlers.
-  - `mount`/`unmount` lifecycle events.
-  - Proper `AbortSignal` passing to handlers:
-    - Per element, per event: abort previous controller before running the next.
-    - Abort all controllers on unmount, then run unmount handlers.
-- No legacy inline function storage (no KV-backed registries). Only module-based handlers are
-  supported.
+- Explicit controller roots declared with `controller(moduleHref, props)`.
+- Browser modules receive `{ root, props, signal }` and may return a cleanup callback.
+- On removal, wait for the mutation batch, check `root.isConnected`, abort the signal, then run
+  cleanup.
+- No legacy inline function storage, refs, adjacent metadata scripts, or auto-anchoring.
 - Type safety: the runtime is authored in TypeScript. Keep types accurate as you edit the file.
 
 ### Suspense client behavior
@@ -43,9 +39,9 @@ repository.
 
 - Import client handlers as modules and ask for their URL via `?url` (optionally `&no-inline`). The
   import yields a branded string typed as a handler URL.
-- Use the helpers from `@mewhhaha/ruwuter/events` (e.g. `event.click(handlerUrl)`) to build the
-  tuples consumed by the JSX runtime. Use `events(bind, event.click(...))`—or the builder variant
-  `events(bind, on => on.click(...))` for dynamic composition—when you need to attach `this`.
+- Use `controller(handlerUrl, props)` on the element that owns the browser behavior. Query children
+  from `context.root` inside the client module. Attach DOM listeners with the `on(element)` helper
+  from `@mewhhaha/ruwuter/components`.
 - The FS-routes generator writes handler declaration files under
   `.router/types/**/+client-handlers.d.ts` to ensure default exports satisfy the
   `(this, event, signal)` contract. Keep them up to date when adding handlers.
@@ -54,8 +50,9 @@ repository.
 ## JSX Runtime Contracts
 
 - Located in `src/runtime/jsx*.ts`.
-- Supports `on` props on intrinsic elements with optional bound context as the first list entry.
-- Function-valued attributes are not supported; only HTML-compatible values plus `on` are emitted.
+- Does not support JSX `on` props. Use explicit controllers instead.
+- Function-valued attributes are not supported; only HTML-compatible values plus runtime payload
+  metadata are emitted.
 - Do not re‑introduce inline client function paths; the runtime only emits `t: 'm'` (module)
   entries.
 
@@ -79,8 +76,8 @@ repository.
 - Lint: `deno lint`
 - Format: `deno fmt`
 - Tests:
-  - DOM tests (default): `deno task test`
-  - Explicit DOM: `deno task test:dom`
+  - Unit/router tests: `deno task test`
+  - DOM integration tests: `deno task test:dom`
   - Workers pool (requires Node features): `deno task test:workers`
 
 ## Coding Conventions

@@ -1,64 +1,40 @@
 /**
  * @module
  *
- * Client‑side interaction helpers and shared refs for Ruwuter.
- * Provides:
- * - `ref(initial)` to create small shared refs across hydration boundaries
- * - `client.scope(bind)` to register component-scoped client behavior
- * - `on(ref)` to attach typed DOM listeners inside client scopes
- * - `Handler` type used by the client events helpers
+ * Browser activation helpers for explicit controller roots.
  */
 
-import type { ModuleEntry } from "../runtime/event-wire.ts";
-import { useFrameMeta, useHook } from "../runtime/hooks.ts";
-const CLIENT_SCOPE_PROP = "__clientScope";
-const CLIENT_SCOPE_FRAME_KEY = Symbol.for("ruwuter.client.scope.frame");
+export type ControllerCleanup = void | (() => void | Promise<void>);
 
-/** Client handler signature for browser-dispatched events. */
-export type Handler<
-  This = unknown,
-  Ev extends Event = Event,
-  Result = unknown | Promise<unknown>,
-> = (this: This, ev: Ev, signal: AbortSignal) => Result;
-
-const registry = new Map<string, unknown>();
-
-/** A small shared ref container used across hydration boundaries. */
-export type Ref<T> = {
-  readonly id: string;
-  get(): T;
-  set(next: T | ((prev: T) => T)): void;
-  toJSON(): { __ref: true; i: string; v: T };
-  toString(): string;
+export type ControllerContext<Props = unknown> = {
+  root: Element;
+  props: Props;
+  signal: AbortSignal;
 };
 
-type HandlerModuleLike<Fn = Handler> = (string | URL) & {
-  readonly __ruwuterHandler?: Fn;
+export type Controller<Props = unknown> = (
+  context: ControllerContext<Props>,
+) => ControllerCleanup | Promise<ControllerCleanup>;
+
+type ControllerModuleLike<Fn = Controller> = (string | URL) & {
+  readonly __ruwuterController?: Fn;
 };
 
-type TransformedClientBinding<Fn = Handler> = Fn & {
+type TransformedControllerBinding<Fn = Controller> = Fn & {
   readonly clientHref?: string | URL;
   readonly href?: string | URL;
 };
 
-type HandlerReference<Fn = Handler> = HandlerModuleLike<Fn> | TransformedClientBinding<Fn>;
+type ControllerReference<Fn = Controller> =
+  | ControllerModuleLike<Fn>
+  | TransformedControllerBinding<Fn>;
 
-type ClientScopeFrameState = {
-  scope?: ClientScopeState<Record<string, unknown>>;
+export type ControllerAttributes = {
+  "data-rw-controller": string;
+  "data-rw-props"?: string;
 };
 
-type ClientScopeProps = {
-  [CLIENT_SCOPE_PROP]: ClientScopeState<Record<string, unknown>>;
-};
-
-type ClientScopeState<Bind extends Record<string, unknown>> = {
-  readonly bind: Bind;
-  readonly entries: ModuleEntry[];
-  anchored: boolean;
-  explicit: boolean;
-};
-
-type EventTargetLike<T extends EventTarget> = T | Ref<T | null> | null | undefined;
+type EventTargetLike<Target extends EventTarget> = Target | null | undefined;
 
 type TargetedRuntimeEvent<
   E extends Event,
@@ -86,48 +62,51 @@ type OnRegistry<Target extends EventTarget> =
     ) => () => void
   >;
 
-function normalizeHandlerReference<Fn = Handler>(
-  kind: string,
-  href: HandlerReference<Fn>,
+function normalizeControllerReference<Fn = Controller>(
+  href: ControllerReference<Fn>,
 ): string {
   if (typeof href === "function") {
-    const transformed = (href as TransformedClientBinding<Fn>).clientHref ??
-      (href as TransformedClientBinding<Fn>).href;
+    const transformed = (href as TransformedControllerBinding<Fn>).clientHref ??
+      (href as TransformedControllerBinding<Fn>).href;
     if (typeof transformed === "string" || transformed instanceof URL) {
       return transformed.toString();
     }
     throw new TypeError(
-      `client.${kind} requires a module URL; received a function without clientHref. Use a transformed 'use client' binding or ?url import.`,
+      "controller() requires a module URL; received a function without clientHref. Use a transformed 'use client' binding or ?url import.",
     );
   }
   return (href as string | URL).toString();
 }
 
-function getClientScopeFrameState(): ClientScopeFrameState {
-  return useFrameMeta(CLIENT_SCOPE_FRAME_KEY, () => ({}));
+function escapeJsonForAttribute(json: string): string {
+  return json
+    .replaceAll(/</g, "\\u003C")
+    .replaceAll(/>/g, "\\u003E")
+    .replaceAll(/&/g, "\\u0026")
+    .replaceAll(/\u2028/g, "\\u2028")
+    .replaceAll(/\u2029/g, "\\u2029");
 }
 
-function createScopeState<Bind extends Record<string, unknown>>(
-  bind: Bind,
-): ClientScopeState<Bind> {
-  return {
-    bind: { ...bind },
-    entries: [],
-    anchored: false,
-    explicit: false,
+export function controller<Props>(
+  href: ControllerReference<Controller<Props>>,
+  props?: Props,
+): ControllerAttributes {
+  const attrs: ControllerAttributes = {
+    "data-rw-controller": normalizeControllerReference(href),
   };
+
+  if (props !== undefined) {
+    attrs["data-rw-props"] = escapeJsonForAttribute(JSON.stringify(props));
+  }
+
+  return attrs;
 }
 
 function resolveRuntimeTarget<Target extends EventTarget>(
   target: EventTargetLike<Target>,
 ): Target {
-  if (target && typeof target === "object" && "get" in target && typeof target.get === "function") {
-    const resolved = target.get() as Target | null | undefined;
-    if (!resolved) throw new TypeError("on(ref): target ref is not attached.");
-    return resolved;
-  }
-  if (!target) throw new TypeError("on(ref): target is required.");
-  return target as Target;
+  if (!target) throw new TypeError("on(target): target is required.");
+  return target;
 }
 
 export function on<Target extends EventTarget>(
@@ -148,104 +127,3 @@ export function on<Target extends EventTarget>(
     },
   }) as OnRegistry<Target>;
 }
-
-/** Creates a new ref with the given initial value. */
-export function ref<T>(initial: T): Ref<T> {
-  return useHook(() => {
-    const id = crypto.randomUUID().replaceAll(/[^A-Za-z0-9_-]/g, "");
-    const marker = { __ref: true as const, i: id, v: initial };
-    return {
-      id,
-      get(): T {
-        try {
-          const value = registry.get(id);
-          return (value as T | undefined) ?? initial;
-        } catch {
-          return initial;
-        }
-      },
-      set(next: T | ((prev: T) => T)): void {
-        const prev = (registry.get(id) as T | undefined) ?? initial;
-        const val = typeof next === "function" ? (next as (prev: T) => T)(prev) : next;
-        registry.set(id, val);
-      },
-      toJSON() {
-        return marker;
-      },
-      toString() {
-        return String(this.get());
-      },
-    } as Ref<T>;
-  });
-}
-
-export type ClientScope<Bind extends Record<string, unknown> = Record<string, unknown>> = {
-  mount(
-    href: HandlerReference<Handler<Bind, Event, unknown | Promise<unknown>>>,
-  ): void;
-  unmount(
-    href: HandlerReference<Handler<Bind, Event, unknown | Promise<unknown>>>,
-  ): void;
-  props(): ClientScopeProps;
-};
-
-function registerScopeState(state: ClientScopeState<Record<string, unknown>>): void {
-  const frame = getClientScopeFrameState();
-  if (frame.scope && frame.scope !== state) {
-    throw new Error("Only one client.scope(bind) may be registered per component frame.");
-  }
-  frame.scope = state;
-}
-
-export function isClientScopeState(
-  value: unknown,
-): value is ClientScopeState<Record<string, unknown>> {
-  if (!value || typeof value !== "object") return false;
-  const record = value as Record<string, unknown>;
-  return isPlainObject(record.bind) && Array.isArray(record.entries);
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function peekAutoClientScope(
-  enabled = true,
-):
-  | ClientScopeState<Record<string, unknown>>
-  | undefined {
-  if (!enabled) return undefined;
-  const frame = useFrameMeta(CLIENT_SCOPE_FRAME_KEY, () => ({} as ClientScopeFrameState));
-  const scope = frame.scope;
-  if (!scope || scope.anchored || scope.explicit) return undefined;
-  return scope;
-}
-
-export function scope<Bind extends Record<string, unknown>>(bind: Bind): ClientScope<Bind>;
-export function scope<Bind extends Record<string, unknown>>(
-  bind: Bind,
-): ClientScope<Bind> {
-  return useHook(() => {
-    const state = createScopeState(bind);
-    registerScopeState(state as ClientScopeState<Record<string, unknown>>);
-
-    return {
-      mount(href) {
-        const normalized = normalizeHandlerReference("scope.mount()", href);
-        state.entries.push({ t: "m", s: normalized, ev: "mount" });
-      },
-      unmount(href) {
-        const normalized = normalizeHandlerReference("scope.unmount()", href);
-        state.entries.push({ t: "m", s: normalized, ev: "unmount" });
-      },
-      props() {
-        state.explicit = true;
-        return { [CLIENT_SCOPE_PROP]: state } as ClientScopeProps;
-      },
-    } satisfies ClientScope<Bind>;
-  });
-}
-
-export const client = {
-  scope,
-} as const;

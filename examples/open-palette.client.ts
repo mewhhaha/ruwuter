@@ -1,16 +1,14 @@
 "use client";
 
-import { on, type Ref } from "@mewhhaha/ruwuter/components";
+import { type ControllerContext, on } from "@mewhhaha/ruwuter/components";
 
 export default function openPalette(
-  this: {
-    button: Ref<HTMLButtonElement | null>;
-    dialog: Ref<HTMLDialogElement | null>;
-  },
-  _ev: Event,
-  signal: AbortSignal,
+  { root, signal }: ControllerContext,
 ) {
-  on(this.button).click(() => {
-    this.dialog.get()?.showModal();
+  const button = root.querySelector<HTMLButtonElement>('[data-ref="open"]');
+  const dialog = root.querySelector<HTMLDialogElement>('[data-ref="dialog"]');
+
+  on(button).click(() => {
+    dialog?.showModal();
   }, { signal });
 }

@@ -1,12 +1,12 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
 import {
   extractRouteParams,
   isRouteModuleName,
   stripRouteExtension,
   toJsModuleName,
 } from "./route-name.ts";
+import { generatedTypesRoot } from "./paths.ts";
 import type { GeneratedFile } from "./types.ts";
 
 type RouteEntry = {
@@ -45,9 +45,7 @@ export const generateTypes = async (
     return [];
   }
 
-  const relativeAppFolder = path.relative(process.cwd(), resolvedAppFolder) ||
-    path.basename(resolvedAppFolder);
-  const typesRoot = path.join(".router", "types", relativeAppFolder);
+  const typesRoot = generatedTypesRoot(resolvedAppFolder);
   const routesTypesRoot = path.join(typesRoot, "routes");
 
   const outputs: GeneratedFile[] = [];

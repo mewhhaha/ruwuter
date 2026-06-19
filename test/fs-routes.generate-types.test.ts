@@ -8,7 +8,10 @@ describe("generateTypes", () => {
     try {
       const routesDir = join(app, "routes");
       await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(routesDir, "api.users.ts"), "export const loader = () => null;");
+      await Deno.writeTextFile(
+        join(routesDir, "api.users.ts"),
+        "export const loader = () => null;",
+      );
 
       const outputs = await generateTypes(app);
       const hasBadDirectoryOutput = outputs.some((file) =>
@@ -32,7 +35,9 @@ describe("generateTypes", () => {
       await Deno.writeTextFile(join(routesDir, "reports.$id[.pdf].tsx"), "export default 1;");
 
       const outputs = await generateTypes(app);
-      const routeTypeFile = outputs.find((file) => file.path.includes("+types.reports.$id[.pdf].ts"));
+      const routeTypeFile = outputs.find((file) =>
+        file.path.includes("+types.reports.$id[.pdf].ts")
+      );
       if (!routeTypeFile) throw new Error("Expected report route type file");
 
       expect(routeTypeFile.contents).toContain('"id": string;');

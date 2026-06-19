@@ -1,12 +1,7 @@
 // Minimal Vitest-like shim for Deno's built-in test runner.
 // Provides describe/it/expect APIs used by this repo's tests.
 
-import {
-  assert,
-  assertEquals,
-  assertMatch,
-  assertStringIncludes,
-} from "@std/assert";
+import { assert, assertEquals, assertMatch, assertStringIncludes } from "@std/assert";
 
 const nameStack: string[] = [];
 

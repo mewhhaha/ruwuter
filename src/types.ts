@@ -19,9 +19,8 @@
  * ```
  */
 
-import type { Env } from "./router.ts";
+import type { Env, RequestContext } from "./router.ts";
 import type { JSX } from "./runtime/jsx.ts";
-import type { ExecutionContext } from "@cloudflare/workers-types";
 
 /**
  * Infers the props type for a component based on its module exports.
@@ -42,10 +41,8 @@ export type InferComponentProps<module> = {
  * @typeParam params - Route parameters as a Record<string, string>
  */
 export type InferLoaderArgs<params extends Record<string, string>> = {
-  request: Request;
   params: params;
-  context: [Env, ExecutionContext];
-};
+} & Omit<RequestContext<Env>, "params">;
 
 /**
  * Infers the argument type for action functions with typed route parameters.
@@ -53,10 +50,8 @@ export type InferLoaderArgs<params extends Record<string, string>> = {
  * @typeParam params - Route parameters as a Record<string, string>
  */
 export type InferActionArgs<params extends Record<string, string>> = {
-  request: Request;
   params: params;
-  context: [Env, ExecutionContext];
-};
+} & Omit<RequestContext<Env>, "params">;
 
 /**
  * Infers the type for headers functions with typed parameters and loader data.
@@ -67,15 +62,15 @@ export type InferActionArgs<params extends Record<string, string>> = {
 export type InferHeadersFunction<
   params extends Record<string, string>,
   module,
-> = (args: {
-  request: Request;
-  params: params;
-  context: [Env, ExecutionContext];
-  loaderData: module extends {
-    loader: infer loader extends (...args: unknown[]) => unknown;
-  } ? ReturnType<loader>
-    : undefined;
-}) => Promise<Headers | HeadersLike> | Headers | HeadersLike;
+> = (
+  args: {
+    params: params;
+    loaderData: module extends {
+      loader: infer loader extends (...args: unknown[]) => unknown;
+    } ? ReturnType<loader>
+      : undefined;
+  } & Omit<RequestContext<Env>, "params">,
+) => Promise<Headers | HeadersLike> | Headers | HeadersLike;
 
 type HeadersLike = {
   [key in CommonHeaders | OpenString]?: string | undefined | null;
