@@ -2,7 +2,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import "./setup.ts";
-import { DOMParser } from "@b-fuze/deno-dom";
+import { DOMParser } from "linkedom";
 import { controller } from "../src/components/client.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
@@ -32,7 +32,7 @@ function setupDomEnvironment(html: string) {
   const doc = parser.parseFromString(
     "<!doctype html><html><head></head><body></body></html>",
     "text/html",
-  )!;
+  )! as unknown as Document;
 
   const window: any = {
     document: doc,

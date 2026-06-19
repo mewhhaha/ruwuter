@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import "./setup.ts";
-import { DOMParser } from "@b-fuze/deno-dom";
+import { DOMParser } from "linkedom";
 import { nextResolveRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 
 function setupDomEnvironment(html: string) {
@@ -9,7 +9,7 @@ function setupDomEnvironment(html: string) {
   const doc = parser.parseFromString(
     "<!doctype html><html><head></head><body></body></html>",
     "text/html",
-  )!;
+  )! as unknown as Document;
 
   class TestMutationObserver {
     constructor(_cb: (mutations: MutationRecord[]) => void) {}
