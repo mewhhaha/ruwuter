@@ -66,8 +66,6 @@ export type DefinedController<Definition extends ControllerDefinition = Controll
   & Controller<DefinitionProps<Definition>, DefinitionRefs<Definition>>
   & {
     readonly [definedControllerBrand]: Definition;
-    readonly clientHref?: string | URL;
-    readonly href?: string | URL;
   };
 
 export type ControllerHref<Definition extends ControllerDefinition = ControllerDefinition> =
@@ -77,8 +75,7 @@ export type ControllerHref<Definition extends ControllerDefinition = ControllerD
   };
 
 type TypedControllerReference<Definition extends ControllerDefinition = ControllerDefinition> =
-  | DefinedController<Definition>
-  | ControllerHref<Definition>;
+  ControllerHref<Definition>;
 
 type UntypedControllerReference =
   | (string & { readonly [controllerHrefBrand]?: never })
@@ -143,15 +140,6 @@ export function defineController<Definition extends ControllerDefinition>(
 function normalizeControllerReference<Definition extends ControllerDefinition>(
   href: ControllerReference<Definition>,
 ): string {
-  if (typeof href === "function") {
-    const transformed = href.clientHref ?? href.href;
-    if (typeof transformed === "string" || transformed instanceof URL) {
-      return transformed.toString();
-    }
-    throw new TypeError(
-      "controller() requires a module URL; received a controller definition without clientHref. Use a transformed controller binding or ?url import.",
-    );
-  }
   return (href as string | URL).toString();
 }
 

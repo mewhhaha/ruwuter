@@ -1,5 +1,5 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
-import { controller, type ControllerHref, defineController } from "../src/components/client.ts";
+import { controller, type ControllerHref } from "../src/components/client.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import type { JSX } from "../src/runtime/jsx.ts";
@@ -41,26 +41,6 @@ describe("controller activation attributes", () => {
     expect(html).not.toContain("data-rw-ref-text");
   });
 
-  it("accepts transformed typed controller bindings with clientHref", () => {
-    const href = "/controllers/palette.js";
-    const paletteController = Object.assign(
-      defineController<{
-        props: { value: number };
-        refs: { open: HTMLButtonElement };
-      }>(({ refs, props }) => {
-        refs.open.value = String(props.value);
-      }),
-      { clientHref: href },
-    );
-
-    const mounted = controller(paletteController, { value: 1 });
-    const attrs = mounted.root();
-
-    expect(attrs["data-rw-controller"]).toBe(href);
-    expect(attrs["data-rw-props"] ?? "").toContain('"value":1');
-    expect(mounted.refs.open.__ruwuterControllerRef).toBe("open");
-  });
-
   it("preserves types from branded controller URL imports", () => {
     type PaletteController = {
       props: { value: number };
@@ -84,13 +64,12 @@ describe("controller activation attributes", () => {
   });
 
   it("types controller refs against the JSX element they are attached to", () => {
-    const paletteController = Object.assign(
-      defineController<{
-        refs: { dialog: HTMLDialogElement };
-      }>(() => {}),
-      { clientHref: "/controllers/palette.js" },
-    );
-    const mounted = controller(paletteController);
+    type PaletteController = {
+      refs: { dialog: HTMLDialogElement };
+    };
+
+    const href = "/controllers/palette.js" as ControllerHref<PaletteController>;
+    const mounted = controller(href);
     // @ts-expect-error dialog refs cannot be attached to button elements.
     const props: JSX.IntrinsicElements["button"] = { ref: mounted.refs.dialog };
 
