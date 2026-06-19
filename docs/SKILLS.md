@@ -17,45 +17,48 @@ Ruwuter is server-first:
 6. Explicit route fragments may return server HTML for targeted swaps.
 7. Out-of-order Suspense is optional and has its own runtime.
 
-Treat server-rendered HTML as canonical UI state. Controllers are small DOM activators, not hydrated components or a second state framework.
+Treat server-rendered HTML as canonical UI state. Controllers are small DOM activators, not hydrated
+components or a second state framework.
 
-When documentation and implementation disagree, inspect `src/` and the matching tests, then update the README and this skill together.
+When documentation and implementation disagree, inspect `src/` and the matching tests, then update
+the README and this skill together.
 
 ## Source Map
 
-| Contract | Source | Tests/examples |
-|---|---|---|
-| Router, methods, responses, fragments | [src/router.ts](./src/router.ts) | [test/router.test.tsx](./test/router.test.tsx), [test/router.errors.test.tsx](./test/router.errors.test.tsx) |
-| Public browser API | [src/browser.ts](./src/browser.ts) | [README.md](./README.md) |
-| Typed controllers and refs | [src/components/client.ts](./src/components/client.ts) | [test/client.controller.test.tsx](./test/client.controller.test.tsx) |
-| Controller lifecycle | [src/runtime/client.ts](./src/runtime/client.ts) | [test-dom/client.runtime.dom.test.tsx](./test-dom/client.runtime.dom.test.tsx) |
-| JSX rendering and typing | [src/runtime/jsx-runtime.ts](./src/runtime/jsx-runtime.ts), [src/runtime/jsx.ts](./src/runtime/jsx.ts) | [test/jsx.attributes.test.tsx](./test/jsx.attributes.test.tsx), [test/client.onprop.test.tsx](./test/client.onprop.test.tsx) |
-| File-route grammar | [src/fs-routes/route-name.ts](./src/fs-routes/route-name.ts), [src/fs-routes/generate-router.ts](./src/fs-routes/generate-router.ts) | [test/fs-routes.generate-router.test.ts](./test/fs-routes.generate-router.test.ts) |
-| Generated route types | [src/fs-routes/generate-types.ts](./src/fs-routes/generate-types.ts), [src/types.ts](./src/types.ts) | [test/fs-routes.generate-types.test.ts](./test/fs-routes.generate-types.test.ts) |
-| Server context | [src/components/context.ts](./src/components/context.ts) | [test/context.nesting.test.tsx](./test/context.nesting.test.tsx) |
-| Suspense | [src/components/suspense.ts](./src/components/suspense.ts), [src/runtime/resolve.ts](./src/runtime/resolve.ts) | [test/router.suspense.test.tsx](./test/router.suspense.test.tsx), [test-dom/resolve.runtime.dom.test.ts](./test-dom/resolve.runtime.dom.test.ts) |
-| HTML swaps | [src/runtime/swap.ts](./src/runtime/swap.ts) | [test-dom/swap.runtime.dom.test.ts](./test-dom/swap.runtime.dom.test.ts) |
-| Vite integration | [src/vite.ts](./src/vite.ts) | [test/vite.test.ts](./test/vite.test.ts) |
-| Exports and commands | [deno.json](./deno.json) | [.github/workflows/ci.yml](./.github/workflows/ci.yml) |
+| Contract                              | Source                                                                                                                               | Tests/examples                                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Router, methods, responses, fragments | [src/router.ts](./src/router.ts)                                                                                                     | [test/router.test.tsx](./test/router.test.tsx), [test/router.errors.test.tsx](./test/router.errors.test.tsx)                                     |
+| Public browser API                    | [src/browser.ts](./src/browser.ts)                                                                                                   | [README.md](./README.md)                                                                                                                         |
+| Typed controllers and refs            | [src/components/client.ts](./src/components/client.ts)                                                                               | [test/client.controller.test.tsx](./test/client.controller.test.tsx)                                                                             |
+| Controller lifecycle                  | [src/runtime/client.ts](./src/runtime/client.ts)                                                                                     | [test-dom/client.runtime.dom.test.tsx](./test-dom/client.runtime.dom.test.tsx)                                                                   |
+| JSX rendering and typing              | [src/runtime/jsx-runtime.ts](./src/runtime/jsx-runtime.ts), [src/runtime/jsx.ts](./src/runtime/jsx.ts)                               | [test/jsx.attributes.test.tsx](./test/jsx.attributes.test.tsx), [test/client.onprop.test.tsx](./test/client.onprop.test.tsx)                     |
+| File-route grammar                    | [src/fs-routes/route-name.ts](./src/fs-routes/route-name.ts), [src/fs-routes/generate-router.ts](./src/fs-routes/generate-router.ts) | [test/fs-routes.generate-router.test.ts](./test/fs-routes.generate-router.test.ts)                                                               |
+| Generated route types                 | [src/fs-routes/generate-types.ts](./src/fs-routes/generate-types.ts), [src/types.ts](./src/types.ts)                                 | [test/fs-routes.generate-types.test.ts](./test/fs-routes.generate-types.test.ts)                                                                 |
+| Server context                        | [src/components/context.ts](./src/components/context.ts)                                                                             | [test/context.nesting.test.tsx](./test/context.nesting.test.tsx)                                                                                 |
+| Suspense                              | [src/components/suspense.ts](./src/components/suspense.ts), [src/runtime/resolve.ts](./src/runtime/resolve.ts)                       | [test/router.suspense.test.tsx](./test/router.suspense.test.tsx), [test-dom/resolve.runtime.dom.test.ts](./test-dom/resolve.runtime.dom.test.ts) |
+| HTML swaps                            | [src/runtime/swap.ts](./src/runtime/swap.ts)                                                                                         | [test-dom/swap.runtime.dom.test.ts](./test-dom/swap.runtime.dom.test.ts)                                                                         |
+| Vite integration                      | [src/vite.ts](./src/vite.ts)                                                                                                         | [test/vite.test.ts](./test/vite.test.ts)                                                                                                         |
+| Exports and commands                  | [deno.json](./deno.json)                                                                                                             | [.github/workflows/ci.yml](./.github/workflows/ci.yml)                                                                                           |
 
 ## Public Import Boundaries
 
 Use the narrowest public entrypoint.
 
-| Entrypoint | Use |
-|---|---|
-| `@mewhhaha/ruwuter` | `Router`, `html`, `json`, `fragment`, render helpers, router types |
-| `@mewhhaha/ruwuter/types` | Route inference helpers |
-| `@mewhhaha/ruwuter/components` | Server context and Suspense |
-| `@mewhhaha/ruwuter/browser` | Controllers, typed events, and `swap` |
-| `@mewhhaha/ruwuter/fs-routes` | Programmatic generation |
-| `@mewhhaha/ruwuter/vite` | Vite plugin |
-| `@mewhhaha/ruwuter/client.js` | Controller activation runtime URL |
-| `@mewhhaha/ruwuter/resolve.js` | Suspense resolver runtime URL |
+| Entrypoint                     | Use                                                                |
+| ------------------------------ | ------------------------------------------------------------------ |
+| `@mewhhaha/ruwuter`            | `Router`, `html`, `json`, `fragment`, render helpers, router types |
+| `@mewhhaha/ruwuter/types`      | Route inference helpers                                            |
+| `@mewhhaha/ruwuter/components` | Server context and Suspense                                        |
+| `@mewhhaha/ruwuter/browser`    | Controllers, typed events, and `swap`                              |
+| `@mewhhaha/ruwuter/fs-routes`  | Programmatic generation                                            |
+| `@mewhhaha/ruwuter/vite`       | Vite plugin                                                        |
+| `@mewhhaha/ruwuter/client.js`  | Controller activation runtime URL                                  |
+| `@mewhhaha/ruwuter/resolve.js` | Suspense resolver runtime URL                                      |
 
 Do not import server context or Suspense into `.client.ts` modules.
 
-Repository invariant: `src/browser.ts` must re-export `controller`, because the public README and examples mount controllers from `@mewhhaha/ruwuter/browser`.
+Repository invariant: `src/browser.ts` must re-export `controller`, because the public README and
+examples mount controllers from `@mewhhaha/ruwuter/browser`.
 
 ## Setup
 
@@ -89,7 +92,8 @@ export default {
 };
 ```
 
-Ruwuter server context and render frames use `AsyncLocalStorage`. On Cloudflare Workers, enable Node compatibility sufficient for `node:async_hooks`, such as `nodejs_compat` or `nodejs_als`.
+Ruwuter server context and render frames use `AsyncLocalStorage`. On Cloudflare Workers, enable Node
+compatibility sufficient for `node:async_hooks`, such as `nodejs_compat` or `nodejs_als`.
 
 Augment the package `Env` interface when route helpers should know application bindings:
 
@@ -104,7 +108,9 @@ declare module "@mewhhaha/ruwuter" {
 export {};
 ```
 
-References: [src/router.ts](./src/router.ts), [src/components/context.ts](./src/components/context.ts), [src/runtime/hooks.ts](./src/runtime/hooks.ts).
+References: [src/router.ts](./src/router.ts),
+[src/components/context.ts](./src/components/context.ts),
+[src/runtime/hooks.ts](./src/runtime/hooks.ts).
 
 ## Application Structure
 
@@ -121,24 +127,26 @@ app/
     └── api.users.ts
 ```
 
-`document.tsx` is the outer document. Prefix modules become nested layouts: `blog.tsx` wraps `blog._index.tsx` and `blog.$slug.tsx`.
+`document.tsx` is the outer document. Prefix modules become nested layouts: `blog.tsx` wraps
+`blog._index.tsx` and `blog.$slug.tsx`.
 
-A default route component receives its own `loaderData` and nested `children`. It does not receive `RequestContext` directly.
+A default route component receives its own `loaderData` and nested `children`. It does not receive
+`RequestContext` directly.
 
 ## File-Route Grammar
 
-| Module | Pattern |
-|---|---|
-| `_index.tsx` | `/` |
-| `about.tsx` | `/about` |
-| `blog._index.tsx` | `/blog` |
-| `blog.$slug.tsx` | `/blog/:slug` |
-| `files.$.tsx` | `/files/*` |
-| `reports.$id[.pdf].tsx` | `/reports/:id.pdf` |
-| `($lang).about.tsx` | optional first segment, then `/about` |
-| `_app.dashboard.tsx` | `/dashboard`, wrapped by pathless `_app` |
-| `sitemap[.]xml.tsx` | `/sitemap.xml` |
-| `dolla-bills-[$].tsx` | `/dolla-bills-$` |
+| Module                  | Pattern                                  |
+| ----------------------- | ---------------------------------------- |
+| `_index.tsx`            | `/`                                      |
+| `about.tsx`             | `/about`                                 |
+| `blog._index.tsx`       | `/blog`                                  |
+| `blog.$slug.tsx`        | `/blog/:slug`                            |
+| `files.$.tsx`           | `/files/*`                               |
+| `reports.$id[.pdf].tsx` | `/reports/:id.pdf`                       |
+| `($lang).about.tsx`     | optional first segment, then `/about`    |
+| `_app.dashboard.tsx`    | `/dashboard`, wrapped by pathless `_app` |
+| `sitemap[.]xml.tsx`     | `/sitemap.xml`                           |
+| `dolla-bills-[$].tsx`   | `/dolla-bills-$`                         |
 
 Rules:
 
@@ -153,7 +161,8 @@ Rules:
 - Static routes sort before parameter routes.
 - Equivalent patterns and generated symbol collisions are rejected.
 
-References: [src/fs-routes/route-name.ts](./src/fs-routes/route-name.ts), [src/fs-routes/generate-router.ts](./src/fs-routes/generate-router.ts).
+References: [src/fs-routes/route-name.ts](./src/fs-routes/route-name.ts),
+[src/fs-routes/generate-router.ts](./src/fs-routes/generate-router.ts).
 
 ## Route Modules
 
@@ -202,9 +211,7 @@ export async function loader({
 }
 
 export const headers: Route.HeadersFunction = ({ loaderData }) => ({
-  "Cache-Control": loaderData.product.private
-    ? "private"
-    : "public, max-age=60",
+  "Cache-Control": loaderData.product.private ? "private" : "public, max-age=60",
 });
 
 export async function action({
@@ -255,15 +262,20 @@ export default function Product({
 - One action handles `POST`, `PUT`, `PATCH`, and `DELETE`.
 - Plain action results become JSON.
 - Loaders and actions may return or throw `Response`.
-- Route components may return JSX, strings, numbers, arrays, nullish values, or promises of those values.
-- Route components must not return or throw `Response`; make status and redirect decisions in loaders/actions.
-- Nested headers merge outer-to-inner. Later values replace earlier values except `Set-Cookie`, which appends.
+- Route components may return JSX, strings, numbers, arrays, nullish values, or promises of those
+  values.
+- Route components must not return or throw `Response`; make status and redirect decisions in
+  loaders/actions.
+- Nested headers merge outer-to-inner. Later values replace earlier values except `Set-Cookie`,
+  which appends.
 
-References: [src/router.ts](./src/router.ts), [src/types.ts](./src/types.ts), [test/router.test.tsx](./test/router.test.tsx).
+References: [src/router.ts](./src/router.ts), [src/types.ts](./src/types.ts),
+[test/router.test.tsx](./test/router.test.tsx).
 
 ## HTTP Semantics
 
-- `GET`: run loaders, then render the matched component stack; without a component, return loader data as JSON.
+- `GET`: run loaders, then render the matched component stack; without a component, return loader
+  data as JSON.
 - `HEAD`: run loaders and headers without rendering components; return no body.
 - `POST`, `PUT`, `PATCH`, `DELETE`: invoke the leaf action.
 - `OPTIONS`: return `204` and `Allow`.
@@ -305,13 +317,15 @@ export namespace Route {
 }
 ```
 
-Use the generated `Route` namespace for the current route. Do not duplicate parameter or loader-data types manually.
+Use the generated `Route` namespace for the current route. Do not duplicate parameter or loader-data
+types manually.
 
 Layout route types include descendant parameters as optional.
 
 Never edit generated files. Regenerate after adding, removing, or renaming routes.
 
-References: [src/fs-routes/generate-types.ts](./src/fs-routes/generate-types.ts), [src/fs-routes/write.ts](./src/fs-routes/write.ts).
+References: [src/fs-routes/generate-types.ts](./src/fs-routes/generate-types.ts),
+[src/fs-routes/write.ts](./src/fs-routes/write.ts).
 
 ## Route-Scoped Fragments
 
@@ -333,13 +347,16 @@ Rules:
 - Route loaders do not run automatically for fragment requests.
 - A fragment name is one encoded path segment.
 
-Reference: fragment dispatch in [src/router.ts](./src/router.ts) and tests in [test/router.test.tsx](./test/router.test.tsx).
+Reference: fragment dispatch in [src/router.ts](./src/router.ts) and tests in
+[test/router.test.tsx](./test/router.test.tsx).
 
 ## Typed Browser Controllers
 
-Use controllers for local browser behavior that native HTML cannot express. Prefer links, forms, dialog commands, and popovers first.
+Use controllers for local browser behavior that native HTML cannot express. Prefer links, forms,
+dialog commands, and popovers first.
 
-Controllers are activation modules. There is no client VDOM, client JSX reconciliation, or reactive server ref store.
+Controllers are activation modules. There is no client VDOM, client JSX reconciliation, or reactive
+server ref store.
 
 ### Define a Controller
 
@@ -381,15 +398,11 @@ export default defineController<PaletteController>(
 
 ```tsx
 import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
-import {
-  controller,
-  type ControllerHref,
-} from "@mewhhaha/ruwuter/browser";
+import { controller, type ControllerHref } from "@mewhhaha/ruwuter/browser";
 import type { PaletteController } from "./palette.client.ts";
 import paletteHrefValue from "./palette.client.ts?url&no-inline";
 
-const paletteHref =
-  paletteHrefValue as ControllerHref<PaletteController>;
+const paletteHref = paletteHrefValue as ControllerHref<PaletteController>;
 
 export default function Palette() {
   const palette = controller(paletteHref, {
@@ -430,7 +443,8 @@ export default function Palette() {
 - Return cleanup for observers, timers, and third-party objects not governed by `signal`.
 - Inserted controller roots activate automatically.
 - DOM moves do not dispose controllers; disconnected roots are aborted and cleaned up.
-- Do not use removed `client.scope`, `scope.mount`, `scope.unmount`, reactive `ref()`, hydration scripts, or serialized inline handlers.
+- Do not use removed `client.scope`, `scope.mount`, `scope.unmount`, reactive `ref()`, hydration
+  scripts, or serialized inline handlers.
 
 References:
 
@@ -453,7 +467,8 @@ on(refs.button).click((event) => {
 
 `on()` is a typed `addEventListener` wrapper and returns a removal callback. Prefer `{ signal }`.
 
-Do not add JSX props such as `onClick`, `onclick`, or `onSubmit`. The JSX runtime rejects every attribute beginning with `on`.
+Do not add JSX props such as `onClick`, `onclick`, or `onSubmit`. The JSX runtime rejects every
+attribute beginning with `on`.
 
 ## HTML Swaps
 
@@ -485,13 +500,15 @@ Safety rules:
 - Fetched responses must be successful and HTML by default.
 - Plain strings are rejected as ambiguous.
 - Raw markup requires explicit `unsafeHTML`.
-- For untrusted markup, provide a sanitizer and remove executable content plus activation attributes such as `data-rw-controller`.
+- For untrusted markup, provide a sanitizer and remove executable content plus activation attributes
+  such as `data-rw-controller`.
 - Under Trusted Types enforcement, pass caller-created `TrustedHTML` or a policy.
 - Ruwuter does not create a permissive policy or install `window.swap`.
 - `viewTransition` uses `document.startViewTransition` when available unless set to `false`.
 - Swapped same-origin controller roots activate when `client.js` is loaded.
 
-References: [src/runtime/swap.ts](./src/runtime/swap.ts), [test-dom/swap.runtime.dom.test.ts](./test-dom/swap.runtime.dom.test.ts).
+References: [src/runtime/swap.ts](./src/runtime/swap.ts),
+[test-dom/swap.runtime.dom.test.ts](./test-dom/swap.runtime.dom.test.ts).
 
 ## Server Context
 
@@ -528,7 +545,8 @@ Available APIs:
 
 Context is server-only and request-local when rendered through `Router`.
 
-References: [src/components/context.ts](./src/components/context.ts), [test/context.nesting.test.tsx](./test/context.nesting.test.tsx).
+References: [src/components/context.ts](./src/components/context.ts),
+[test/context.nesting.test.tsx](./test/context.nesting.test.tsx).
 
 ## Streaming Suspense
 
@@ -536,10 +554,7 @@ Load the resolver once and wrap all participating boundaries:
 
 ```tsx
 import resolveRuntime from "@mewhhaha/ruwuter/resolve.js?url&no-inline";
-import {
-  Suspense,
-  SuspenseProvider,
-} from "@mewhhaha/ruwuter/components";
+import { Suspense, SuspenseProvider } from "@mewhhaha/ruwuter/components";
 
 export default function Page() {
   return (
@@ -571,7 +586,9 @@ Rules:
 - Without a provider, children render directly.
 - Do not use Suspense for redirects or status selection; use loaders.
 
-References: [src/components/suspense.ts](./src/components/suspense.ts), [src/runtime/resolve.ts](./src/runtime/resolve.ts), [test/router.suspense.test.tsx](./test/router.suspense.test.tsx).
+References: [src/components/suspense.ts](./src/components/suspense.ts),
+[src/runtime/resolve.ts](./src/runtime/resolve.ts),
+[test/router.suspense.test.tsx](./test/router.suspense.test.tsx).
 
 ## JSX Rules
 
@@ -586,7 +603,8 @@ References: [src/components/suspense.ts](./src/components/suspense.ts), [src/run
 - Components and children may be async.
 - Void elements do not emit closing tags.
 
-References: [src/runtime/jsx-runtime.ts](./src/runtime/jsx-runtime.ts), [src/runtime/jsx.ts](./src/runtime/jsx.ts).
+References: [src/runtime/jsx-runtime.ts](./src/runtime/jsx-runtime.ts),
+[src/runtime/jsx.ts](./src/runtime/jsx.ts).
 
 ## Generation and Vite
 
@@ -601,7 +619,8 @@ export default defineConfig({
 });
 ```
 
-The plugin generates routes/types at build start, watches `app/routes`, and performs full reloads. It does not rewrite application chunks or `import.meta.url`.
+The plugin generates routes/types at build start, watches `app/routes`, and performs full reloads.
+It does not rewrite application chunks or `import.meta.url`.
 
 Programmatic:
 
@@ -619,7 +638,8 @@ node src/fs-routes/routes.ts ./app
 
 Never edit generated output. Treat collision errors as route-design errors.
 
-References: [src/vite.ts](./src/vite.ts), [src/fs-routes/js.ts](./src/fs-routes/js.ts), [src/fs-routes/write.ts](./src/fs-routes/write.ts).
+References: [src/vite.ts](./src/vite.ts), [src/fs-routes/js.ts](./src/fs-routes/js.ts),
+[src/fs-routes/write.ts](./src/fs-routes/write.ts).
 
 ## Decision Order
 
@@ -632,16 +652,16 @@ Use the least complex mechanism:
 5. Suspense for independent slow server rendering.
 6. Server context for values shared through nested layouts.
 
-| Need | Use |
-|---|---|
-| Navigation | `<a href>` |
-| Data mutation | `<form>` plus `action` |
-| JSON endpoint | loader/action without a component, or `json()` |
-| Redirect/error status | loader/action `Response` |
-| Replace one region | fragment plus `swap` |
-| Focus/keyboard/animation/local DOM integration | controller |
-| Slow independent panel | `Suspense` |
-| Shared server value | `createContext` |
+| Need                                           | Use                                            |
+| ---------------------------------------------- | ---------------------------------------------- |
+| Navigation                                     | `<a href>`                                     |
+| Data mutation                                  | `<form>` plus `action`                         |
+| JSON endpoint                                  | loader/action without a component, or `json()` |
+| Redirect/error status                          | loader/action `Response`                       |
+| Replace one region                             | fragment plus `swap`                           |
+| Focus/keyboard/animation/local DOM integration | controller                                     |
+| Slow independent panel                         | `Suspense`                                     |
+| Shared server value                            | `createContext`                                |
 
 ## Prohibited Patterns
 
