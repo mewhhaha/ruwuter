@@ -203,9 +203,20 @@ describe("Router data responses", () => {
 
 describe("Router method semantics", () => {
   it("maps HEAD to GET without a response body", async () => {
+    let rendered = false;
     const router = Router([[
       new URLPattern({ pathname: "/head" }),
-      [{ id: "head", mod: { default: () => <h1>Head</h1> } }],
+      [{
+        id: "head",
+        mod: {
+          loader: () => ({ title: "Head" }),
+          default: () => {
+            rendered = true;
+            return <h1>Head</h1>;
+          },
+          headers: ({ loaderData }) => ({ "x-title": (loaderData as { title: string }).title }),
+        },
+      }],
     ]]);
     const { ctx } = makeCtx();
     const res = await router.handle(
@@ -216,7 +227,9 @@ describe("Router method semantics", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toMatch(/text\/html/);
+    expect(res.headers.get("x-title")).toBe("Head");
     expect(await res.text()).toBe("");
+    expect(rendered).toBe(false);
   });
 
   it("returns 405 with Allow for unsupported matched methods", async () => {
@@ -256,28 +269,30 @@ describe("Router method semantics", () => {
 });
 
 describe("Router explicit fragments", () => {
-  it("serves explicit route fragments from the reserved namespace", async () => {
+  it("serves route-scoped fragments with matched params", async () => {
     const router = Router([[
-      new URLPattern({ pathname: "/page" }),
+      new URLPattern({ pathname: "/products/:slug" }),
       [{
-        id: "page",
+        id: "products.$slug",
         mod: {
           default: () => <main>Page</main>,
           fragments: {
-            sidebar: defineFragment(({ env }) => <aside>{String("name" in env)}</aside>),
+            sidebar: defineFragment(({ env, params }) => (
+              <aside>{params.slug}:{String("name" in env)}</aside>
+            )),
           },
         },
       }],
     ]]);
     const { ctx } = makeCtx();
     const res = await router.handle(
-      new Request("https://example.com/_ruwuter/fragments/page/sidebar"),
+      new Request("https://example.com/products/keyboard/_ruwuter/sidebar"),
       { name: "env" } as unknown as Env,
       ctx,
     );
 
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("<aside>true</aside>");
+    expect(await res.text()).toContain("<aside>keyboard:true</aside>");
   });
 });
 

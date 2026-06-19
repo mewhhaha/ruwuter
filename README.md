@@ -63,23 +63,29 @@ export const action = async () => {
 
 ## Controllers
 
-Use `controller(moduleHref, props)` on the DOM root that owns the browser behavior.
+Define browser controllers with typed props and static ref tokens. Use
+`controller(moduleHref, props)` on the DOM root that owns the browser behavior.
 
 ```tsx
 import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
-import { controller } from "@mewhhaha/ruwuter/components";
-import paletteController from "./palette.client.ts?url";
+import { controller, type ControllerHref } from "@mewhhaha/ruwuter/browser";
+import type { PaletteController } from "./palette.client.ts";
+import paletteControllerHref from "./palette.client.ts?url";
+
+const paletteController = paletteControllerHref as ControllerHref<PaletteController>;
 
 export default function Palette() {
+  const palette = controller(paletteController, { initiallyOpen: false });
+
   return (
     <html>
       <head>
         <script type="module" src={clientRuntime}></script>
       </head>
       <body>
-        <section {...controller(paletteController, { initiallyOpen: false })}>
-          <button data-ref="open" type="button">Open</button>
-          <dialog data-ref="dialog">...</dialog>
+        <section {...palette.root()}>
+          <button ref={palette.refs.open} type="button">Open</button>
+          <dialog ref={palette.refs.dialog}>...</dialog>
         </section>
       </body>
     </html>
@@ -91,22 +97,27 @@ export default function Palette() {
 // palette.client.ts
 "use client";
 
-import { type ControllerContext, on } from "@mewhhaha/ruwuter/components";
+import { defineController, on } from "@mewhhaha/ruwuter/browser";
 
-export default function mount(
-  { root, props, signal }: ControllerContext<{ initiallyOpen: boolean }>,
-) {
-  const button = root.querySelector<HTMLButtonElement>('[data-ref="open"]');
-  const dialog = root.querySelector<HTMLDialogElement>('[data-ref="dialog"]');
+export type PaletteController = {
+  props: {
+    initiallyOpen: boolean;
+  };
+  refs: {
+    open: HTMLButtonElement;
+    dialog: HTMLDialogElement;
+  };
+};
 
-  if (props.initiallyOpen) dialog?.showModal();
+export default defineController<PaletteController>(({ refs, props, signal }) => {
+  if (props.initiallyOpen) refs.dialog.showModal();
 
-  on(button).click(() => dialog?.showModal(), { signal });
+  on(refs.open).click(() => refs.dialog.showModal(), { signal });
 
   return () => {
-    dialog?.close();
+    refs.dialog.close();
   };
-}
+});
 ```
 
 The runtime mounts each controller root once. On removal it waits for the mutation batch, ignores
@@ -127,7 +138,7 @@ export const fragments = {
 Fetch fragments from the reserved namespace:
 
 ```text
-/_ruwuter/fragments/<route-id>/sidebar
+/products/keyboard/_ruwuter/sidebar
 ```
 
 ## File-System Routes

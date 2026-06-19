@@ -4,10 +4,17 @@
  * Browser runtime for explicit Ruwuter activation controllers.
  */
 
-import type { Controller, ControllerCleanup } from "../components/client.ts";
+import type { Controller, ControllerCleanup, JsonValue } from "../components/client.ts";
 
 const CONTROLLER_ATTR = "data-rw-controller";
 const PROPS_ATTR = "data-rw-props";
+const REF_ATTR = "data-rw-ref";
+
+type ControllerModule = {
+  default?: unknown;
+};
+
+type ControllerModuleLoader = (url: URL) => Promise<ControllerModule>;
 
 type MountedController = {
   controller: AbortController;
@@ -23,16 +30,38 @@ function isAbortError(error: unknown): boolean {
 function initializeActivationRuntime(): void {
   const mounted = new WeakMap<Element, MountedController>();
 
-  const loadModule = async (spec: string): Promise<Controller | undefined> => {
+  const resolveModuleUrl = (spec: string): URL => {
     const base = (typeof document.baseURI === "string" && document.baseURI &&
         document.baseURI !== "about:blank")
       ? document.baseURI
       : (typeof globalThis.location?.href === "string"
         ? globalThis.location.href
         : "http://localhost/");
-    const resolved = new URL(spec, base).href;
-    const mod = await import(resolved);
-    return typeof mod.default === "function" ? (mod.default as Controller) : undefined;
+    const url = new URL(spec, base);
+    const locationUrl = new URL(
+      typeof globalThis.location?.href === "string" ? globalThis.location.href : base,
+    );
+
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.origin !== locationUrl.origin
+    ) {
+      throw new TypeError(`Controller module URL is not allowed: ${url.href}`);
+    }
+
+    return url;
+  };
+
+  const loadModule = async (spec: string): Promise<Controller> => {
+    const url = resolveModuleUrl(spec);
+    const customLoader = (globalThis as {
+      __ruwuterControllerModuleLoader?: ControllerModuleLoader;
+    }).__ruwuterControllerModuleLoader;
+    const mod = customLoader ? await customLoader(url) : await import(url.href);
+    if (!mod || typeof mod.default !== "function") {
+      throw new TypeError(`Controller module must default export a function: ${url.href}`);
+    }
+    return mod.default as Controller;
   };
 
   const isConnected = (root: Element): boolean => {
@@ -40,15 +69,40 @@ function initializeActivationRuntime(): void {
     return document.documentElement?.contains(root) ?? false;
   };
 
-  const parseProps = (root: Element): unknown => {
+  const parseProps = (root: Element): JsonValue | undefined => {
     const text = root.getAttribute(PROPS_ATTR);
     if (!text) return undefined;
     try {
-      return JSON.parse(text);
+      return JSON.parse(text) as JsonValue;
     } catch (error) {
       console.error(error);
       return undefined;
     }
+  };
+
+  const collectRefs = (root: Element): Record<string, Element> => {
+    const refs: Record<string, Element> = Object.create(null);
+    const add = (element: Element) => {
+      const name = element.getAttribute(REF_ATTR);
+      if (!name) return;
+      if (Object.hasOwn(refs, name)) {
+        throw new TypeError(`Duplicate controller ref "${name}".`);
+      }
+      refs[name] = element;
+    };
+
+    add(root);
+    root.querySelectorAll(`[${REF_ATTR}]`).forEach((element) => add(element));
+
+    return new Proxy(refs, {
+      get(target, prop: PropertyKey) {
+        if (typeof prop !== "string") return Reflect.get(target, prop);
+        if (!Object.hasOwn(target, prop)) {
+          throw new TypeError(`Controller ref "${prop}" was not found.`);
+        }
+        return target[prop];
+      },
+    });
   };
 
   const mount = async (root: Element): Promise<void> => {
@@ -62,7 +116,7 @@ function initializeActivationRuntime(): void {
 
     try {
       const activate = await loadModule(spec);
-      if (!activate || controller.signal.aborted || !isConnected(root)) {
+      if (controller.signal.aborted || !isConnected(root)) {
         controller.abort();
         mounted.delete(root);
         return;
@@ -71,6 +125,7 @@ function initializeActivationRuntime(): void {
       const cleanup = await activate({
         root,
         props: parseProps(root),
+        refs: collectRefs(root),
         signal: controller.signal,
       });
 

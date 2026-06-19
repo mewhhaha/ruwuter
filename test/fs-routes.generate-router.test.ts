@@ -1,8 +1,16 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { join } from "node:path";
 import { generateRouter } from "../src/fs-routes/generate-router.ts";
+import { bySpecificity } from "../src/fs-routes/sort.ts";
 
 describe("generateRouter", () => {
+  it("sorts catch-all routes with an antisymmetric comparator", () => {
+    const forward = bySpecificity("files.$", "assets.$");
+    const reverse = bySpecificity("assets.$", "files.$");
+
+    expect(Math.sign(forward)).toBe(-Math.sign(reverse));
+  });
+
   it("includes entries for prefixed routes so layouts stay navigable", async () => {
     const app = await Deno.makeTempDir();
     try {
@@ -174,6 +182,46 @@ describe("generateRouter", () => {
 
       expect(error instanceof Error).toBe(true);
       expect((error as Error).message).toContain('Route pattern "/sitemap.xml"');
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("rejects route patterns that differ only by param name", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(routesDir, "users.$id.tsx"), "export default 1;");
+      await Deno.writeTextFile(join(routesDir, "users.$slug.tsx"), "export default 2;");
+
+      let error: unknown;
+      try {
+        await generateRouter(app);
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error instanceof Error).toBe(true);
+      expect((error as Error).message).toContain('Route pattern "/users/:');
+      expect((error as Error).message).toContain("users.$id");
+      expect((error as Error).message).toContain("users.$slug");
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("serializes route ids as JSON string literals", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(routesDir, { recursive: true });
+      await Deno.writeTextFile(join(routesDir, 'quote["].tsx'), "export default 1;");
+
+      const [routerFile] = await generateRouter(app);
+
+      expect(routerFile.contents).toContain(`id: ${JSON.stringify('quote["]')}`);
+      expect(routerFile.contents).not.toContain('id: "quote""');
     } finally {
       await Deno.remove(app, { recursive: true });
     }

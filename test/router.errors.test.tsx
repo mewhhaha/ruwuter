@@ -113,7 +113,7 @@ describe("Thrown Response handling", () => {
     expect(await res.text()).toBe("Custom Throw");
   });
 
-  it("surfaces component render failures through the response stream", async () => {
+  it("rejects components that throw Response during rendering", async () => {
     const pattern = new URLPattern({ pathname: "/throw" });
     const fragments: fragment[] = [
       {
@@ -151,7 +151,7 @@ describe("Thrown Response handling", () => {
     } catch (caught) {
       error = caught;
     }
-    expect(error instanceof Response).toBe(true);
-    expect((error as Response).status).toBe(404);
+    expect(error instanceof TypeError).toBe(true);
+    expect((error as Error).message).toContain("cannot throw Response");
   });
 });

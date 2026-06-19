@@ -6,8 +6,17 @@ import { DOMParser } from "@b-fuze/deno-dom";
 import { controller } from "../src/components/client.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
+import type { JsonValue } from "../src/browser.ts";
 
 const nextRuntimeUrl = () => nextClientRuntimeUrl();
+const controllerModules = new Map<string, { default?: unknown }>();
+let controllerId = 0;
+
+function registerController(defaultExport: unknown): string {
+  const href = `https://example.com/controllers/${controllerId++}.js`;
+  controllerModules.set(href, { default: defaultExport });
+  return href;
+}
 
 async function waitFor(check: () => boolean, timeoutMs = 500) {
   const start = Date.now();
@@ -72,11 +81,14 @@ function setupDomEnvironment(html: string) {
     Node: (globalThis as any).Node,
     Element: (globalThis as any).Element,
     HTMLElement: (globalThis as any).HTMLElement,
+    location: (globalThis as any).location,
     MutationObserver: (globalThis as any).MutationObserver,
+    controllerModuleLoader: (globalThis as any).__ruwuterControllerModuleLoader,
   };
 
   (globalThis as any).window = window;
   (globalThis as any).document = doc;
+  (globalThis as any).location = window.location;
   (globalThis as any).MutationObserver = window.MutationObserver = TestMutationObserver as any;
   (globalThis as any).Comment = (doc.createComment as any)
     ? (doc.createComment("x") as any).constructor
@@ -84,6 +96,11 @@ function setupDomEnvironment(html: string) {
   (globalThis as any).Node = saved.Node || ({ ELEMENT_NODE: 1, COMMENT_NODE: 8 } as any);
   (globalThis as any).Element = (doc.createElement("div") as any).constructor;
   (globalThis as any).HTMLElement = (doc.createElement("div") as any).constructor;
+  (globalThis as any).__ruwuterControllerModuleLoader = async (url: URL) => {
+    const mod = controllerModules.get(url.href);
+    if (!mod) throw new Error(`missing controller module: ${url.href}`);
+    return await Promise.resolve(mod);
+  };
 
   doc.body.innerHTML = html.replace(/^<!doctype html>/i, "");
   doc.querySelectorAll("*").forEach((el) => patchRemove(el as any));
@@ -115,14 +132,25 @@ function setupDomEnvironment(html: string) {
       if (typeof saved.HTMLElement === "undefined") delete (globalThis as any).HTMLElement;
       else (globalThis as any).HTMLElement = saved.HTMLElement;
 
+      if (typeof saved.location === "undefined") delete (globalThis as any).location;
+      else (globalThis as any).location = saved.location;
+
       if (typeof saved.MutationObserver === "undefined") {
         delete (globalThis as any).MutationObserver;
       } else (globalThis as any).MutationObserver = saved.MutationObserver;
+
+      if (typeof saved.controllerModuleLoader === "undefined") {
+        delete (globalThis as any).__ruwuterControllerModuleLoader;
+      } else {
+        (globalThis as any).__ruwuterControllerModuleLoader = saved.controllerModuleLoader;
+      }
+      controllerModules.clear();
     },
   };
 }
 
-async function render(htmlHref: string, props: Record<string, unknown> = {}) {
+async function render(htmlHref: string, props: JsonValue = {}) {
+  const mounted = controller(htmlHref, props);
   const fragments: fragment[] = [{
     id: "root",
     mod: {
@@ -130,8 +158,8 @@ async function render(htmlHref: string, props: Record<string, unknown> = {}) {
         <html>
           <body>
             <main id="mount-target">
-              <section id="controller-root" {...controller(htmlHref, props)}>
-                <button data-ref="button" type="button">Run</button>
+              <section id="controller-root" {...mounted.root()}>
+                <button ref={mounted.refs.button} type="button">Run</button>
               </section>
             </main>
           </body>
@@ -147,11 +175,11 @@ async function render(htmlHref: string, props: Record<string, unknown> = {}) {
 
 describe("Activation runtime DOM behaviour", () => {
   it("mounts explicit controller roots and passes props", async () => {
-    const href = `data:text/javascript,${
-      encodeURIComponent(
-        'export default function({ root, props }) { root.setAttribute("data-mounted", String(props.label)); document.body.setAttribute("data-mounted", "1"); }',
-      )
-    }`;
+    const href = registerController(({ root, props, refs }: any) => {
+      root.setAttribute("data-mounted", String(props.label));
+      refs.button.setAttribute("data-ref-mounted", "yes");
+      document.body.setAttribute("data-mounted", "1");
+    });
 
     const html = await render(href, { label: "ready" });
     const { doc, cleanup } = setupDomEnvironment(html);
@@ -162,17 +190,18 @@ describe("Activation runtime DOM behaviour", () => {
       await waitFor(() => root?.getAttribute("data-mounted") === "ready", 1000);
       expect(doc.body.getAttribute("data-mounted")).toBe("1");
       expect(root?.getAttribute("data-mounted")).toBe("ready");
+      expect(doc.querySelector("[data-rw-ref='button']")?.getAttribute("data-ref-mounted")).toBe(
+        "yes",
+      );
     } finally {
       cleanup();
     }
   });
 
   it("reports controller activation failures", async () => {
-    const href = `data:text/javascript,${
-      encodeURIComponent(
-        'export default function() { throw new Error("controller failed"); }',
-      )
-    }`;
+    const href = registerController(() => {
+      throw new Error("controller failed");
+    });
 
     const html = await render(href);
     const { cleanup } = setupDomEnvironment(html);
@@ -192,12 +221,57 @@ describe("Activation runtime DOM behaviour", () => {
     }
   });
 
+  it("reports modules without a default controller", async () => {
+    const href = "https://example.com/controllers/missing-default.js";
+    controllerModules.set(href, {});
+
+    const html = await render(href);
+    const { cleanup } = setupDomEnvironment(html);
+    const originalError = console.error;
+    const errors: unknown[] = [];
+    console.error = (...args: unknown[]) => {
+      errors.push(args[0]);
+    };
+    try {
+      await import(nextRuntimeUrl());
+
+      await waitFor(() => errors.length === 1, 1000);
+      expect((errors[0] as Error).message).toContain("must default export a function");
+    } finally {
+      console.error = originalError;
+      cleanup();
+    }
+  });
+
+  it("rejects controller URLs outside the current origin", async () => {
+    const html = await render("https://evil.example/controller.js");
+    const { cleanup } = setupDomEnvironment(html);
+    const originalError = console.error;
+    const errors: unknown[] = [];
+    console.error = (...args: unknown[]) => {
+      errors.push(args[0]);
+    };
+    try {
+      await import(nextRuntimeUrl());
+
+      await waitFor(() => errors.length === 1, 1000);
+      expect((errors[0] as Error).message).toContain("not allowed");
+    } finally {
+      console.error = originalError;
+      cleanup();
+    }
+  });
+
   it("aborts the controller signal and runs returned cleanup on removal", async () => {
-    const href = `data:text/javascript,${
-      encodeURIComponent(
-        'export default function({ root, signal }) { root.setAttribute("data-ready", "yes"); signal.addEventListener("abort", () => document.body.setAttribute("data-aborted", "yes"), { once: true }); return () => document.body.setAttribute("data-cleaned", "yes"); }',
-      )
-    }`;
+    const href = registerController(({ root, signal }: any) => {
+      root.setAttribute("data-ready", "yes");
+      signal.addEventListener(
+        "abort",
+        () => document.body.setAttribute("data-aborted", "yes"),
+        { once: true },
+      );
+      return () => document.body.setAttribute("data-cleaned", "yes");
+    });
 
     const html = await render(href);
     const { doc, patchRemove, cleanup } = setupDomEnvironment(html);
@@ -219,11 +293,10 @@ describe("Activation runtime DOM behaviour", () => {
   });
 
   it("does not mount after a root is removed before the module resolves", async () => {
-    const href = `data:text/javascript,${
-      encodeURIComponent(
-        'await new Promise((r)=>setTimeout(r,25)); export default function(){ document.body.setAttribute("data-stale-mounted", "yes"); }',
-      )
-    }`;
+    const href = registerController(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      document.body.setAttribute("data-stale-mounted", "yes");
+    });
 
     const html = await render(href);
     const { doc, patchRemove, cleanup } = setupDomEnvironment(html);
@@ -243,11 +316,9 @@ describe("Activation runtime DOM behaviour", () => {
   });
 
   it("does not dispose a controller root moved within the document", async () => {
-    const href = `data:text/javascript,${
-      encodeURIComponent(
-        'export default function(){ return () => document.body.setAttribute("data-disposed-after-move", "yes"); }',
-      )
-    }`;
+    const href = registerController(() => {
+      return () => document.body.setAttribute("data-disposed-after-move", "yes");
+    });
 
     const html = await render(href);
     const { doc, notify, cleanup } = setupDomEnvironment(html);
@@ -270,11 +341,9 @@ describe("Activation runtime DOM behaviour", () => {
   });
 
   it("mounts controller roots inserted after runtime startup", async () => {
-    const href = `data:text/javascript,${
-      encodeURIComponent(
-        'export default function({ root }) { root.setAttribute("data-streamed-mounted", "yes"); }',
-      )
-    }`;
+    const href = registerController(({ root }: any) => {
+      root.setAttribute("data-streamed-mounted", "yes");
+    });
 
     const { doc, notify, cleanup } = setupDomEnvironment("<main id='mount-target'></main>");
     try {

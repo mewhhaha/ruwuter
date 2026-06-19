@@ -137,7 +137,7 @@ describe("swap runtime DOM behaviour", () => {
         },
       };
 
-      await swap(null, {
+      const result = await swap(null, {
         target: asElement(target),
         unsafeHTML: "<script>x</script><p>ok</p>",
         sanitizer: (html) => html.replace("<script>x</script>", ""),
@@ -145,6 +145,7 @@ describe("swap runtime DOM behaviour", () => {
       });
 
       expect(target.innerHTML).toBe("trusted:<p>ok</p>");
+      expect(result.text).toBe("trusted:<p>ok</p>");
     } finally {
       cleanup();
     }

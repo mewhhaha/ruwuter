@@ -22,6 +22,7 @@
 
 import { type Html, into, isHtml } from "./node.ts";
 import { withComponentFrame } from "./hooks.ts";
+import { isControllerRefToken } from "../components/client.ts";
 import "./typed.ts";
 import type { JSX } from "./typed.ts";
 export type * from "./typed.ts";
@@ -80,6 +81,13 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
 
   for (const [key, value] of Object.entries(props)) {
     if (key === "ref") {
+      if (value == null || value === false) continue;
+      if (!isControllerRefToken(value)) {
+        throw new TypeError(
+          `[ruwuter] Unsupported ref value. Use a controller ref token such as ref={controller.refs.name}.`,
+        );
+      }
+      attrs += ` data-rw-ref="${sanitize(value.__ruwuterControllerRef)}" `;
       continue;
     }
 

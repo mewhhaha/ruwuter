@@ -55,13 +55,13 @@ export type action<Bindings = Env> = (
   params: RequestContext<Bindings>,
 ) => unknown | Promise<unknown>;
 
-export type Renderable = JSX.HtmlNode | Response;
-export type RenderResult = Renderable | Promise<Renderable>;
+export type Renderable = JSX.HtmlNode | Promise<JSX.HtmlNode>;
+export type EndpointResult = JSX.HtmlNode | Response | Promise<JSX.HtmlNode | Response>;
 
 export type renderer = (
   // deno-lint-ignore no-explicit-any
   props: any,
-) => RenderResult;
+) => Renderable;
 
 export type headers<Bindings = Env> = (
   params: RequestContext<Bindings> & {
@@ -74,7 +74,7 @@ export type headers<Bindings = Env> = (
 
 export type FragmentEndpoint<Bindings = Env> = (
   ctx: RequestContext<Bindings>,
-) => RenderResult;
+) => EndpointResult;
 
 export type mod<Bindings = Env> = {
   loader?: loader<Bindings>;
@@ -232,7 +232,13 @@ const streamFromGenerator = (
         controller.enqueue(encoder.encode(chunk.value));
       } catch (error) {
         await close();
-        controller.error(error);
+        controller.error(
+          error instanceof Response
+            ? new TypeError(
+              "Route components cannot throw Response after HTML streaming has started. Return responses from loaders or actions instead.",
+            )
+            : error,
+        );
       }
     },
     async cancel() {
@@ -241,10 +247,10 @@ const streamFromGenerator = (
   });
 };
 
-const routeResponse = async (
+const routeData = async (
   fragments: fragment[],
   ctx: RequestContext,
-): Promise<Response> => {
+): Promise<{ headers: Headers; loaderData: unknown[] }> => {
   const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
   const loaderData: unknown[] = [];
 
@@ -264,6 +270,26 @@ const routeResponse = async (
       if (h) mergeHeaders(headers, h);
     }
   }
+
+  return { headers, loaderData };
+};
+
+const routeHeadResponse = async (
+  fragments: fragment[],
+  ctx: RequestContext,
+): Promise<Response> => {
+  const { headers } = await routeData(fragments, ctx);
+  return new Response(null, {
+    headers,
+    status: 200,
+  });
+};
+
+const routeResponse = async (
+  fragments: fragment[],
+  ctx: RequestContext,
+): Promise<Response> => {
+  const { headers, loaderData } = await routeData(fragments, ctx);
 
   const renderFragment = async (index: number): Promise<Html> => {
     if (index >= fragments.length) {
@@ -285,15 +311,27 @@ const routeResponse = async (
       return childHtml;
     }
 
-    const result = await withHookFrame(() =>
-      Component({
-        loaderData: loaderData[index],
-        children: childHtml,
-      })
-    );
+    let result: Renderable;
+    try {
+      result = await withHookFrame(() =>
+        Component({
+          loaderData: loaderData[index],
+          children: childHtml,
+        })
+      );
+    } catch (error) {
+      if (error instanceof Response) {
+        throw new TypeError(
+          "Route components cannot throw Response. Return responses from loaders or actions instead.",
+        );
+      }
+      throw error;
+    }
 
     if (result instanceof Response) {
-      throw result;
+      throw new TypeError(
+        "Route components cannot return Response. Return responses from loaders or actions instead.",
+      );
     }
 
     return isHtml(result) ? result : into(result);
@@ -315,14 +353,17 @@ const routeResponse = async (
   });
 };
 
-const fragmentPath = (pathname: string): { routeId: string; name: string } | undefined => {
-  const prefix = "/_ruwuter/fragments/";
-  if (!pathname.startsWith(prefix)) return undefined;
-  const [routeId, name, extra] = pathname.slice(prefix.length).split("/");
-  if (!routeId || !name || extra !== undefined) return undefined;
+const fragmentPath = (pathname: string): { routePath: string; name: string } | undefined => {
+  const marker = "/_ruwuter/";
+  const markerIndex = pathname.lastIndexOf(marker);
+  if (markerIndex < 0) return undefined;
+
+  const encodedName = pathname.slice(markerIndex + marker.length);
+  if (!encodedName || encodedName.includes("/")) return undefined;
+
   return {
-    routeId: decodeURIComponent(routeId),
-    name: decodeURIComponent(name),
+    routePath: pathname.slice(0, markerIndex) || "/",
+    name: decodeURIComponent(encodedName),
   };
 };
 
@@ -344,21 +385,29 @@ const fragmentResponse = async (
     return new Response(null, { status: 405, headers: { Allow: allowHeader(allowed) } });
   }
 
-  for (const [, stack] of routes) {
-    const routeFragment = stack.find((item) => item.id === match.routeId);
-    const endpoint = routeFragment?.mod.fragments?.[match.name];
-    if (!endpoint) continue;
+  const routeUrl = new URL(request.url);
+  routeUrl.pathname = match.routePath;
+  routeUrl.search = "";
 
-    const ctx: RequestContext = {
-      request,
-      params: {},
-      env,
-      executionContext,
-      signal: request.signal,
-    };
-    const result = await endpoint(ctx);
-    const response = result instanceof Response ? result : html(result);
-    return request.method === "HEAD" ? withoutBody(response) : response;
+  for (const [pattern, stack] of routes) {
+    const routeMatch = pattern.exec(routeUrl.href);
+    if (!routeMatch) continue;
+
+    for (let index = stack.length - 1; index >= 0; index--) {
+      const endpoint = stack[index].mod.fragments?.[match.name];
+      if (!endpoint) continue;
+
+      const ctx: RequestContext = {
+        request,
+        params: toParams(routeMatch.pathname.groups),
+        env,
+        executionContext,
+        signal: request.signal,
+      };
+      const result = await endpoint(ctx);
+      const response = result instanceof Response ? result : html(result);
+      return request.method === "HEAD" ? withoutBody(response) : response;
+    }
   }
 
   return new Response(null, { status: 404 });
@@ -424,7 +473,17 @@ export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindin
         };
 
         let response: Response;
-        if (request.method === "GET" || request.method === "HEAD") {
+        if (request.method === "HEAD") {
+          if (leaf?.default) {
+            response = await routeHeadResponse(fragments as fragment[], ctx as RequestContext);
+          } else if (leaf?.loader) {
+            response = withoutBody(
+              await dataResponse(leaf.loader as loader, ctx as RequestContext),
+            );
+          } else {
+            return new Response(null, { status: 404 });
+          }
+        } else if (request.method === "GET") {
           if (leaf?.default) {
             response = await routeResponse(fragments as fragment[], ctx as RequestContext);
           } else if (leaf?.loader) {
@@ -438,7 +497,7 @@ export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindin
           return new Response(null, { status: 404 });
         }
 
-        return request.method === "HEAD" ? withoutBody(response) : response;
+        return response;
       } catch (error) {
         if (error instanceof Response) {
           return request.method === "HEAD" ? withoutBody(error) : error;

@@ -42,14 +42,6 @@ export const bySpecificity = (a: string, b: string): number => {
   const aSegments = segments(a);
   const bSegments = segments(b);
   if (aSegments.length === bSegments.length) {
-    if (a.endsWith(".$")) {
-      return 1;
-    }
-
-    if (b.endsWith(".$")) {
-      return -1;
-    }
-
     for (let i = 0; i < aSegments.length; i++) {
       const aInfo = segmentInfo(aSegments[i]);
       const bInfo = segmentInfo(bSegments[i]);

@@ -5,10 +5,12 @@
  * Supports fetchable inputs and Trusted Types-aware HTML sinks.
  */
 
+declare const trustedHTMLBrand: unique symbol;
+
 type TrustedHTMLValue = typeof globalThis extends {
   TrustedHTML: { prototype: infer T };
 } ? T
-  : string & { __trusted_html_brand?: never };
+  : string & { readonly [trustedHTMLBrand]: true };
 
 type TrustedTypePolicyValue = typeof globalThis extends {
   TrustedTypePolicy: { prototype: infer P };
@@ -251,7 +253,7 @@ export const swap = async (
 
   const { html, response } = await toHtml(input, options);
   const domValue = await prepareDomValue(html, options, response);
-  const resolvedText = typeof html === "string" ? html : String(html);
+  const resolvedText = typeof domValue === "string" ? domValue : String(domValue);
 
   await runWithTransition(() => applySwap(target, writeMode, domValue), options.viewTransition);
 
