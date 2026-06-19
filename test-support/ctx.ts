@@ -1,3 +1,5 @@
+import type { ExecutionContext } from "../src/router.ts";
+
 export const makeCtx = () => {
   const pending: Promise<unknown>[] = [];
   const ctx: ExecutionContext = {

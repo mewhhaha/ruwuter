@@ -37,6 +37,11 @@ export const renderToStream = (
 // deno-lint-ignore no-empty-interface
 export interface Env {}
 
+export interface ExecutionContext {
+  waitUntil(promise: Promise<unknown>): void;
+  passThroughOnException(): void;
+}
+
 export interface RequestContext<Bindings = Env> {
   request: Request;
   params: Record<string, string>;
