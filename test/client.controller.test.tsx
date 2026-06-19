@@ -55,6 +55,8 @@ describe("controller activation attributes", () => {
     const mounted = controller(href, { value: 1 });
 
     void (() => {
+      // @ts-expect-error typed controller props are required when the definition declares props.
+      controller(href);
       // @ts-expect-error typed controller props come from the branded URL definition.
       controller(href, { value: "wrong" });
     });

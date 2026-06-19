@@ -62,6 +62,8 @@ type DefinitionRefs<Definition extends ControllerDefinition> = Definition extend
 } ? Refs
   : ControllerRefs;
 
+type ControllerPropsArgs<Props> = Props extends undefined ? [props?: undefined] : [props: Props];
+
 export type DefinedController<Definition extends ControllerDefinition = ControllerDefinition> =
   & Controller<DefinitionProps<Definition>, DefinitionRefs<Definition>>
   & {
@@ -226,7 +228,7 @@ function createRefTokens<Refs extends ControllerRefs>(): ControllerRefTokens<Ref
 
 export function controller<Definition extends ControllerDefinition>(
   href: TypedControllerReference<Definition>,
-  props?: DefinitionProps<Definition>,
+  ...args: ControllerPropsArgs<DefinitionProps<Definition>>
 ): ControllerMount<DefinitionRefs<Definition>>;
 export function controller(
   href: UntypedControllerReference,
@@ -234,8 +236,9 @@ export function controller(
 ): ControllerMount<ControllerRefs>;
 export function controller<Definition extends ControllerDefinition>(
   href: ControllerReference<Definition>,
-  props?: DefinitionProps<Definition> | JsonValue,
+  ...args: [props?: DefinitionProps<Definition> | JsonValue]
 ): ControllerMount<DefinitionRefs<Definition>> {
+  const [props] = args;
   const spec = normalizeControllerReference(href);
   const serializedProps = serializeProps(props as JsonValue | undefined);
 
