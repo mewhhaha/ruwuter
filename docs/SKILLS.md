@@ -92,8 +92,8 @@ export default {
 };
 ```
 
-Ruwuter server context uses `AsyncLocalStorage`. On Cloudflare Workers, enable Node
-compatibility sufficient for `node:async_hooks`, such as `nodejs_compat` or `nodejs_als`.
+Ruwuter server context uses `AsyncLocalStorage`. On Cloudflare Workers, enable Node compatibility
+sufficient for `node:async_hooks`, such as `nodejs_compat` or `nodejs_als`.
 
 Augment the package `Env` interface when route helpers should know application bindings:
 
