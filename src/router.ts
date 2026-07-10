@@ -5,14 +5,11 @@
  */
 
 import type { JSX } from "./runtime/jsx.ts";
-import { type Html, into, isHtml } from "./runtime/node.ts";
+import { fromParts, type Html, into, isHtml } from "./runtime/node.ts";
 import { bindContext, runWithContextStore } from "./components/context.ts";
-import { runWithHooksStore, withHookFrame } from "./runtime/hooks.ts";
 
 export type { Html } from "./runtime/node.ts";
 export type { JSX } from "./runtime/jsx.ts";
-
-const encoder = new TextEncoder();
 
 /**
  * Renders an HTML value to a complete string.
@@ -152,8 +149,6 @@ const toParams = (
   return result;
 };
 
-const runWithStores = <T>(fn: () => Promise<T>) => runWithHooksStore(() => runWithContextStore(fn));
-
 const ACTION_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 
 const methodSetForLeaf = (leaf: mod | undefined): Set<string> => {
@@ -207,49 +202,24 @@ const dataResponse = async (
   return json(value);
 };
 
-const streamFromGenerator = (
-  generator: AsyncGenerator<string>,
-  signal: AbortSignal,
-): ReadableStream<Uint8Array> => {
-  let closed = false;
-  const next = bindContext(() => generator.next());
-  const close = bindContext(async () => {
-    if (closed) return;
-    closed = true;
-    await generator.return(undefined).catch(() => {});
-  });
-
-  return new ReadableStream({
-    async pull(controller) {
-      try {
-        if (signal.aborted) {
-          await close();
-          signal.throwIfAborted?.();
-          throw new DOMException("The operation was aborted.", "AbortError");
-        }
-
-        const chunk = await next();
-        if (chunk.done) {
-          closed = true;
-          controller.close();
-          return;
-        }
-        controller.enqueue(encoder.encode(chunk.value));
-      } catch (error) {
-        await close();
-        controller.error(
-          error instanceof Response
-            ? new TypeError(
-              "Route components cannot throw Response after HTML streaming has started. Return responses from loaders or actions instead.",
-            )
-            : error,
-        );
-      }
+/**
+ * Wraps a generator so every advance runs under the context store that is
+ * active now. Stream pulls happen outside the request's AsyncLocalStorage
+ * scope, so lazily rendered components would otherwise lose context values.
+ */
+const bindGenerator = (generator: AsyncGenerator<string>): AsyncGenerator<string> => {
+  const bound: AsyncGenerator<string> = {
+    next: bindContext(() => generator.next()) as AsyncGenerator<string>["next"],
+    return: bindContext(() => generator.return(undefined)) as AsyncGenerator<string>["return"],
+    throw: (error?: unknown) => generator.throw(error),
+    [Symbol.asyncIterator]() {
+      return bound;
     },
-    async cancel() {
-      await close();
+    [Symbol.asyncDispose]() {
+      return generator[Symbol.asyncDispose]?.() ?? Promise.resolve();
     },
-  });
+  };
+  return bound;
 };
 
 const routeData = async (
@@ -298,32 +268,25 @@ const routeResponse = async (
 
   const renderFragment = async (index: number): Promise<Html> => {
     if (index >= fragments.length) {
-      return into("");
+      return fromParts([]);
     }
 
     const { mod } = fragments[index];
-    const next = () => renderFragment(index + 1);
-
-    const childHtml = into(
-      (async function* (): AsyncGenerator<string> {
-        const inner = await next();
-        yield* inner.generator;
-      })(),
-    );
+    // Children render lazily: the next fragment's component only runs once the
+    // stream reaches its position in the parent's markup.
+    const childHtml = fromParts([{ v: () => renderFragment(index + 1), esc: false }]);
 
     const Component = mod.default;
     if (!Component) {
       return childHtml;
     }
 
-    let result: Renderable;
+    let result: Awaited<Renderable>;
     try {
-      result = await withHookFrame(() =>
-        Component({
-          loaderData: loaderData[index],
-          children: childHtml,
-        })
-      );
+      result = await Component({
+        loaderData: loaderData[index],
+        children: childHtml,
+      });
     } catch (error) {
       if (error instanceof Response) {
         throw new TypeError(
@@ -339,18 +302,25 @@ const routeResponse = async (
       );
     }
 
-    return isHtml(result) ? result : into(result);
+    return isHtml(result) ? result : fromParts([{ v: result, esc: true }]);
   };
 
   const node = await renderFragment(0);
 
-  const body = streamFromGenerator(
-    (async function* (): AsyncGenerator<string> {
+  const page = (async function* (): AsyncGenerator<string> {
+    try {
       yield "<!doctype html>";
       yield* node.generator;
-    })(),
-    ctx.signal,
-  );
+    } catch (error) {
+      throw error instanceof Response
+        ? new TypeError(
+          "Route components cannot throw Response after HTML streaming has started. Return responses from loaders or actions instead.",
+        )
+        : error;
+    }
+  })();
+
+  const body = into(bindGenerator(page)).toReadableStream({ signal: ctx.signal });
 
   return new Response(body, {
     headers,
@@ -372,34 +342,40 @@ const fragmentPath = (pathname: string): { routePath: string; name: string } | u
   };
 };
 
+type CompiledRoute<Bindings = Env> = {
+  pattern: URLPattern;
+  fragments: fragment<Bindings>[];
+  leaf: mod<Bindings> | undefined;
+  allowed: Set<string>;
+  allow: string;
+};
+
+const FRAGMENT_ALLOWED = new Set(["GET", "HEAD", "OPTIONS"]);
+const FRAGMENT_ALLOW = allowHeader(FRAGMENT_ALLOWED);
+
 const fragmentResponse = async (
-  routes: route[],
+  routes: CompiledRoute[],
   request: Request,
+  pathname: string,
   env: Env,
   executionContext: ExecutionContext,
 ): Promise<Response | undefined> => {
-  const url = new URL(request.url);
-  const match = fragmentPath(url.pathname);
+  const match = fragmentPath(pathname);
   if (!match) return undefined;
 
-  const allowed = new Set(["GET", "HEAD", "OPTIONS"]);
   if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: { Allow: allowHeader(allowed) } });
+    return new Response(null, { status: 204, headers: { Allow: FRAGMENT_ALLOW } });
   }
-  if (!allowed.has(request.method)) {
-    return new Response(null, { status: 405, headers: { Allow: allowHeader(allowed) } });
+  if (!FRAGMENT_ALLOWED.has(request.method)) {
+    return new Response(null, { status: 405, headers: { Allow: FRAGMENT_ALLOW } });
   }
 
-  const routeUrl = new URL(request.url);
-  routeUrl.pathname = match.routePath;
-  routeUrl.search = "";
-
-  for (const [pattern, stack] of routes) {
-    const routeMatch = pattern.exec(routeUrl.href);
+  for (const { pattern, fragments } of routes) {
+    const routeMatch = pattern.exec({ pathname: match.routePath });
     if (!routeMatch) continue;
 
-    for (let index = stack.length - 1; index >= 0; index--) {
-      const endpoint = stack[index].mod.fragments?.[match.name];
+    for (let index = fragments.length - 1; index >= 0; index--) {
+      const endpoint = fragments[index].mod.fragments?.[match.name];
       if (!endpoint) continue;
 
       const ctx: RequestContext = {
@@ -419,38 +395,46 @@ const fragmentResponse = async (
 };
 
 export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindings> => {
+  const compiled: CompiledRoute<Bindings>[] = routes.map(([pattern, fragments]) => {
+    const leaf = fragments[fragments.length - 1]?.mod;
+    const allowed = methodSetForLeaf(leaf as mod | undefined);
+    return { pattern, fragments, leaf, allowed, allow: allowHeader(allowed) };
+  });
+
   const handle = (
     request: Request,
     env: Bindings,
     executionContext: ExecutionContext,
   ): Promise<Response> => {
-    return runWithStores(async () => {
+    return runWithContextStore(async () => {
       try {
+        const url = new URL(request.url);
+
         const explicitFragment = await fragmentResponse(
-          routes as route[],
+          compiled as CompiledRoute[],
           request,
+          url.pathname,
           env as Env,
           executionContext,
         );
         if (explicitFragment) return explicitFragment;
 
-        let fragments: fragment<Bindings>[] | undefined;
+        let matched: CompiledRoute<Bindings> | undefined;
         let params: Record<string, string> | undefined;
-        for (const [pattern, frags] of routes) {
-          const match = pattern.exec(request.url);
+        for (const route of compiled) {
+          const match = route.pattern.exec({ pathname: url.pathname });
           if (match) {
-            fragments = frags;
+            matched = route;
             params = toParams(match.pathname.groups);
             break;
           }
         }
 
-        if (!fragments || !params) {
+        if (!matched || !params) {
           return new Response(null, { status: 404 });
         }
 
-        const leaf = fragments[fragments.length - 1]?.mod;
-        const allowed = methodSetForLeaf(leaf as mod | undefined);
+        const { fragments, leaf, allowed, allow } = matched;
         if (allowed.size === 0) {
           return new Response(null, { status: 404 });
         }
@@ -458,14 +442,14 @@ export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindin
         if (request.method === "OPTIONS") {
           return new Response(null, {
             status: 204,
-            headers: { Allow: allowHeader(allowed) },
+            headers: { Allow: allow },
           });
         }
 
         if (!allowed.has(request.method)) {
           return new Response(null, {
             status: 405,
-            headers: { Allow: allowHeader(allowed) },
+            headers: { Allow: allow },
           });
         }
 

@@ -6,13 +6,29 @@
 
 import { createContext } from "./context.ts";
 import { Fragment, into, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
+import { fromParts } from "../runtime/node.ts";
 
-type SuspenseRegistry = Map<string, Promise<[id: string, html: string]>>;
+type Settled =
+  | { id: string; ok: true; html: string }
+  | { id: string; ok: false; error: unknown };
+
+type SuspenseRegistry = {
+  /** Monotonic id source for boundaries within one render. */
+  counter: number;
+  /** Boundaries registered but not yet settled. */
+  pending: number;
+  /** Settled boundaries waiting to be emitted by `Resolve`. */
+  queue: Settled[];
+  /** Wakes a `Resolve` that is waiting for the next settlement. */
+  wake: (() => void) | undefined;
+};
 
 const context = createContext<SuspenseRegistry | undefined>(undefined);
 
-const getRegistry = (): SuspenseRegistry | undefined => {
-  return context.use();
+const settle = (registry: SuspenseRegistry, result: Settled): void => {
+  registry.pending--;
+  registry.queue.push(result);
+  registry.wake?.();
 };
 
 type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
@@ -30,37 +46,29 @@ export const Suspense = ({
   children,
   ...props
 }: SuspenseProps): JSX.Element => {
-  const id = `suspense-${crypto.randomUUID()}`;
   return into(
     (async function* () {
-      const registry = getRegistry();
+      const registry = context.use();
+      // Function children are called lazily by the renderer; escaping applies
+      // to any plain-string results.
+      const content = fromParts([{ v: children, esc: true }]);
+
       if (!registry) {
         // No registry -> render children directly (no fallback streaming)
-        const content = typeof children === "function" ? await children() : children;
-        if (!content) return;
-        yield await (await content).toPromise();
+        yield* content.generator;
         return;
       }
 
-      // With registry -> register resolver promise and stream fallback now
-      let promise: Promise<[id: string, html: string]>;
-      if (typeof children === "function") {
-        promise = children().then(async (el: JSX.Element) => [
-          id,
-          await (await el).toPromise(),
-        ]);
-      } else if (children === undefined) {
-        promise = Promise.resolve([id, ""]);
-      } else {
-        promise = (async () => [
-          id,
-          await (await children).toPromise(),
-        ])();
-      }
-      registry.set(id, promise);
+      // With registry -> register the resolving content and stream fallback now
+      const id = `suspense-${registry.counter++}`;
+      registry.pending++;
+      content.toPromise().then(
+        (html) => settle(registry, { id, ok: true, html }),
+        (error) => settle(registry, { id, ok: false, error }),
+      );
 
       // Emit fallback wrapper immediately
-      yield* into(jsx(As, { ...props, id, children: fallback })).generator;
+      yield* jsx(As, { ...props, id, children: fallback }).generator;
     })(),
   );
 };
@@ -72,22 +80,31 @@ export const Suspense = ({
 export const Resolve = (): JSX.Element => {
   return into(
     (async function* () {
-      const registry = getRegistry();
+      const registry = context.use();
       if (!registry) return;
 
       // If we arrived before any Suspense registered, allow one tick for registration
-      if (registry.size === 0) {
+      if (registry.pending === 0 && registry.queue.length === 0) {
         await Promise.resolve();
       }
 
-      while (registry.size > 0) {
-        const [id, element] = await Promise.race(registry.values());
-        registry.delete(id);
-        yield `<template data-rw-target="${id}">${element}</template>`;
+      while (registry.pending > 0 || registry.queue.length > 0) {
+        if (registry.queue.length === 0) {
+          await new Promise<void>((resolve) => {
+            registry.wake = resolve;
+          });
+          registry.wake = undefined;
+          continue;
+        }
+
+        const settled = registry.queue.shift()!;
+        if (!settled.ok) throw settled.error;
+        yield `<template data-rw-target="${settled.id}">${settled.html}</template>`;
       }
     })(),
   );
 };
+
 type SuspenseProviderProps = {
   children?: JSX.HtmlNode;
 };
@@ -98,7 +115,12 @@ type SuspenseProviderProps = {
 export const SuspenseProvider = ({
   children,
 }: SuspenseProviderProps): JSX.Element => {
-  const registry = new Map<string, Promise<[id: string, html: string]>>();
+  const registry: SuspenseRegistry = {
+    counter: 0,
+    pending: 0,
+    queue: [],
+    wake: undefined,
+  };
   const provided = jsx(Fragment, {
     children: [children, jsx(Resolve, {})],
   });

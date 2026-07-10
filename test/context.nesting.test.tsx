@@ -81,7 +81,7 @@ describe("context providers", () => {
     );
     const html = await res.text();
 
-    expect(html).toContain('<div id="theme" >spicy</div>');
+    expect(html).toContain('<div id="theme">spicy</div>');
     expect(html).not.toContain("plain");
   });
 });

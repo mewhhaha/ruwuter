@@ -92,7 +92,7 @@ export default {
 };
 ```
 
-Ruwuter server context and render frames use `AsyncLocalStorage`. On Cloudflare Workers, enable Node
+Ruwuter server context uses `AsyncLocalStorage`. On Cloudflare Workers, enable Node
 compatibility sufficient for `node:async_hooks`, such as `nodejs_compat` or `nodejs_als`.
 
 Augment the package `Env` interface when route helpers should know application bindings:
@@ -109,8 +109,7 @@ export {};
 ```
 
 References: [src/router.ts](./src/router.ts),
-[src/components/context.ts](./src/components/context.ts),
-[src/runtime/hooks.ts](./src/runtime/hooks.ts).
+[src/components/context.ts](./src/components/context.ts).
 
 ## Application Structure
 

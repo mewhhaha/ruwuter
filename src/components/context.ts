@@ -1,14 +1,18 @@
+/**
+ * @module
+ *
+ * AsyncLocalStorage‑based context utilities for composing JSX trees.
+ * Provides a small Provider/use API that mirrors React's ergonomics.
+ */
+
 import { AsyncLocalStorage } from "node:async_hooks";
-import { into, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
+import { Fragment, into, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
 
 type Store = Map<symbol, unknown[]>;
 
 const storage = new AsyncLocalStorage<Store>();
-let fallbackStore: Store | undefined;
 
-const getStore = (): Store | undefined => {
-  return storage.getStore() || fallbackStore;
-};
+const getStore = (): Store | undefined => storage.getStore();
 
 function pushValue<T>(key: symbol, value: T): () => void {
   const store = getStore();
@@ -45,44 +49,19 @@ const isPromise = (value: unknown): value is Promise<unknown> => {
  * Use this to isolate a request or render pass.
  */
 export function runWithContextStore<T>(fn: () => T): T {
-  let result!: T;
-  const local = new Map() as Store;
-  // Use AsyncLocalStorage if available; also set a fallback for non-ALS environments
-  storage.run(local, () => {
-    const prev = fallbackStore;
-    fallbackStore = local;
-    try {
-      result = fn();
-    } finally {
-      fallbackStore = prev;
-    }
-  });
-  return result;
+  return storage.run(new Map(), fn);
 }
-
-/**
- * Captures the current store and returns a function that runs under it.
- * Useful when scheduling async work that must see the same context.
- */
-type UnknownFn = (...args: unknown[]) => unknown;
 
 /**
  * Binds a function to the current context store so later execution sees the same context values.
  */
+type UnknownFn = (...args: unknown[]) => unknown;
+
 export function bindContext<F extends UnknownFn>(fn: F): F {
   const store = getStore();
-  if (!store) return fn as F;
+  if (!store) return fn;
   return ((...args: Parameters<F>): ReturnType<F> =>
-    // Prefer ALS; also set fallback for the duration
-    storage.run(store, () => {
-      const prev = fallbackStore;
-      fallbackStore = store;
-      try {
-        return fn(...args) as ReturnType<F>;
-      } finally {
-        fallbackStore = prev;
-      }
-    })) as F;
+    storage.run(store, () => fn(...args) as ReturnType<F>)) as F;
 }
 
 /**
@@ -110,13 +89,13 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
     value: T;
     children?: JSX.HtmlNode;
   }): JSX.Element => {
+    const content = Fragment({ children });
     const store = getStore();
     if (!store) {
-      return into(children);
+      return content;
     }
 
     const release = pushValue(key, value);
-    const content = into(children);
 
     return into(
       (async function* () {
@@ -167,12 +146,6 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
   const api: CreatedContext<T> = { Provider, use, withValue };
   return api;
 }
-/**
- * @module
- *
- * AsyncLocalStorage‑based context utilities for composing JSX trees.
- * Provides a small Provider/use API that mirrors React's ergonomics.
- */
 
 export const use = <T>(context: CreatedContext<T>): T => {
   return context.use();
