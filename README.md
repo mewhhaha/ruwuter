@@ -48,27 +48,31 @@ parent-to-leaf order. Because every loader starts before settlement, child loade
 run even when a parent redirects or fails; later rejections are observed and do not become unhandled
 promises.
 
-Applications can provide global error and not-found responses:
+The router itself stays out of error and not-found presentation: unmatched requests return an empty
+`404`, and errors that are not a `Response` rethrow to the caller. Wrap `handle` to provide your own
+responses:
 
 ```tsx
 import { html } from "@mewhhaha/ruwuter";
 
-const router = Router(routes, {
-  onNotFound: (ctx) =>
-    html(<h1>Not found: {new URL(ctx.request.url).pathname}</h1>, {
-      status: 404,
-    }),
-  onError: (error, ctx) => {
-    ctx.executionContext.waitUntil(reportError(error));
-    return html(<h1>Something went wrong</h1>, { status: 500 });
+export default {
+  async fetch(request: Request, env: Env, executionContext: ExecutionContext) {
+    try {
+      const response = await router.handle(request, env, executionContext);
+      if (response.status === 404 && !response.body) {
+        return html(<h1>Not found: {new URL(request.url).pathname}</h1>, { status: 404 });
+      }
+      return response;
+    } catch (error) {
+      executionContext.waitUntil(reportError(error));
+      return html(<h1>Something went wrong</h1>, { status: 500 });
+    }
   },
-});
+};
 ```
 
-Unhandled failures are logged as complete error values, preserving stacks and causes. Returning
-`undefined` from either hook uses the default empty response. Once a streamed response has begun, a
-later rendering failure cannot change its status or invoke `onError`; the already-committed body
-ends early instead.
+Once a streamed response has begun, a later rendering failure cannot change its status or reach your
+catch; the already-committed body ends early instead.
 
 ## Response Helpers
 

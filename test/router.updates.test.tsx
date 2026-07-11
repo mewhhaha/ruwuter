@@ -63,25 +63,7 @@ describe("Router updates", () => {
     expect(result.headers.get("x-route")).toBe("child");
   });
 
-  it("uses the static path lookup without executing its URLPattern", async () => {
-    const pattern = new URLPattern({ pathname: "/static" });
-    Object.defineProperty(pattern, "exec", {
-      value: () => {
-        throw new Error("static route should not execute its pattern");
-      },
-    });
-    const router = Router([[
-      pattern,
-      [{ id: "static", mod: { loader: () => ({ ok: true }) } }],
-    ]]);
-    const { ctx } = makeCtx();
-    const response = await router.handle(new Request("https://example.com/static"), {} as Env, ctx);
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true });
-  });
-
-  it("preserves first-match order before the static fast path", async () => {
+  it("matches routes in declaration order", async () => {
     const router = Router([
       [
         new URLPattern({ pathname: "/:slug" }),
@@ -98,7 +80,7 @@ describe("Router updates", () => {
     expect(await response.json()).toBe("dynamic:about");
   });
 
-  it("preserves the first duplicate static route", async () => {
+  it("preserves the first of duplicate routes", async () => {
     const router = Router([
       [
         new URLPattern({ pathname: "/duplicate" }),
@@ -119,7 +101,7 @@ describe("Router updates", () => {
     expect(await response.json()).toBe("first");
   });
 
-  it("keeps case-insensitive literal URLPatterns on the pattern matcher", async () => {
+  it("matches case-insensitive literal URLPatterns", async () => {
     const router = Router([[
       new URLPattern({ pathname: "/About" }, { ignoreCase: true }),
       [{ id: "about", mod: { loader: () => ({ matched: true }) } }],
@@ -161,8 +143,7 @@ describe("Router updates", () => {
     expect(response.status).toBe(302);
   });
 
-  it("lets onNotFound and onError render application responses with request context", async () => {
-    let errorParams: Record<string, string> | undefined;
+  it("rethrows loader errors so applications can respond to them", async () => {
     const router = Router([[
       new URLPattern({ pathname: "/items/:id" }),
       [{
@@ -173,22 +154,52 @@ describe("Router updates", () => {
           },
         },
       }],
-    ]], {
-      onNotFound: ({ params }) => new Response(`missing:${Object.keys(params).length}`),
-      onError: (_error, { params }) => {
-        errorParams = params;
-        return new Response("handled", { status: 520 });
-      },
-    });
+    ]]);
     const { ctx } = makeCtx();
 
-    const missing = await router.handle(new Request("https://example.com/missing"), {} as Env, ctx);
-    expect(await missing.text()).toBe("missing:0");
+    let caught: unknown;
+    try {
+      await router.handle(new Request("https://example.com/items/42"), {} as Env, ctx);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught instanceof Error).toBe(true);
+    expect((caught as Error).message).toBe("broken");
+  });
 
-    const failed = await router.handle(new Request("https://example.com/items/42"), {} as Env, ctx);
-    expect(failed.status).toBe(520);
-    expect(await failed.text()).toBe("handled");
-    expect(errorParams).toEqual({ id: "42" });
+  it("lets applications wrap handle for not-found and error responses", async () => {
+    const router = Router([[
+      new URLPattern({ pathname: "/items/:id" }),
+      [{
+        id: "item",
+        mod: {
+          loader: () => {
+            throw new Error("broken");
+          },
+        },
+      }],
+    ]]);
+    const { ctx } = makeCtx();
+
+    const fetch = async (request: Request): Promise<Response> => {
+      try {
+        const response = await router.handle(request, {} as Env, ctx);
+        if (response.status === 404 && !response.body) {
+          return new Response("custom not found", { status: 404 });
+        }
+        return response;
+      } catch {
+        return new Response("custom error", { status: 500 });
+      }
+    };
+
+    const missing = await fetch(new Request("https://example.com/missing"));
+    expect(missing.status).toBe(404);
+    expect(await missing.text()).toBe("custom not found");
+
+    const failed = await fetch(new Request("https://example.com/items/42"));
+    expect(failed.status).toBe(500);
+    expect(await failed.text()).toBe("custom error");
   });
 
   it("allows fragment endpoints to opt into POST", async () => {
@@ -249,8 +260,7 @@ describe("Router updates", () => {
     expect(await response.text()).toContain("static fragment");
   });
 
-  it("passes fragment params to onError", async () => {
-    let params: Record<string, string> | undefined;
+  it("rethrows fragment endpoint errors to the caller", async () => {
     const router = Router([[
       new URLPattern({ pathname: "/items/:id" }),
       [{
@@ -263,52 +273,48 @@ describe("Router updates", () => {
           },
         },
       }],
-    ]], {
-      onError: (_error, context) => {
-        params = context.params;
-        return new Response("handled", { status: 520 });
-      },
-    });
+    ]]);
     const { ctx } = makeCtx();
-    const response = await router.handle(
-      new Request("https://example.com/items/42/_ruwuter/details"),
-      {} as Env,
-      ctx,
-    );
 
-    expect(response.status).toBe(520);
-    expect(params).toEqual({ id: "42" });
+    let caught: unknown;
+    try {
+      await router.handle(
+        new Request("https://example.com/items/42/_ruwuter/details"),
+        {} as Env,
+        ctx,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught instanceof Error).toBe(true);
+    expect((caught as Error).message).toBe("fragment failed");
   });
 
-  it("routes fragment misses through onNotFound with available params", async () => {
-    const seen: Record<string, string>[] = [];
+  it("returns a bodyless 404 for fragment misses", async () => {
     const router = Router([[
       new URLPattern({ pathname: "/items/:id" }),
       [{ id: "item", mod: { default: () => "item" } }],
-    ]], {
-      onNotFound: ({ params }) => {
-        seen.push(params);
-        return new Response("fragment missing", { status: 404 });
-      },
-    });
+    ]]);
     const { ctx } = makeCtx();
 
-    await router.handle(
+    const matchedRoute = await router.handle(
       new Request("https://example.com/items/42/_ruwuter/unknown"),
       {} as Env,
       ctx,
     );
-    await router.handle(
+    expect(matchedRoute.status).toBe(404);
+    expect(matchedRoute.body).toBe(null);
+
+    const unmatchedRoute = await router.handle(
       new Request("https://example.com/elsewhere/_ruwuter/unknown"),
       {} as Env,
       ctx,
     );
-
-    expect(seen).toEqual([{ id: "42" }, {}]);
+    expect(unmatchedRoute.status).toBe(404);
+    expect(unmatchedRoute.body).toBe(null);
   });
 
-  it("cannot invoke onError after a streaming response is committed", async () => {
-    let handled = false;
+  it("cannot change a streaming response after it is committed", async () => {
     const router = Router([[
       new URLPattern({ pathname: "/late-error" }),
       [
@@ -322,12 +328,7 @@ describe("Router updates", () => {
           },
         },
       ],
-    ]], {
-      onError: () => {
-        handled = true;
-        return new Response("too late", { status: 500 });
-      },
-    });
+    ]]);
     const { ctx } = makeCtx();
     const response = await router.handle(
       new Request("https://example.com/late-error"),
@@ -343,6 +344,5 @@ describe("Router updates", () => {
       streamFailed = true;
     }
     expect(streamFailed).toBe(true);
-    expect(handled).toBe(false);
   });
 });
