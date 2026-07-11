@@ -116,20 +116,6 @@ export type router<Bindings = Env> = {
   ) => Promise<Response>;
 };
 
-export type RouterErrorHandler<Bindings = Env> = (
-  error: unknown,
-  ctx: RequestContext<Bindings>,
-) => Response | undefined | Promise<Response | undefined>;
-
-export type RouterNotFoundHandler<Bindings = Env> = (
-  ctx: RequestContext<Bindings>,
-) => Response | undefined | Promise<Response | undefined>;
-
-export type RouterOptions<Bindings = Env> = {
-  onError?: RouterErrorHandler<Bindings>;
-  onNotFound?: RouterNotFoundHandler<Bindings>;
-};
-
 export function html(value: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type")) {
@@ -377,7 +363,6 @@ const fragmentPath = (pathname: string): { routePath: string; name: string } | u
 };
 
 type CompiledRoute<Bindings = Env> = {
-  index: number;
   pattern: URLPattern;
   fragments: fragment<Bindings>[];
   leaf: mod<Bindings> | undefined;
@@ -392,63 +377,20 @@ const fragmentMethods = <Bindings>(endpoint: FragmentEndpoint<Bindings>): Set<st
   return methods;
 };
 
-const isStaticPathPattern = (pattern: URLPattern): boolean => {
-  if (pattern.protocol !== "*" || pattern.username !== "*" || pattern.password !== "*") {
-    return false;
-  }
-  if (pattern.hostname !== "*" || pattern.port !== "*" || pattern.search !== "*") {
-    return false;
-  }
-  if (pattern.hash !== "*") return false;
-  if (/[:*(){}?+]/.test(pattern.pathname)) return false;
-
-  const caseVariant = pattern.pathname.replace(
-    /[A-Za-z]/,
-    (character) =>
-      character === character.toLowerCase() ? character.toUpperCase() : character.toLowerCase(),
-  );
-  return caseVariant === pattern.pathname || !pattern.test({ pathname: caseVariant });
-};
-
 type RouteMatch<Bindings> = {
   route: CompiledRoute<Bindings>;
   params: Record<string, string>;
 };
 
 function* matchingRoutes<Bindings>(
-  staticRoutes: ReadonlyMap<string, readonly CompiledRoute<Bindings>[]>,
-  dynamicRoutes: readonly CompiledRoute<Bindings>[],
+  routes: readonly CompiledRoute<Bindings>[],
   pathname: string,
 ): Generator<RouteMatch<Bindings>> {
-  const staticMatches = staticRoutes.get(pathname) ?? [];
-  let dynamicIndex = 0;
-
-  for (const staticRoute of staticMatches) {
-    while (
-      dynamicIndex < dynamicRoutes.length &&
-      dynamicRoutes[dynamicIndex].index < staticRoute.index
-    ) {
-      const route = dynamicRoutes[dynamicIndex++];
-      const match = route.pattern.exec({ pathname });
-      if (match) yield { route, params: toParams(match.pathname.groups) };
-    }
-    yield { route: staticRoute, params: {} };
-  }
-
-  while (dynamicIndex < dynamicRoutes.length) {
-    const route = dynamicRoutes[dynamicIndex++];
+  for (const route of routes) {
     const match = route.pattern.exec({ pathname });
     if (match) yield { route, params: toParams(match.pathname.groups) };
   }
 }
-
-const matchRoute = <Bindings>(
-  staticRoutes: ReadonlyMap<string, readonly CompiledRoute<Bindings>[]>,
-  dynamicRoutes: readonly CompiledRoute<Bindings>[],
-  pathname: string,
-): RouteMatch<Bindings> | undefined => {
-  return matchingRoutes(staticRoutes, dynamicRoutes, pathname).next().value;
-};
 
 type FragmentMatch<Bindings> = {
   context: RequestContext<Bindings>;
@@ -456,8 +398,7 @@ type FragmentMatch<Bindings> = {
 };
 
 const matchFragment = <Bindings>(
-  staticRoutes: ReadonlyMap<string, readonly CompiledRoute<Bindings>[]>,
-  dynamicRoutes: readonly CompiledRoute<Bindings>[],
+  routes: readonly CompiledRoute<Bindings>[],
   request: Request,
   pathname: string,
   env: Bindings,
@@ -466,21 +407,15 @@ const matchFragment = <Bindings>(
   const match = fragmentPath(pathname);
   if (!match) return undefined;
 
-  let context: RequestContext<Bindings> = {
+  const context: RequestContext<Bindings> = {
     request,
     params: {},
     env,
     executionContext,
     signal: request.signal,
   };
-  let hasRouteMatch = false;
 
-  for (const routeMatch of matchingRoutes(staticRoutes, dynamicRoutes, match.routePath)) {
-    if (!hasRouteMatch) {
-      hasRouteMatch = true;
-      context = { ...context, params: routeMatch.params };
-    }
-
+  for (const routeMatch of matchingRoutes(routes, match.routePath)) {
     for (let index = routeMatch.route.fragments.length - 1; index >= 0; index--) {
       const endpoint = routeMatch.route.fragments[index].mod.fragments?.[match.name];
       if (endpoint) {
@@ -497,27 +432,12 @@ const matchFragment = <Bindings>(
 
 export const Router = <Bindings = Env>(
   routes: route<Bindings>[],
-  options: RouterOptions<Bindings> = {},
 ): router<Bindings> => {
-  const compiled: CompiledRoute<Bindings>[] = routes.map(([pattern, fragments], index) => {
+  const compiled: CompiledRoute<Bindings>[] = routes.map(([pattern, fragments]) => {
     const leaf = fragments[fragments.length - 1]?.mod;
     const allowed = methodSetForLeaf(leaf as mod | undefined);
-    return { index, pattern, fragments, leaf, allowed, allow: allowHeader(allowed) };
+    return { pattern, fragments, leaf, allowed, allow: allowHeader(allowed) };
   });
-  const staticRoutes = new Map<string, CompiledRoute<Bindings>[]>();
-  const dynamicRoutes: CompiledRoute<Bindings>[] = [];
-  for (const route of compiled) {
-    if (isStaticPathPattern(route.pattern)) {
-      const matches = staticRoutes.get(route.pattern.pathname);
-      if (matches) {
-        matches.push(route);
-      } else {
-        staticRoutes.set(route.pattern.pathname, [route]);
-      }
-    } else {
-      dynamicRoutes.push(route);
-    }
-  }
 
   const handle = (
     request: Request,
@@ -525,30 +445,18 @@ export const Router = <Bindings = Env>(
     executionContext: ExecutionContext,
   ): Promise<Response> => {
     return runWithContextStore(async () => {
-      let context: RequestContext<Bindings> | undefined;
       try {
         const url = new URL(request.url);
-        const baseContext: RequestContext<Bindings> = {
-          request,
-          params: {},
-          env,
-          executionContext,
-          signal: request.signal,
-        };
 
         const explicitFragment = matchFragment(
-          staticRoutes,
-          dynamicRoutes,
+          compiled,
           request,
           url.pathname,
           env,
           executionContext,
         );
         if (explicitFragment) {
-          context = explicitFragment.context;
           if (!explicitFragment.endpoint) {
-            const response = await options.onNotFound?.(context);
-            if (response) return request.method === "HEAD" ? withoutBody(response) : response;
             return new Response(null, { status: 404 });
           }
 
@@ -561,16 +469,13 @@ export const Router = <Bindings = Env>(
             return new Response(null, { status: 405, headers: { Allow: allow } });
           }
 
-          const result = await explicitFragment.endpoint(context);
+          const result = await explicitFragment.endpoint(explicitFragment.context);
           const response = result instanceof Response ? result : html(result);
           return request.method === "HEAD" ? withoutBody(response) : response;
         }
 
-        const routeMatch = matchRoute(staticRoutes, dynamicRoutes, url.pathname);
+        const routeMatch = matchingRoutes(compiled, url.pathname).next().value;
         if (!routeMatch) {
-          context = baseContext;
-          const response = await options.onNotFound?.(context);
-          if (response) return request.method === "HEAD" ? withoutBody(response) : response;
           return new Response(null, { status: 404 });
         }
 
@@ -593,7 +498,7 @@ export const Router = <Bindings = Env>(
           });
         }
 
-        const ctx: RequestContext<Bindings> = context = {
+        const ctx: RequestContext<Bindings> = {
           request,
           params: routeMatch.params,
           env,
@@ -601,56 +506,36 @@ export const Router = <Bindings = Env>(
           signal: request.signal,
         };
 
-        let response: Response;
         if (request.method === "HEAD") {
           if (leaf?.default) {
-            response = await routeHeadResponse(fragments as fragment[], ctx as RequestContext);
-          } else if (leaf?.loader) {
-            response = withoutBody(
-              await dataResponse(leaf.loader as loader, ctx as RequestContext),
-            );
-          } else {
-            return new Response(null, { status: 404 });
+            return await routeHeadResponse(fragments as fragment[], ctx as RequestContext);
           }
-        } else if (request.method === "GET") {
-          if (leaf?.default) {
-            response = await routeResponse(fragments as fragment[], ctx as RequestContext);
-          } else if (leaf?.loader) {
-            response = await dataResponse(leaf.loader as loader, ctx as RequestContext);
-          } else {
-            return new Response(null, { status: 404 });
+          if (leaf?.loader) {
+            return withoutBody(await dataResponse(leaf.loader as loader, ctx as RequestContext));
           }
-        } else if (leaf?.action) {
-          response = await dataResponse(leaf.action as action, ctx as RequestContext);
-        } else {
           return new Response(null, { status: 404 });
         }
 
-        return response;
+        if (request.method === "GET") {
+          if (leaf?.default) {
+            return await routeResponse(fragments as fragment[], ctx as RequestContext);
+          }
+          if (leaf?.loader) {
+            return await dataResponse(leaf.loader as loader, ctx as RequestContext);
+          }
+          return new Response(null, { status: 404 });
+        }
+
+        if (leaf?.action) {
+          return await dataResponse(leaf.action as action, ctx as RequestContext);
+        }
+
+        return new Response(null, { status: 404 });
       } catch (error) {
         if (error instanceof Response) {
           return request.method === "HEAD" ? withoutBody(error) : error;
         }
-
-        console.error(error);
-
-        try {
-          const response = await options.onError?.(
-            error,
-            context ?? {
-              request,
-              params: {},
-              env,
-              executionContext,
-              signal: request.signal,
-            },
-          );
-          if (response) return request.method === "HEAD" ? withoutBody(response) : response;
-        } catch (handlerError) {
-          console.error(handlerError);
-        }
-
-        return new Response(null, { status: 500 });
+        throw error;
       }
     });
   };

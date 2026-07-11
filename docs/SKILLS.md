@@ -274,21 +274,28 @@ export default function Product({
 - Nested headers merge outer-to-inner. Later values replace earlier values except `Set-Cookie`,
   which appends.
 
-Create application-wide error surfaces with router options:
+Create application-wide error surfaces by wrapping `handle`; unmatched requests return an empty
+`404` and non-`Response` errors rethrow to the caller:
 
 ```tsx
-const router = Router(routes, {
-  onNotFound: () => html(<h1>Not found</h1>, { status: 404 }),
-  onError: (error, { executionContext }) => {
-    executionContext.waitUntil(reportError(error));
-    return html(<h1>Server error</h1>, { status: 500 });
+export default {
+  async fetch(request: Request, env: Env, executionContext: ExecutionContext) {
+    try {
+      const response = await router.handle(request, env, executionContext);
+      if (response.status === 404 && !response.body) {
+        return html(<h1>Not found</h1>, { status: 404 });
+      }
+      return response;
+    } catch (error) {
+      executionContext.waitUntil(reportError(error));
+      return html(<h1>Server error</h1>, { status: 500 });
+    }
   },
-});
+};
 ```
 
-The router logs complete unhandled error values, including stacks and causes. Hooks may return
-`undefined` to use the empty default response. Errors raised after streaming has started cannot
-change the committed status or reach `onError`; they terminate the body stream.
+Errors raised after streaming has started cannot change the committed status or reach the wrapping
+catch; they terminate the body stream.
 
 References: [src/router.ts](./src/router.ts), [src/types.ts](./src/types.ts),
 [test/router.test.tsx](./test/router.test.tsx).
