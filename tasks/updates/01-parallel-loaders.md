@@ -1,6 +1,6 @@
 # Run nested loaders concurrently
 
-**Status:** proposal · **Size:** S · **Files:** `src/router.ts`
+**Status:** implemented · **Size:** S · **Files:** `src/router.ts`
 
 ## Problem
 
@@ -45,3 +45,10 @@ surface as an unhandled rejection in workerd. The guard is needed either way.
 
 Add a test: two nested loaders with deferred resolution, assert both are in flight before either
 resolves, and assert header order is unchanged.
+
+## Implementation
+
+`routeData` starts every loader promise before settling them parent-to-leaf and attaches rejection
+observers immediately. Router tests cover concurrent starts, deterministic header order, and a
+losing rejection after an earlier response wins. README and usage docs describe the side-effect
+tradeoff.

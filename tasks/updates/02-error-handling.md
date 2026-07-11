@@ -1,6 +1,6 @@
 # Better error surfaces
 
-**Status:** proposal · **Size:** S · **Files:** `src/router.ts`
+**Status:** implemented · **Size:** S · **Files:** `src/router.ts`
 
 ## Problem
 
@@ -40,3 +40,10 @@ explainable in one paragraph.
 Note for streamed responses: errors thrown _after_ the first chunk can't become a 500 — the stream
 just aborts. Worth one sentence in the README so users know why they saw a truncated page instead of
 an error page.
+
+## Implementation
+
+The router logs complete error values and accepts typed `onError` and `onNotFound` hooks. Hook
+contexts retain dynamic params, including fragment failures and fragment misses. Tests also prove
+that late stream errors cannot change the committed response; README and `docs/SKILLS.md` document
+that limitation.

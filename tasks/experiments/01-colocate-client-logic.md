@@ -1,6 +1,6 @@
 # Co-locate client logic with JSX
 
-**Status:** proposal · **Size:** M (~300–500 lines, all in build tooling) · **Runtime cost:** zero
+**Status:** implemented (experimental opt-in) · **Size:** M · **Runtime cost:** zero by default
 
 ## Problem
 
@@ -124,3 +124,11 @@ Prototype in a branch: hardcode extraction of exactly one `client()` per file, n
 validation, dev mode only. If the URL plumbing works and the ergonomics feel right in a demo app,
 invest in the scope walk + build mode. If dev-mode plumbing is miserable, stop — option B already
 banks most of the DX win.
+
+## Implementation
+
+The experiment advanced past the prototype behind `ruwuter({ clientMacro: true })`: multiple
+top-level `client()` constants work in Vite dev and SSR builds, captured imports are rebased,
+lexical module captures fail with a props-directed diagnostic, aliases/import forms are preserved,
+and emitted hrefs are same-origin browser paths. Plain Deno keeps the sibling `.client.ts` path and
+the untransformed function fails loudly.

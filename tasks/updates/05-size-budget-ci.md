@@ -1,6 +1,6 @@
 # Enforce the size budget in CI
 
-**Status:** proposal · **Size:** XS · **Files:** `.github/workflows/ci.yml`, `deno.json`
+**Status:** implemented · **Size:** XS · **Files:** `.github/workflows/ci.yml`, `deno.json`
 
 ## Problem
 
@@ -27,3 +27,9 @@ soft number in the README badge sense — but the hard gate should be the browse
 
 This also gives every task in this folder a shared acceptance criterion: if a proposal can't fit
 inside the budgets, it belongs in build tooling or an opt-in entrypoint instead.
+
+## Implementation
+
+`deno task size` bundles, minifies, gzips, prints, and enforces `client.js` (1,400 B), `resolve.js`
+(500 B), `swap.js` (1,450 B), and opt-in `navigate.js` (1,500 B). It runs in both `deno task ci` and
+GitHub Actions.

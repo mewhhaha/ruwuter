@@ -26,6 +26,8 @@ repository.
   cleanup.
 - No legacy inline function storage, refs, adjacent metadata scripts, or auto-anchoring.
 - Type safety: the runtime is authored in TypeScript. Keep types accurate as you edit the file.
+- Runtime `?url` imports rely on the Ruwuter Vite plugin to emit compiled JavaScript; raw TypeScript
+  assets are not browser modules.
 
 ### Suspense client behavior
 
@@ -37,13 +39,16 @@ repository.
 
 ## Client Handlers
 
-- Import client handlers as modules and ask for their URL via `?url` (optionally `&no-inline`). The
-  import yields a branded string typed as a handler URL.
+- With the Vite plugin, import typed controller URLs from generated `app/controllers.ts`. The plugin
+  serves compiled modules in development and emits dedicated browser chunks in production; do not
+  cast raw TypeScript `?url` assets.
 - Use `defineController()` in browser modules and `controller(handlerUrl, props)` on the server
   element that owns the browser behavior. Use static `ref={mounted.refs.name}` tokens for elements
   the browser module needs. Attach DOM listeners with the `on(element)` helper from
   `@mewhhaha/ruwuter/browser`.
 - The router no longer serializes JS handlers; only HTML fragment assets are served for components.
+- Experimental same-file handlers use top-level `client()` only with `clientMacro: true`. They may
+  capture imports, never server module bindings; values cross the boundary through JSON props.
 
 ## JSX Runtime Contracts
 
@@ -56,10 +61,10 @@ repository.
 ## FS‑Routes
 
 - Generator modules in `src/fs-routes/`:
-  - `generate-router.ts` and `generate-types.ts`.
+  - `generate-router.ts`, `generate-types.ts`, and Vite-only `generate-controllers.ts`.
   - CLI entry: `src/fs-routes/routes.ts` (shebang runner).
 - How to run generation for an app folder:
-  - CLI: `node src/fs-routes/routes.ts ./app`
+  - Repository CLI: `deno run -A src/fs-routes/routes.ts ./app`
   - Programmatic: `import { generate } from "@mewhhaha/ruwuter/fs-routes"; await generate('./app');`
 
 ## Types and Lint
@@ -72,6 +77,7 @@ repository.
 - Type check: `deno task typecheck`
 - Lint: `deno lint`
 - Format: `deno fmt`
+- Browser size budgets: `deno task size`
 - Tests:
   - Unit/router tests: `deno task test`
   - DOM integration tests: `deno task test:dom`
@@ -81,8 +87,8 @@ repository.
 - Keep changes minimal and focused. Do not reformat unrelated files.
 - Avoid adding new dependencies; prefer Web/ESNext APIs.
 - Favor clarity over cleverness; keep the client runtime small and direct.
-- Preserve public APIs in `src/client.ts`, `src/router.ts`, and runtime files unless the change is
-  intentional and documented.
+- Preserve public APIs in `src/browser.ts`, `src/components/client.ts`, `src/runtime/client.ts`,
+  `src/router.ts`, and runtime files unless the change is intentional and documented.
 
 ## What Not To Do
 
@@ -94,5 +100,6 @@ repository.
 
 - [ ] `deno task typecheck` is clean
 - [ ] `deno lint` is clean
-- [ ] README examples stay in sync with behavior
+- [ ] `deno task size` is within budget
+- [ ] README examples and `docs/SKILLS.md` stay in sync with behavior
 - [ ] No legacy client paths or APIs reintroduced

@@ -1,6 +1,6 @@
 # Suspense: don't let one boundary kill the page
 
-**Status:** proposal · **Size:** S · **Files:** `src/components/suspense.ts`,
+**Status:** implemented · **Size:** S · **Files:** `src/components/suspense.ts`,
 `src/runtime/resolve.ts`
 
 ## Problem 1 — a rejected boundary aborts the whole stream
@@ -45,3 +45,10 @@ fine on Workers) so ids are `rw-<prefix>-<n>`. Also namespaces us away from user
 - Failing child with and without `errorFallback`: stream completes, sibling boundaries resolve,
   status stays 200.
 - Two nested providers: both sets of boundaries resolve to their own content.
+
+## Implementation
+
+Failed boundaries are logged and contained, optional element/function fallbacks render without
+stopping queue drainage, and a failing error fallback leaves the original fallback. Providers use
+full UUID-prefixed `rw-*` targets. Unit and stream tests cover sibling progress, both fallback
+modes, nested providers, and user-owned legacy ids.

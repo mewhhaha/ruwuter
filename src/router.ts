@@ -74,9 +74,17 @@ export type headers<Bindings = Env> = (
   | Record<string, string | undefined | null>
   | Headers;
 
-export type FragmentEndpoint<Bindings = Env> = (
-  ctx: RequestContext<Bindings>,
-) => EndpointResult;
+export type FragmentMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+export type FragmentOptions = {
+  /** Methods handled by this endpoint. GET endpoints also answer HEAD. */
+  methods?: readonly FragmentMethod[];
+};
+
+export type FragmentEndpoint<Bindings = Env> = {
+  (ctx: RequestContext<Bindings>): EndpointResult;
+  methods?: readonly FragmentMethod[];
+};
 
 export type mod<Bindings = Env> = {
   loader?: loader<Bindings>;
@@ -108,6 +116,20 @@ export type router<Bindings = Env> = {
   ) => Promise<Response>;
 };
 
+export type RouterErrorHandler<Bindings = Env> = (
+  error: unknown,
+  ctx: RequestContext<Bindings>,
+) => Response | undefined | Promise<Response | undefined>;
+
+export type RouterNotFoundHandler<Bindings = Env> = (
+  ctx: RequestContext<Bindings>,
+) => Response | undefined | Promise<Response | undefined>;
+
+export type RouterOptions<Bindings = Env> = {
+  onError?: RouterErrorHandler<Bindings>;
+  onNotFound?: RouterNotFoundHandler<Bindings>;
+};
+
 export function html(value: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type")) {
@@ -132,7 +154,14 @@ export function json(value: unknown, init: ResponseInit = {}): Response {
 
 export function fragment<Bindings = Env>(
   render: FragmentEndpoint<Bindings>,
+  options: FragmentOptions = {},
 ): FragmentEndpoint<Bindings> {
+  if (options.methods) {
+    Object.defineProperty(render, "methods", {
+      value: [...options.methods],
+      configurable: true,
+    });
+  }
   return render;
 }
 
@@ -228,10 +257,15 @@ const routeData = async (
 ): Promise<{ headers: Headers; loaderData: unknown[] }> => {
   const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
   const loaderData: unknown[] = [];
+  const results = fragments.map(({ mod }) => Promise.resolve().then(() => mod.loader?.(ctx)));
+
+  // Every loader has started before we settle any of them. If an earlier
+  // loader wins by throwing, later failures are still observed.
+  results.forEach((result) => result.catch(() => undefined));
 
   for (let i = 0; i < fragments.length; i++) {
     const { mod } = fragments[i];
-    const data = mod.loader ? await mod.loader(ctx) : undefined;
+    const data = await results[i];
     if (data instanceof Response) {
       throw data;
     }
@@ -343,6 +377,7 @@ const fragmentPath = (pathname: string): { routePath: string; name: string } | u
 };
 
 type CompiledRoute<Bindings = Env> = {
+  index: number;
   pattern: URLPattern;
   fragments: fragment<Bindings>[];
   leaf: mod<Bindings> | undefined;
@@ -350,56 +385,139 @@ type CompiledRoute<Bindings = Env> = {
   allow: string;
 };
 
-const FRAGMENT_ALLOWED = new Set(["GET", "HEAD", "OPTIONS"]);
-const FRAGMENT_ALLOW = allowHeader(FRAGMENT_ALLOWED);
+const fragmentMethods = <Bindings>(endpoint: FragmentEndpoint<Bindings>): Set<string> => {
+  const methods = new Set<string>(endpoint.methods ?? ["GET", "HEAD"]);
+  if (methods.has("GET")) methods.add("HEAD");
+  if (methods.size > 0) methods.add("OPTIONS");
+  return methods;
+};
 
-const fragmentResponse = async (
-  routes: CompiledRoute[],
+const isStaticPathPattern = (pattern: URLPattern): boolean => {
+  if (pattern.protocol !== "*" || pattern.username !== "*" || pattern.password !== "*") {
+    return false;
+  }
+  if (pattern.hostname !== "*" || pattern.port !== "*" || pattern.search !== "*") {
+    return false;
+  }
+  if (pattern.hash !== "*") return false;
+  if (/[:*(){}?+]/.test(pattern.pathname)) return false;
+
+  const caseVariant = pattern.pathname.replace(
+    /[A-Za-z]/,
+    (character) =>
+      character === character.toLowerCase() ? character.toUpperCase() : character.toLowerCase(),
+  );
+  return caseVariant === pattern.pathname || !pattern.test({ pathname: caseVariant });
+};
+
+type RouteMatch<Bindings> = {
+  route: CompiledRoute<Bindings>;
+  params: Record<string, string>;
+};
+
+function* matchingRoutes<Bindings>(
+  staticRoutes: ReadonlyMap<string, readonly CompiledRoute<Bindings>[]>,
+  dynamicRoutes: readonly CompiledRoute<Bindings>[],
+  pathname: string,
+): Generator<RouteMatch<Bindings>> {
+  const staticMatches = staticRoutes.get(pathname) ?? [];
+  let dynamicIndex = 0;
+
+  for (const staticRoute of staticMatches) {
+    while (
+      dynamicIndex < dynamicRoutes.length &&
+      dynamicRoutes[dynamicIndex].index < staticRoute.index
+    ) {
+      const route = dynamicRoutes[dynamicIndex++];
+      const match = route.pattern.exec({ pathname });
+      if (match) yield { route, params: toParams(match.pathname.groups) };
+    }
+    yield { route: staticRoute, params: {} };
+  }
+
+  while (dynamicIndex < dynamicRoutes.length) {
+    const route = dynamicRoutes[dynamicIndex++];
+    const match = route.pattern.exec({ pathname });
+    if (match) yield { route, params: toParams(match.pathname.groups) };
+  }
+}
+
+const matchRoute = <Bindings>(
+  staticRoutes: ReadonlyMap<string, readonly CompiledRoute<Bindings>[]>,
+  dynamicRoutes: readonly CompiledRoute<Bindings>[],
+  pathname: string,
+): RouteMatch<Bindings> | undefined => {
+  return matchingRoutes(staticRoutes, dynamicRoutes, pathname).next().value;
+};
+
+type FragmentMatch<Bindings> = {
+  context: RequestContext<Bindings>;
+  endpoint?: FragmentEndpoint<Bindings>;
+};
+
+const matchFragment = <Bindings>(
+  staticRoutes: ReadonlyMap<string, readonly CompiledRoute<Bindings>[]>,
+  dynamicRoutes: readonly CompiledRoute<Bindings>[],
   request: Request,
   pathname: string,
-  env: Env,
+  env: Bindings,
   executionContext: ExecutionContext,
-): Promise<Response | undefined> => {
+): FragmentMatch<Bindings> | undefined => {
   const match = fragmentPath(pathname);
   if (!match) return undefined;
 
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: { Allow: FRAGMENT_ALLOW } });
-  }
-  if (!FRAGMENT_ALLOWED.has(request.method)) {
-    return new Response(null, { status: 405, headers: { Allow: FRAGMENT_ALLOW } });
-  }
+  let context: RequestContext<Bindings> = {
+    request,
+    params: {},
+    env,
+    executionContext,
+    signal: request.signal,
+  };
+  let hasRouteMatch = false;
 
-  for (const { pattern, fragments } of routes) {
-    const routeMatch = pattern.exec({ pathname: match.routePath });
-    if (!routeMatch) continue;
+  for (const routeMatch of matchingRoutes(staticRoutes, dynamicRoutes, match.routePath)) {
+    if (!hasRouteMatch) {
+      hasRouteMatch = true;
+      context = { ...context, params: routeMatch.params };
+    }
 
-    for (let index = fragments.length - 1; index >= 0; index--) {
-      const endpoint = fragments[index].mod.fragments?.[match.name];
-      if (!endpoint) continue;
-
-      const ctx: RequestContext = {
-        request,
-        params: toParams(routeMatch.pathname.groups),
-        env,
-        executionContext,
-        signal: request.signal,
-      };
-      const result = await endpoint(ctx);
-      const response = result instanceof Response ? result : html(result);
-      return request.method === "HEAD" ? withoutBody(response) : response;
+    for (let index = routeMatch.route.fragments.length - 1; index >= 0; index--) {
+      const endpoint = routeMatch.route.fragments[index].mod.fragments?.[match.name];
+      if (endpoint) {
+        return {
+          endpoint,
+          context: { ...context, params: routeMatch.params },
+        };
+      }
     }
   }
 
-  return new Response(null, { status: 404 });
+  return { context };
 };
 
-export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindings> => {
-  const compiled: CompiledRoute<Bindings>[] = routes.map(([pattern, fragments]) => {
+export const Router = <Bindings = Env>(
+  routes: route<Bindings>[],
+  options: RouterOptions<Bindings> = {},
+): router<Bindings> => {
+  const compiled: CompiledRoute<Bindings>[] = routes.map(([pattern, fragments], index) => {
     const leaf = fragments[fragments.length - 1]?.mod;
     const allowed = methodSetForLeaf(leaf as mod | undefined);
-    return { pattern, fragments, leaf, allowed, allow: allowHeader(allowed) };
+    return { index, pattern, fragments, leaf, allowed, allow: allowHeader(allowed) };
   });
+  const staticRoutes = new Map<string, CompiledRoute<Bindings>[]>();
+  const dynamicRoutes: CompiledRoute<Bindings>[] = [];
+  for (const route of compiled) {
+    if (isStaticPathPattern(route.pattern)) {
+      const matches = staticRoutes.get(route.pattern.pathname);
+      if (matches) {
+        matches.push(route);
+      } else {
+        staticRoutes.set(route.pattern.pathname, [route]);
+      }
+    } else {
+      dynamicRoutes.push(route);
+    }
+  }
 
   const handle = (
     request: Request,
@@ -407,34 +525,56 @@ export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindin
     executionContext: ExecutionContext,
   ): Promise<Response> => {
     return runWithContextStore(async () => {
+      let context: RequestContext<Bindings> | undefined;
       try {
         const url = new URL(request.url);
+        const baseContext: RequestContext<Bindings> = {
+          request,
+          params: {},
+          env,
+          executionContext,
+          signal: request.signal,
+        };
 
-        const explicitFragment = await fragmentResponse(
-          compiled as CompiledRoute[],
+        const explicitFragment = matchFragment(
+          staticRoutes,
+          dynamicRoutes,
           request,
           url.pathname,
-          env as Env,
+          env,
           executionContext,
         );
-        if (explicitFragment) return explicitFragment;
-
-        let matched: CompiledRoute<Bindings> | undefined;
-        let params: Record<string, string> | undefined;
-        for (const route of compiled) {
-          const match = route.pattern.exec({ pathname: url.pathname });
-          if (match) {
-            matched = route;
-            params = toParams(match.pathname.groups);
-            break;
+        if (explicitFragment) {
+          context = explicitFragment.context;
+          if (!explicitFragment.endpoint) {
+            const response = await options.onNotFound?.(context);
+            if (response) return request.method === "HEAD" ? withoutBody(response) : response;
+            return new Response(null, { status: 404 });
           }
+
+          const methods = fragmentMethods(explicitFragment.endpoint);
+          const allow = allowHeader(methods);
+          if (request.method === "OPTIONS") {
+            return new Response(null, { status: 204, headers: { Allow: allow } });
+          }
+          if (!methods.has(request.method)) {
+            return new Response(null, { status: 405, headers: { Allow: allow } });
+          }
+
+          const result = await explicitFragment.endpoint(context);
+          const response = result instanceof Response ? result : html(result);
+          return request.method === "HEAD" ? withoutBody(response) : response;
         }
 
-        if (!matched || !params) {
+        const routeMatch = matchRoute(staticRoutes, dynamicRoutes, url.pathname);
+        if (!routeMatch) {
+          context = baseContext;
+          const response = await options.onNotFound?.(context);
+          if (response) return request.method === "HEAD" ? withoutBody(response) : response;
           return new Response(null, { status: 404 });
         }
 
-        const { fragments, leaf, allowed, allow } = matched;
+        const { fragments, leaf, allowed, allow } = routeMatch.route;
         if (allowed.size === 0) {
           return new Response(null, { status: 404 });
         }
@@ -453,9 +593,9 @@ export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindin
           });
         }
 
-        const ctx: RequestContext<Bindings> = {
+        const ctx: RequestContext<Bindings> = context = {
           request,
-          params,
+          params: routeMatch.params,
           env,
           executionContext,
           signal: request.signal,
@@ -492,8 +632,22 @@ export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindin
           return request.method === "HEAD" ? withoutBody(error) : error;
         }
 
-        if (error instanceof Error) {
-          console.error(error.message);
+        console.error(error);
+
+        try {
+          const response = await options.onError?.(
+            error,
+            context ?? {
+              request,
+              params: {},
+              env,
+              executionContext,
+              signal: request.signal,
+            },
+          );
+          if (response) return request.method === "HEAD" ? withoutBody(response) : response;
+        } catch (handlerError) {
+          console.error(handlerError);
         }
 
         return new Response(null, { status: 500 });

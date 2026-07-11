@@ -1,6 +1,6 @@
 # Generate typed controller hrefs
 
-**Status:** proposal · **Size:** S · **Runtime cost:** zero
+**Status:** implemented · **Size:** S · **Runtime cost:** zero
 
 ## Problem
 
@@ -58,3 +58,12 @@ export — rename the definition type and the href type follows.
 - This is the cheap 80% of the co-location ask
   ([experiments/01](../experiments/01-colocate-client-logic.md)); ship it first and see how much
   appetite remains for the macro.
+
+## Implementation
+
+The Vite path recursively generates typed `app/controllers.ts`, validates that defaults use
+`defineController()`, and compiles controllers into cache-busted JS chunks in dev/build through a
+dedicated URL query. This deliberately does not use Vite's ordinary `?url`, which would copy or
+inline raw TypeScript rather than emit an executable module. Watchers handle controller additions
+without observing generated outputs, stale generated files are removed, and user-owned files are
+never overwritten.

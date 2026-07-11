@@ -1,8 +1,7 @@
-#!/usr/bin/env node --experimental-strip-types --no-warnings
+#!/usr/bin/env -S deno run -A
 
 import path from "node:path";
-import process from "node:process";
 import { writeGeneratedFiles } from "./write.ts";
 
-const appFolder = path.normalize(process.argv[2]);
+const appFolder = path.normalize(Deno.args[0] ?? "./app");
 await writeGeneratedFiles(appFolder);

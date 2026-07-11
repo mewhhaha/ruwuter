@@ -6,4 +6,5 @@ export type GeneratedFile = {
 export type GenerateResult = {
   router: GeneratedFile[];
   types: GeneratedFile[];
+  controllers: GeneratedFile[];
 };

@@ -1,11 +1,12 @@
 # Tasks
 
-Suggestions from a review of the codebase (2026-07). Split by intent:
+Work items from a review of the codebase (2026-07), now implemented and retained as design records.
+They are split by intent:
 
-- `updates/` — concrete improvements to code that already exists. Small, low-risk, do whenever.
-- `dx/` — developer-experience work that removes boilerplate without touching the runtime.
-- `experiments/` — bigger bets that need a design decision before code. Each file states the
-  smallest version worth trying.
+- `updates/` — concrete improvements to existing code.
+- `dx/` — developer-experience work that removes boilerplate from the default path.
+- `experiments/` — opt-in features whose implementation preserves the original constraints and
+  tradeoffs.
 
 Guiding constraint for everything in here: **ruwuter stays small.** The server core
 (`src/router.ts` + `src/runtime/`) and the browser runtimes (`client.ts`, `resolve.ts`, `swap.ts`)

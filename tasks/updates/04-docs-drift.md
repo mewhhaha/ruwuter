@@ -1,6 +1,6 @@
 # Fix documentation drift
 
-**Status:** ready to do · **Size:** XS · **Files:** `AGENTS.md`, `README.md`, `examples/`
+**Status:** implemented · **Size:** XS · **Files:** `AGENTS.md`, `README.md`, `examples/`
 
 Places where the docs disagree with the code as of 0.4.2:
 
@@ -24,3 +24,9 @@ Places where the docs disagree with the code as of 0.4.2:
    the README.
 
 None of these need discussion — they're just edits once point 4's install story is confirmed.
+
+## Implementation
+
+The repository and published CLI examples now use Deno/JSR, install commands use the documented
+`jsr:` package-manager syntax, public source paths are current, the controller example uses the Vite
+controller URL pipeline, and README/`docs/SKILLS.md`/AGENTS guidance is synchronized.

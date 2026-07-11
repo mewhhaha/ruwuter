@@ -14,13 +14,15 @@
     "./browser": "./src/browser.ts",
     "./components": "./src/components/index.ts",
     "./fs-routes": "./src/fs-routes/js.ts",
+    "./fs-routes/cli": "./src/fs-routes/routes.ts",
     "./vite": "./src/vite.ts",
     "./types": "./src/types.ts",
     "./jsx-runtime": "./src/runtime/jsx-runtime.ts",
     "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.ts",
     "./client.js": "./src/runtime/client.ts",
     "./resolve.js": "./src/runtime/resolve.ts",
-    "./swap.js": "./src/runtime/swap.ts"
+    "./swap.js": "./src/runtime/swap.ts",
+    "./navigate.js": "./src/runtime/navigate.ts"
   },
   "bin": {
     "fs-routes": "./src/fs-routes/routes.ts"
@@ -30,7 +32,8 @@
     "test": "deno test -A test/",
     "test:dom": "deno test -A test-dom/",
     "typecheck": "deno check src/ test/ test-dom/",
-    "ci": "deno task fmt:check && deno lint && deno task typecheck && deno task test && deno task test:dom",
+    "size": "deno run --allow-run=deno scripts/check-size.ts",
+    "ci": "deno task fmt:check && deno lint && deno task typecheck && deno task test && deno task test:dom && deno task size",
     "cf-typegen": "wrangler typegen"
   },
   "compilerOptions": {

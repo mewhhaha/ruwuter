@@ -1,7 +1,6 @@
 # Enhanced navigation (opt-in)
 
-**Status:** idea — needs a demo app to validate · **Size:** M · **Runtime cost:** zero unless
-imported
+**Status:** implemented (opt-in) · **Size:** M · **Runtime cost:** zero unless imported
 
 ## Problem
 
@@ -44,3 +43,13 @@ interception exists.
 - Streamed Suspense pages fetched via `fetch()` + `swap` lose out-of-order resolution (templates
   arrive but the resolver observes the _document_, and `swap` writes once). Either scope v1 to
   non-streamed navigations or document that streamed pages hard-navigate.
+
+## Implementation
+
+The optional `navigate.js` entrypoint listens to standards-defined `navigate` events, progressively
+falls back, preserves POST encodings, parses full destination documents, replaces a configurable
+target with cancellation checks, updates the title, and coordinates View Transitions. Redirects and
+failures become non-intercepted hard loads. `data-rw-reload` and a destination reload meta marker
+retain native Suspense streaming. Router fragments can opt into POST methods. DOM tests cover full
+documents, errors, races, targets, native fallbacks, streamed reloads, and controller
+cleanup/remount.

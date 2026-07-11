@@ -33,3 +33,6 @@ jobs:
 
       - name: Run DOM integration tests
         run: deno task test:dom
+
+      - name: Enforce browser size budgets
+        run: deno task size

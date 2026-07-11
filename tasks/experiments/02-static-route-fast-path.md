@@ -1,6 +1,6 @@
 # Static-route fast path
 
-**Status:** proposal · **Size:** S · **Files:** `src/router.ts` (compile step only)
+**Status:** implemented · **Size:** S · **Files:** `src/router.ts` (compile step only)
 
 ## Problem
 
@@ -34,3 +34,10 @@ specificity and knows the grammar). That's real complexity for a case — hundre
 — that may never exist. Measure first: add a micro-benchmark (`URLPattern.exec` × route-count in
 workerd via `wrangler dev --test-scheduled` or a plain Deno bench as a proxy) and let numbers decide
 whether anything beyond the Map is warranted.
+
+## Implementation
+
+Router compilation buckets static paths into a Map and dynamic routes into the ordered fallback. The
+matcher still preserves the public route array's first-match behavior, duplicate-static order, and
+fragment fallback across matching routes. Specificity-sorted generated tables take the O(1) path
+without executing `URLPattern`.
