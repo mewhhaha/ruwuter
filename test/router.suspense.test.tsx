@@ -196,6 +196,56 @@ describe("Suspense streaming", () => {
     expect(full).toContain("INNER-READY");
   });
 
+  it("uses distinct rw-prefixed targets for nested providers", async () => {
+    const pattern = new URLPattern({ pathname: "/nested-providers" });
+    const fragments: fragment[] = [
+      {
+        id: "root",
+        mod: {
+          default: () => (
+            <SuspenseProvider>
+              <html>
+                <body>
+                  <div id="suspense-0">user-owned id</div>
+                  <Suspense fallback={<div>OUTER-LOADING</div>}>
+                    {async () => {
+                      await sleep(5);
+                      return (
+                        <SuspenseProvider>
+                          <Suspense fallback={<div>INNER-LOADING</div>}>
+                            {async () => {
+                              await sleep(5);
+                              return <div>INNER-PROVIDER-READY</div>;
+                            }}
+                          </Suspense>
+                        </SuspenseProvider>
+                      );
+                    }}
+                  </Suspense>
+                </body>
+              </html>
+            </SuspenseProvider>
+          ),
+        },
+      },
+    ];
+    const router = Router([[pattern, fragments]]);
+    const { ctx } = makeCtx();
+    const res = await router.handle(
+      new Request("https://example.com/nested-providers"),
+      {} as Env,
+      ctx,
+    );
+    const full = await new Response(res.body).text();
+    const targets = [...full.matchAll(/data-rw-target="([^"]+)"/g)].map((match) => match[1]);
+
+    expect(targets.length).toBe(2);
+    expect(targets[0]).toMatch(/^rw-[0-9a-f-]{36}-0$/);
+    expect(targets[1]).toMatch(/^rw-[0-9a-f-]{36}-0$/);
+    expect(targets[0] === targets[1]).toBe(false);
+    expect(full).toContain("INNER-PROVIDER-READY");
+  });
+
   it("streams across fragments: layout fallback -> leaf fallback -> leaf ready", async () => {
     const pattern = new URLPattern({ pathname: "/xfrag" });
     const fragments: fragment[] = [

@@ -7,6 +7,7 @@ import { controller } from "../src/components/client.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 import type { JsonValue } from "../src/browser.ts";
+import { enhanceNavigation } from "../src/runtime/navigate.ts";
 
 const nextRuntimeUrl = () => nextClientRuntimeUrl();
 const controllerModules = new Map<string, { default?: unknown }>();
@@ -76,6 +77,7 @@ function setupDomEnvironment(html: string) {
 
   const saved = {
     window: (globalThis as any).window,
+    DOMParser: (globalThis as any).DOMParser,
     document: (globalThis as any).document,
     Comment: (globalThis as any).Comment,
     Node: (globalThis as any).Node,
@@ -83,10 +85,12 @@ function setupDomEnvironment(html: string) {
     HTMLElement: (globalThis as any).HTMLElement,
     location: (globalThis as any).location,
     MutationObserver: (globalThis as any).MutationObserver,
+    navigation: (globalThis as any).navigation,
     controllerModuleLoader: (globalThis as any).__ruwuterControllerModuleLoader,
   };
 
   (globalThis as any).window = window;
+  (globalThis as any).DOMParser = DOMParser;
   (globalThis as any).document = doc;
   (globalThis as any).location = window.location;
   (globalThis as any).MutationObserver = window.MutationObserver = TestMutationObserver as any;
@@ -117,6 +121,8 @@ function setupDomEnvironment(html: string) {
       });
 
       (globalThis as any).window = saved.window;
+      if (typeof saved.DOMParser === "undefined") delete (globalThis as any).DOMParser;
+      else (globalThis as any).DOMParser = saved.DOMParser;
       if (typeof saved.document === "undefined") delete (globalThis as any).document;
       else (globalThis as any).document = saved.document;
 
@@ -138,6 +144,9 @@ function setupDomEnvironment(html: string) {
       if (typeof saved.MutationObserver === "undefined") {
         delete (globalThis as any).MutationObserver;
       } else (globalThis as any).MutationObserver = saved.MutationObserver;
+
+      if (typeof saved.navigation === "undefined") delete (globalThis as any).navigation;
+      else (globalThis as any).navigation = saved.navigation;
 
       if (typeof saved.controllerModuleLoader === "undefined") {
         delete (globalThis as any).__ruwuterControllerModuleLoader;
@@ -360,6 +369,75 @@ describe("Activation runtime DOM behaviour", () => {
 
       await waitFor(() => root.getAttribute("data-streamed-mounted") === "yes", 1000);
       expect(root.getAttribute("data-streamed-mounted")).toBe("yes");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("cleans up old controllers and mounts new ones after enhanced navigation", async () => {
+    const href = registerController(({ root }: any) => {
+      root.setAttribute("data-mounted", "yes");
+      return () => document.body.setAttribute("data-old-cleaned", "yes");
+    });
+    const html = await render(href);
+    const { doc, notify, cleanup } = setupDomEnvironment(html);
+
+    class Navigation extends EventTarget {}
+    class Navigate extends Event {
+      canIntercept = true;
+      destination = { url: "https://example.com/next" };
+      downloadRequest = null;
+      formData = null;
+      hashChange = false;
+      navigationType = "push" as const;
+      signal = new AbortController().signal;
+      sourceElement = null;
+      handler?: () => Promise<void>;
+
+      constructor() {
+        super("navigate");
+      }
+
+      intercept({ handler }: { handler: () => Promise<void> }) {
+        this.handler = handler;
+      }
+    }
+
+    try {
+      await import(nextRuntimeUrl());
+      const oldRoot = doc.getElementById("controller-root");
+      if (!oldRoot) throw new Error("expected old controller root");
+      await waitFor(() => oldRoot.getAttribute("data-mounted") === "yes", 1000);
+
+      const navigation = new Navigation();
+      (globalThis as any).navigation = navigation;
+      const stop = enhanceNavigation({
+        fetch: (() =>
+          Promise.resolve(
+            new Response(
+              `<html><head><title>Next</title></head><body>` +
+                `<section id="next-controller" data-rw-controller="${href}"></section>` +
+                `</body></html>`,
+              { headers: { "Content-Type": "text/html" } },
+            ),
+          )) as typeof fetch,
+      });
+      const event = new Navigate();
+      navigation.dispatchEvent(event);
+      await event.handler?.();
+
+      const nextRoot = doc.getElementById("next-controller");
+      if (!nextRoot) throw new Error("expected new controller root");
+      notify([{
+        addedNodes: [nextRoot],
+        removedNodes: [oldRoot],
+      } as unknown as MutationRecord]);
+
+      await waitFor(() => nextRoot.getAttribute("data-mounted") === "yes", 1000);
+      await waitFor(() => doc.body.getAttribute("data-old-cleaned") === "yes", 1000);
+      expect(nextRoot.getAttribute("data-mounted")).toBe("yes");
+      expect(doc.body.getAttribute("data-old-cleaned")).toBe("yes");
+      stop();
     } finally {
       cleanup();
     }

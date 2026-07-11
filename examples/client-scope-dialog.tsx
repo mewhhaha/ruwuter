@@ -1,10 +1,12 @@
 import { controller, type ControllerHref } from "@mewhhaha/ruwuter/browser";
 import type { OpenPaletteController } from "./open-palette.client.ts";
+import openPaletteHrefValue from "./open-palette.client.ts?ruwuter-controller-url";
 
-const openPaletteHref = "./open-palette.client.ts?url" as ControllerHref<OpenPaletteController>;
+// Low-level Vite-plugin form. Applications normally import this from generated app/controllers.ts.
+const openPalette = openPaletteHrefValue as unknown as ControllerHref<OpenPaletteController>;
 
 export default function CommandPaletteExample() {
-  const palette = controller(openPaletteHref);
+  const palette = controller(openPalette);
 
   return (
     <html>

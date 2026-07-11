@@ -10,9 +10,18 @@ import { fromParts } from "../runtime/node.ts";
 
 type Settled =
   | { id: string; ok: true; html: string }
-  | { id: string; ok: false; error: unknown };
+  | {
+    id: string;
+    ok: false;
+    error: unknown;
+    errorFallback: SuspenseErrorFallback | undefined;
+  };
+
+type SuspenseErrorFallback = JSX.Element | ((error: unknown) => JSX.Element);
 
 type SuspenseRegistry = {
+  /** Unique prefix that keeps this provider's boundary ids document-scoped. */
+  prefix: string;
   /** Monotonic id source for boundaries within one render. */
   counter: number;
   /** Boundaries registered but not yet settled. */
@@ -34,6 +43,8 @@ const settle = (registry: SuspenseRegistry, result: Settled): void => {
 type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
   as?: AS;
   fallback: JSX.Element;
+  /** Content to replace the fallback when the boundary's child rejects. */
+  errorFallback?: SuspenseErrorFallback;
   children?: JSX.Element | (() => Promise<JSX.Element>);
 } & Omit<JSX.IntrinsicElements[AS], "children">;
 
@@ -42,6 +53,7 @@ type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
  */
 export const Suspense = ({
   fallback,
+  errorFallback,
   as: As = "div",
   children,
   ...props
@@ -60,11 +72,11 @@ export const Suspense = ({
       }
 
       // With registry -> register the resolving content and stream fallback now
-      const id = `suspense-${registry.counter++}`;
+      const id = `rw-${registry.prefix}-${registry.counter++}`;
       registry.pending++;
       content.toPromise().then(
         (html) => settle(registry, { id, ok: true, html }),
-        (error) => settle(registry, { id, ok: false, error }),
+        (error) => settle(registry, { id, ok: false, error, errorFallback }),
       );
 
       // Emit fallback wrapper immediately
@@ -98,8 +110,23 @@ export const Resolve = (): JSX.Element => {
         }
 
         const settled = registry.queue.shift()!;
-        if (!settled.ok) throw settled.error;
-        yield `<template data-rw-target="${settled.id}">${settled.html}</template>`;
+        if (settled.ok) {
+          yield `<template data-rw-target="${settled.id}">${settled.html}</template>`;
+          continue;
+        }
+
+        console.error("Suspense boundary failed", settled.error);
+        if (!settled.errorFallback) continue;
+
+        try {
+          const fallback = typeof settled.errorFallback === "function"
+            ? settled.errorFallback(settled.error)
+            : settled.errorFallback;
+          const html = await fromParts([{ v: fallback, esc: true }]).toPromise();
+          yield `<template data-rw-target="${settled.id}">${html}</template>`;
+        } catch {
+          // An error fallback must not cause the stream to fail or recurse.
+        }
       }
     })(),
   );
@@ -116,6 +143,7 @@ export const SuspenseProvider = ({
   children,
 }: SuspenseProviderProps): JSX.Element => {
   const registry: SuspenseRegistry = {
+    prefix: crypto.randomUUID(),
     counter: 0,
     pending: 0,
     queue: [],

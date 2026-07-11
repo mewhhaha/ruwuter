@@ -74,7 +74,7 @@ describe("Resolve streams resolved suspense chunks", () => {
 
     // Expect Resolve emitted a template targeting the fallback element
 
-    expect(full).toMatch(/<template\s+data-rw-target="suspense-[^"]+"/);
+    expect(full).toMatch(/<template\s+data-rw-target="rw-[^"]+"/);
     // Resolved HTML must be present
     expect(full).toContain("READY");
 
@@ -82,5 +82,127 @@ describe("Resolve streams resolved suspense chunks", () => {
     const iFallback = full.indexOf("FALLBACK");
     const iResolved = full.indexOf("READY");
     expect(iResolved).toBeGreaterThan(iFallback);
+  });
+
+  it("contains rejected boundaries and keeps draining sibling resolutions", async () => {
+    const pattern = new URLPattern({ pathname: "/resolve-errors" });
+    const fragments: fragment[] = [
+      {
+        id: "root",
+        mod: {
+          default: () => (
+            <SuspenseProvider>
+              <html>
+                <body>
+                  <Suspense fallback={<div>ERROR-FALLBACK-ONE</div>}>
+                    {async () => {
+                      await sleep(0);
+                      throw new Error("first failure");
+                    }}
+                  </Suspense>
+                  <Suspense
+                    fallback={<div>ERROR-FALLBACK-TWO</div>}
+                    errorFallback={(error) => (
+                      <div>RECOVERED: {String((error as Error).message)}</div>
+                    )}
+                  >
+                    {async () => {
+                      await sleep(10);
+                      throw new Error("second failure");
+                    }}
+                  </Suspense>
+                  <Suspense fallback={<div>LOADING-SIBLING</div>}>
+                    {async () => {
+                      await sleep(20);
+                      return <div>SIBLING-READY</div>;
+                    }}
+                  </Suspense>
+                </body>
+              </html>
+            </SuspenseProvider>
+          ),
+        },
+      },
+    ];
+    const errors: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => errors.push(args);
+
+    try {
+      const router = Router([[pattern, fragments]]);
+      const { ctx } = makeCtx();
+      const res = await router.handle(
+        new Request("https://example.com/resolve-errors"),
+        {} as Env,
+        ctx,
+      );
+      expect(res.status).toBe(200);
+      const full = await new Response(res.body).text();
+
+      expect(full).toContain("ERROR-FALLBACK-ONE");
+      expect(full).toContain("ERROR-FALLBACK-TWO");
+      expect(full).toContain("RECOVERED: second failure");
+      expect(full).toContain("SIBLING-READY");
+      expect(errors.length).toBe(2);
+      expect((errors[0][1] as Error).message).toBe("first failure");
+      expect((errors[1][1] as Error).message).toBe("second failure");
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  it("leaves the fallback in place when its error fallback fails", async () => {
+    const pattern = new URLPattern({ pathname: "/resolve-error-fallback" });
+    const fragments: fragment[] = [
+      {
+        id: "root",
+        mod: {
+          default: () => (
+            <SuspenseProvider>
+              <html>
+                <body>
+                  <Suspense
+                    fallback={<div>KEEP-THIS-FALLBACK</div>}
+                    errorFallback={() => {
+                      throw new Error("error fallback failure");
+                    }}
+                  >
+                    {async () => {
+                      await sleep(0);
+                      throw new Error("boundary failure");
+                    }}
+                  </Suspense>
+                  <Suspense fallback={<div>LOADING-OTHER</div>}>
+                    {async () => {
+                      await sleep(0);
+                      return <div>OTHER-READY</div>;
+                    }}
+                  </Suspense>
+                </body>
+              </html>
+            </SuspenseProvider>
+          ),
+        },
+      },
+    ];
+    const originalError = console.error;
+    console.error = () => {};
+
+    try {
+      const router = Router([[pattern, fragments]]);
+      const { ctx } = makeCtx();
+      const res = await router.handle(
+        new Request("https://example.com/resolve-error-fallback"),
+        {} as Env,
+        ctx,
+      );
+      const full = await new Response(res.body).text();
+
+      expect(full).toContain("KEEP-THIS-FALLBACK");
+      expect(full).toContain("OTHER-READY");
+      expect(full).not.toContain("error fallback failure");
+    } finally {
+      console.error = originalError;
+    }
   });
 });
