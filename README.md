@@ -7,6 +7,34 @@ lets ordinary links and forms work without JavaScript.
 Browser JavaScript is optional and explicit: add a controller root, load the small activation
 runtime, and mount a browser module against that root.
 
+## Runtime Requirements
+
+The deployed server path uses Fetch API objects, Web Streams, `URLPattern`, and `AsyncLocalStorage`
+from `node:async_hooks`. The `node:` specifier is a shared server-runtime compatibility surface
+rather than a Node-only deployment target: [Node.js](https://nodejs.org/api/async_context.html) and
+[Deno](https://docs.deno.com/api/node/async_hooks/) provide it directly, and
+[Vercel Edge](https://vercel.com/docs/functions/runtimes/edge#compatible-node.js-modules) provides
+the WinterCG-compatible subset Ruwuter uses.
+
+On Cloudflare Workers, enable only `AsyncLocalStorage` with
+[`nodejs_als`](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag),
+or use `nodejs_compat` when the application needs broader Node compatibility:
+
+```jsonc
+{
+  "compatibility_flags": ["nodejs_als"]
+}
+```
+
+Do not replace `node:async_hooks` with a no-op or module-global mock. Ruwuter uses
+`AsyncLocalStorage` to keep server context and streamed Suspense state isolated across concurrent
+requests and asynchronous stream pulls. A runtime without equivalent async-context semantics is not
+currently supported; a Promise-only userland polyfill cannot reliably provide them.
+
+The other Node built-in imports (`node:fs`, `node:path`, and `node:process`) are confined to the
+file-route generator, CLI, and Vite build integration. They are not part of the deployed router
+path.
+
 ## Install
 
 ```sh

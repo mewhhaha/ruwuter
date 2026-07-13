@@ -96,8 +96,16 @@ export default {
 };
 ```
 
-Ruwuter server context uses `AsyncLocalStorage`. On Cloudflare Workers, enable Node compatibility
-sufficient for `node:async_hooks`, such as `nodejs_compat` or `nodejs_als`.
+The deployed server path requires Fetch API objects, Web Streams, `URLPattern`, and
+`AsyncLocalStorage` from `node:async_hooks`. Node.js and Deno provide the module directly. On
+Cloudflare Workers, enable the narrow `nodejs_als` compatibility flag, or use `nodejs_compat` when
+the application needs broader Node compatibility.
+
+Never replace `node:async_hooks` with a no-op or module-global mock. Ruwuter relies on native
+async-context propagation to isolate server context and streamed Suspense state across concurrent
+requests and asynchronous stream pulls. Runtimes without equivalent semantics are not supported. The
+remaining `node:fs`, `node:path`, and `node:process` imports belong to file-route generation, the
+CLI, and Vite build integration rather than the deployed router path.
 
 Augment the package `Env` interface when route helpers should know application bindings:
 

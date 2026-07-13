@@ -2,6 +2,7 @@ import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import { createContext } from "../src/components/context.ts";
 import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/router.ts";
+import { into } from "../src/runtime/jsx-runtime.ts";
 
 type LayoutProps = { children?: RuwuterJSX.HtmlNode };
 
@@ -83,5 +84,62 @@ describe("context providers", () => {
 
     expect(html).toContain('<div id="theme">spicy</div>');
     expect(html).not.toContain("plain");
+  });
+
+  it("keeps context isolated while response streams overlap", async () => {
+    const RequestNameContext = createContext("missing");
+    const bothChildrenStarted = Promise.withResolvers<void>();
+    const continueRendering = Promise.withResolvers<void>();
+    let startedChildren = 0;
+
+    const fragments: fragment[] = [
+      {
+        id: "page",
+        mod: {
+          loader: ({ params }) => params.requestName,
+          default: ({ loaderData: requestName }) => (
+            <RequestNameContext.Provider value={String(requestName)}>
+              {into(async () => {
+                startedChildren++;
+                if (startedChildren === 2) {
+                  bothChildrenStarted.resolve();
+                }
+                await continueRendering.promise;
+                return <span>{RequestNameContext.use()}</span>;
+              })}
+            </RequestNameContext.Provider>
+          ),
+        },
+      },
+    ];
+    const router = Router([[new URLPattern({ pathname: "/:requestName" }), fragments]]);
+    const firstContext = makeCtx().ctx;
+    const secondContext = makeCtx().ctx;
+    const [firstResponse, secondResponse] = await Promise.all([
+      router.handle(new Request("https://example.com/first"), {} as Env, firstContext),
+      router.handle(new Request("https://example.com/second"), {} as Env, secondContext),
+    ]);
+
+    const firstHtmlPromise = firstResponse.text();
+    const secondHtmlPromise = secondResponse.text();
+    try {
+      await Promise.race([
+        bothChildrenStarted.promise,
+        firstHtmlPromise.then(() => {
+          throw new Error("First response stream ended before both children started");
+        }),
+        secondHtmlPromise.then(() => {
+          throw new Error("Second response stream ended before both children started");
+        }),
+      ]);
+    } finally {
+      continueRendering.resolve();
+    }
+
+    const [firstHtml, secondHtml] = await Promise.all([firstHtmlPromise, secondHtmlPromise]);
+    expect(firstHtml).toContain("<span>first</span>");
+    expect(firstHtml).not.toContain("<span>second</span>");
+    expect(secondHtml).toContain("<span>second</span>");
+    expect(secondHtml).not.toContain("<span>first</span>");
   });
 });

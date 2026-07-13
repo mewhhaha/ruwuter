@@ -1,7 +1,7 @@
 {
   "name": "@mewhhaha/ruwuter",
   "version": "0.4.2",
-  "description": "TypeScript web router designed exclusively for Cloudflare Workers with file-system routing and streaming JSX",
+  "description": "Server-first TypeScript router for Web API runtimes with file-system routing and streaming JSX",
   "publish": {
     "include": [
       "deno.json",
