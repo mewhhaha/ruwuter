@@ -3,7 +3,7 @@ import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import "./setup.ts";
 import { DOMParser } from "linkedom";
-import { controller } from "../src/components/client.ts";
+import { controller, move, type MovedHandler } from "../src/components/client.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 import type { JsonValue } from "../src/browser.ts";
@@ -26,6 +26,12 @@ async function waitFor(check: () => boolean, timeoutMs = 500) {
     await new Promise((r) => setTimeout(r, 5));
   }
   throw new Error("waitFor timeout");
+}
+
+function dispatchDomEvent(doc: Document, target: Element, type: string): void {
+  const EventConstructor = doc.defaultView?.Event;
+  if (!EventConstructor) throw new Error("expected DOM event constructor");
+  target.dispatchEvent(new EventConstructor(type));
 }
 
 function setupDomEnvironment(html: string) {
@@ -182,6 +188,29 @@ async function render(htmlHref: string, props: JsonValue = {}) {
   return await res.text();
 }
 
+async function renderMovedClick(htmlHref: string, values: JsonValue) {
+  const movedClick = (move as unknown as (
+    values: JsonValue,
+    moduleHref: string,
+  ) => MovedHandler<PointerEvent, HTMLButtonElement>)(values, htmlHref);
+  const fragments: fragment[] = [{
+    id: "root",
+    mod: {
+      default: () => (
+        <html>
+          <body>
+            <button id="moved-root" type="button" on:click={movedClick}>Run</button>
+          </body>
+        </html>
+      ),
+    },
+  }];
+  const router = Router([[new URLPattern({ pathname: "/" }), fragments]]);
+  const { ctx } = makeCtx();
+  const response = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
+  return await response.text();
+}
+
 describe("Activation runtime DOM behaviour", () => {
   it("mounts explicit controller roots and passes props", async () => {
     const href = registerController(({ root, props, refs }: any) => {
@@ -203,6 +232,53 @@ describe("Activation runtime DOM behaviour", () => {
         "yes",
       );
     } finally {
+      cleanup();
+    }
+  });
+
+  it("runs moved event modules with their JSON values", async () => {
+    const href = registerController((event: Event, values: { count: number }) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      button.setAttribute("data-count", String(values.count));
+    });
+    const html = await renderMovedClick(href, { count: 2 });
+    const { doc, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+
+      const button = doc.getElementById("moved-root");
+      if (!button) throw new Error("expected moved event root");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      dispatchDomEvent(doc, button, "click");
+
+      await waitFor(() => button.getAttribute("data-count") === "2", 1000);
+      expect(button.getAttribute("data-count")).toBe("2");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("reports rejected moved event callbacks", async () => {
+    const href = registerController(() => Promise.reject(new Error("moved event failed")));
+    const html = await renderMovedClick(href, null);
+    const { doc, cleanup } = setupDomEnvironment(html);
+    const originalError = console.error;
+    const errors: unknown[] = [];
+    console.error = (...args: unknown[]) => {
+      errors.push(args[0]);
+    };
+    try {
+      await import(nextRuntimeUrl());
+
+      const button = doc.getElementById("moved-root");
+      if (!button) throw new Error("expected moved event root");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      dispatchDomEvent(doc, button, "click");
+
+      await waitFor(() => errors.length === 1, 1000);
+      expect((errors[0] as Error).message).toBe("moved event failed");
+    } finally {
+      console.error = originalError;
       cleanup();
     }
   });

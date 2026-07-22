@@ -4,8 +4,8 @@ Ruwuter is a server-first router and HTML renderer for Cloudflare-style Web APIs
 generated `URLPattern` routes, runs loaders/actions, renders nested server components to HTML, and
 lets ordinary links and forms work without JavaScript.
 
-Browser JavaScript is optional and explicit: add a controller root, load the small activation
-runtime, and mount a browser module against that root.
+Browser JavaScript is optional and explicit: move one event callback into a browser module or mount
+a controller for behavior that spans elements, then load the small activation runtime.
 
 ## Runtime Requirements
 
@@ -208,8 +208,38 @@ bindings, but cannot capture other module values; pass server values through con
 macro emits a separate browser controller in both dev and production and adds nothing to the default
 runtime. Without `clientMacro: true`, `client()` throws with an actionable error.
 
-The runtime mounts each controller root once. On removal it waits for the mutation batch, ignores
-DOM moves, aborts the controller signal, and then runs the returned cleanup callback.
+For one local event, the same plugin can move a callback directly from server JSX:
+
+```tsx
+import { move } from "@mewhhaha/ruwuter/browser";
+
+export default function Counter({ count }: { count: number }) {
+  return (
+    <button
+      type="button"
+      on:click={move({ count }, async (event, values) => {
+        const button = event.currentTarget;
+        const { default: confetti } = await import("canvas-confetti");
+        button.textContent = String(values.count + 1);
+        confetti();
+      })}
+    >
+      {count}
+    </button>
+  );
+}
+```
+
+`move()` is also Vite-only and requires `clientMacro: true`. The event and element types come from
+the `on:event` prop, while the values object must be JSON-safe. The callback may use browser
+globals, static imports, and dynamic imports; Vite bundles installed dependencies normally. It
+cannot capture server bindings, so rendered values cross the boundary explicitly through `move()`'s
+first argument. The HTML contains only an event name, a same-origin browser module URL, and those
+JSON values—never function source or evaluated code. Load `client.js` once on any page that uses
+moved events.
+
+The runtime mounts each controller or moved-event root once. On removal it waits for the mutation
+batch, ignores DOM moves, aborts the root signal, and then runs any controller cleanup callback.
 
 ## Fragments
 

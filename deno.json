@@ -1,6 +1,6 @@
 {
   "name": "@mewhhaha/ruwuter",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Server-first TypeScript router for Web API runtimes with file-system routing and streaming JSX",
   "publish": {
     "include": [

@@ -10,6 +10,15 @@ describe("on prop removal", () => {
     expect("onClick" in props).toBe(true);
   });
 
+  it("requires moved event tokens for typed event directives", () => {
+    const props: JSX.IntrinsicElements["button"] = {
+      // @ts-expect-error Raw callbacks are not valid moved event tokens.
+      "on:click": () => {},
+    };
+
+    expect("on:click" in props).toBe(true);
+  });
+
   it("throws when inline event attributes are provided on an intrinsic element", () => {
     let error: unknown;
     try {

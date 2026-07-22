@@ -21,7 +21,12 @@
  */
 
 import { escapeHtml, fromParts, type Html, into, isHtml, type Part } from "./node.ts";
-import { isControllerRefToken } from "../components/client.ts";
+import {
+  isControllerRefToken,
+  isMovedHandler,
+  type MovedHandlerToken,
+  serializeMovedEvents,
+} from "../components/client.ts";
 import "./typed.ts";
 import type { JSX } from "./typed.ts";
 export type * from "./typed.ts";
@@ -156,6 +161,7 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
 
   let attrs = "";
   let dangerousHtml: string | undefined;
+  const movedEvents: Array<readonly [string, MovedHandlerToken]> = [];
 
   for (const key in props) {
     if (key === "children") continue;
@@ -169,6 +175,18 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
         );
       }
       attrs += ` data-rw-ref="${sanitize(value.__ruwuterControllerRef)}"`;
+      continue;
+    }
+
+    if (key.startsWith("on:")) {
+      if (!isMovedHandler(value)) {
+        throw new TypeError(
+          `[ruwuter] ${key} requires move(values, callback) with the Ruwuter Vite plugin.`,
+        );
+      }
+      const eventType = key.slice(3);
+      if (!eventType) throw new TypeError("[ruwuter] Moved event type is required.");
+      movedEvents.push([eventType, value]);
       continue;
     }
 
@@ -204,6 +222,10 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
     }
 
     attrs += ` ${key}="${sanitized}"`;
+  }
+
+  if (movedEvents.length > 0) {
+    attrs += ` data-rw-events="${sanitize(serializeMovedEvents(movedEvents))}"`;
   }
 
   const parts: Part[] = [];

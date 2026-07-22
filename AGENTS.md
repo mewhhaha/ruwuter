@@ -21,6 +21,7 @@ repository.
   loaded in the browser.
 - Must support:
 - Explicit controller roots declared with `controller(moduleHref, props).root()`.
+- Moved `on:event={move(values, callback)}` listeners emitted as module URLs plus JSON values.
 - Browser modules receive `{ root, props, refs, signal }` and may return a cleanup callback.
 - On removal, wait for the mutation batch, check `root.isConnected`, abort the signal, then run
   cleanup.
@@ -49,14 +50,17 @@ repository.
 - The router no longer serializes JS handlers; only HTML fragment assets are served for components.
 - Experimental same-file handlers use top-level `client()` only with `clientMacro: true`. They may
   capture imports, never server module bindings; values cross the boundary through JSON props.
+- Experimental moved events use `move()` only with `clientMacro: true`. Their callbacks follow the
+  same capture rules; values cross the boundary through the explicit JSON argument.
 
 ## JSX Runtime Contracts
 
 - Located in `src/runtime/jsx*.ts`.
-- Does not support JSX `on` props. Use explicit controllers instead.
-- Function-valued attributes are not supported; only HTML-compatible values plus controller root/ref
-  metadata are emitted.
-- Do not re‑introduce inline client function paths or serialized event-handler entries.
+- Raw JSX event callbacks are unsupported. Use `on:event={move(...)}` for one listener or a
+  controller for behavior spanning elements.
+- Function-valued HTML attributes are not supported; only HTML-compatible values, controller
+  root/ref metadata, and moved-event module metadata are emitted.
+- Do not emit JavaScript source or evaluated code in event metadata.
 
 ## FS‑Routes
 
@@ -93,7 +97,7 @@ repository.
 ## What Not To Do
 
 - Do not add back KV/map‑backed inline client functions.
-- Do not emit or support serialized inline client payloads.
+- Do not emit or support serialized inline JavaScript source.
 - Do not wrap the client runtime in an IIFE; it runs as a module.
 
 ## Quick Checklist (before you finish)

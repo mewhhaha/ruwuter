@@ -1,6 +1,6 @@
 ---
 name: ruwuter-usage
-description: Build, review, and maintain Ruwuter applications using server-first routes, streaming JSX, route-scoped fragments, typed browser controllers, server context, optional Suspense, and safe HTML swaps. Use when adding route modules, loaders, actions, headers, fragments, controller modules, generated route types, runtime scripts, or build configuration.
+description: Build, review, and maintain Ruwuter applications using server-first routes, streaming JSX, route-scoped fragments, moved browser events, typed browser controllers, server context, optional Suspense, and safe HTML swaps. Use when adding route modules, loaders, actions, headers, fragments, browser behavior, generated route types, runtime scripts, or build configuration.
 ---
 
 # Ruwuter Usage
@@ -13,12 +13,12 @@ Ruwuter is server-first:
 2. Nested loaders and headers run.
 3. Nested server components render escaped HTML.
 4. Links and forms work without JavaScript.
-5. Explicit controller roots may add local browser behavior.
+5. Moved events or explicit controller roots may add local browser behavior.
 6. Explicit route fragments may return server HTML for targeted swaps.
 7. Out-of-order Suspense is optional and has its own runtime.
 
-Treat server-rendered HTML as canonical UI state. Controllers are small DOM activators, not hydrated
-components or a second state framework.
+Treat server-rendered HTML as canonical UI state. Moved callbacks and controllers are small DOM
+activators, not hydrated components or a second state framework.
 
 When documentation and implementation disagree, inspect `src/` and the matching tests, then update
 the README and this skill together.
@@ -29,8 +29,8 @@ the README and this skill together.
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Router, methods, responses, fragments | [src/router.ts](./src/router.ts)                                                                                                               | [test/router.test.tsx](./test/router.test.tsx), [test/router.errors.test.tsx](./test/router.errors.test.tsx)                                     |
 | Public browser API                    | [src/browser.ts](./src/browser.ts)                                                                                                             | [README.md](./README.md)                                                                                                                         |
-| Typed controllers and refs            | [src/components/client.ts](./src/components/client.ts)                                                                                         | [test/client.controller.test.tsx](./test/client.controller.test.tsx)                                                                             |
-| Controller lifecycle                  | [src/runtime/client.ts](./src/runtime/client.ts)                                                                                               | [test-dom/client.runtime.dom.test.tsx](./test-dom/client.runtime.dom.test.tsx)                                                                   |
+| Controllers, refs, and moved events   | [src/components/client.ts](./src/components/client.ts)                                                                                         | [test/client.controller.test.tsx](./test/client.controller.test.tsx)                                                                             |
+| Browser activation lifecycle          | [src/runtime/client.ts](./src/runtime/client.ts)                                                                                               | [test-dom/client.runtime.dom.test.tsx](./test-dom/client.runtime.dom.test.tsx)                                                                   |
 | JSX rendering and typing              | [src/runtime/jsx-runtime.ts](./src/runtime/jsx-runtime.ts), [src/runtime/jsx.ts](./src/runtime/jsx.ts)                                         | [test/jsx.attributes.test.tsx](./test/jsx.attributes.test.tsx), [test/client.onprop.test.tsx](./test/client.onprop.test.tsx)                     |
 | File-route grammar                    | [src/fs-routes/route-name.ts](./src/fs-routes/route-name.ts), [src/fs-routes/generate-router.ts](./src/fs-routes/generate-router.ts)           | [test/fs-routes.generate-router.test.ts](./test/fs-routes.generate-router.test.ts)                                                               |
 | Generated route types                 | [src/fs-routes/generate-types.ts](./src/fs-routes/generate-types.ts), [src/types.ts](./src/types.ts)                                           | [test/fs-routes.generate-types.test.ts](./test/fs-routes.generate-types.test.ts)                                                                 |
@@ -51,10 +51,10 @@ Use the narrowest public entrypoint.
 | `@mewhhaha/ruwuter`             | `Router`, `html`, `json`, `fragment`, render helpers, router types |
 | `@mewhhaha/ruwuter/types`       | Route inference helpers                                            |
 | `@mewhhaha/ruwuter/components`  | Server context and Suspense                                        |
-| `@mewhhaha/ruwuter/browser`     | Controllers, typed events, and `swap`                              |
+| `@mewhhaha/ruwuter/browser`     | Controllers, moved events, typed listeners, and `swap`             |
 | `@mewhhaha/ruwuter/fs-routes`   | Programmatic generation                                            |
 | `@mewhhaha/ruwuter/vite`        | Vite plugin                                                        |
-| `@mewhhaha/ruwuter/client.js`   | Controller activation runtime URL                                  |
+| `@mewhhaha/ruwuter/client.js`   | Controller and moved-event activation runtime URL                  |
 | `@mewhhaha/ruwuter/resolve.js`  | Suspense resolver runtime URL                                      |
 | `@mewhhaha/ruwuter/swap.js`     | Standalone HTML swap module                                        |
 | `@mewhhaha/ruwuter/navigate.js` | Opt-in Navigation API enhancement                                  |
@@ -488,6 +488,37 @@ browser globals, and imports. Capturing another module binding is a build error;
 through JSON-safe props. Imported helpers are rebased into the emitted controller module. Without
 the opt-in transform, `client()` throws immediately.
 
+### Moved Events
+
+For one local listener, `clientMacro: true` also enables typed `on:event` directives:
+
+```tsx
+import { move } from "@mewhhaha/ruwuter/browser";
+
+export default function Counter({ count }: { count: number }) {
+  return (
+    <button
+      type="button"
+      on:click={move({ count }, async (event, values) => {
+        const button = event.currentTarget;
+        const { default: confetti } = await import("canvas-confetti");
+        button.textContent = String(values.count + 1);
+        confetti();
+      })}
+    >
+      {count}
+    </button>
+  );
+}
+```
+
+The plugin extracts the callback into a browser module. Installed-package dynamic imports remain
+dynamic Vite imports, while relative imports are rebased from the route module. Callback code may
+use imports and browser globals but cannot close over server bindings. Pass JSON-safe rendered
+values through the first argument. Capture `event.currentTarget` before an `await`, because the DOM
+clears it after event dispatch. The rendered `data-rw-events` metadata contains only the event name,
+same-origin module URL, and JSON values. It contains no JavaScript source and requires no `eval`.
+
 ### Controller Rules
 
 - Spread `mounted.root()` onto exactly one root element.
@@ -496,11 +527,12 @@ the opt-in transform, `client()` throws immediately.
 - Every ref accessed by the controller must be rendered under its root.
 - Ref names must be unique within the root.
 - Controller props must be JSON-safe and are visible in rendered HTML.
-- Never include secrets in controller props.
+- Moved-event values must be JSON-safe and are visible in rendered HTML.
+- Never include secrets in controller props or moved-event values.
 - Do not pass functions, DOM objects, `bigint`, `undefined`, non-finite numbers, or cyclic values.
 - Controller module URLs must be same-origin HTTP(S).
 - Import generated hrefs from `app/controllers.ts`; do not cast raw source asset URLs.
-- Load `client.js` once whenever controllers are present.
+- Load `client.js` once whenever controllers or moved events are present.
 - Pass `signal` to listeners, fetches, and abortable APIs.
 - Return cleanup for observers, timers, and third-party objects not governed by `signal`.
 - Inserted controller roots activate automatically.
@@ -529,8 +561,9 @@ on(refs.button).click((event) => {
 
 `on()` is a typed `addEventListener` wrapper and returns a removal callback. Prefer `{ signal }`.
 
-Do not add JSX props such as `onClick`, `onclick`, or `onSubmit`. The JSX runtime rejects every
-attribute beginning with `on`.
+Raw JSX callbacks such as `onClick`, `onclick`, and `onSubmit` remain unsupported. For one extracted
+listener use `on:event={move(values, callback)}`; use a controller when behavior spans elements or
+has a lifecycle.
 
 ## HTML Swaps
 
@@ -701,7 +734,8 @@ References: [src/components/suspense.ts](./src/components/suspense.ts),
 - `true` emits a boolean attribute; false and nullish values are omitted.
 - `dangerouslySetInnerHTML` bypasses escaping.
 - `ref` accepts only a controller ref token.
-- JSX `on*` attributes and function-valued HTML attributes are unsupported.
+- Raw JSX `on*` callbacks and function-valued HTML attributes are unsupported. Moved events use the
+  explicit `on:event={move(...)}` directive.
 - There is no key-based diffing or client state reconciliation.
 - Components and children may be async.
 - Void elements do not emit closing tags.
@@ -725,7 +759,8 @@ export default defineConfig({
 The plugin generates routes/types/controller hrefs at build start, watches route inputs plus
 recursive `*.client.ts(x)` modules, and performs full reloads. It compiles controller chunks and the
 documented browser-runtime `?url` imports without globally rewriting application chunks or
-`import.meta.url`. Enable same-file controller extraction explicitly with `clientMacro: true`.
+`import.meta.url`. Enable same-file controller and moved-event extraction explicitly with
+`clientMacro: true`.
 
 Programmatic:
 
@@ -754,21 +789,23 @@ Use the least complex mechanism:
 2. Loader/action and full server response.
 3. Route fragment plus `swap`.
 4. Opt-in enhanced navigation for whole-page same-origin transitions.
-5. Typed controller for local DOM behavior.
-6. Suspense for independent slow server rendering.
-7. Server context for values shared through nested layouts.
+5. Moved event for one local listener.
+6. Typed controller for behavior spanning elements or requiring a lifecycle.
+7. Suspense for independent slow server rendering.
+8. Server context for values shared through nested layouts.
 
-| Need                                           | Use                                            |
-| ---------------------------------------------- | ---------------------------------------------- |
-| Navigation                                     | `<a href>`                                     |
-| Enhanced same-origin page transitions          | Optional `navigate.js`                         |
-| Data mutation                                  | `<form>` plus `action`                         |
-| JSON endpoint                                  | loader/action without a component, or `json()` |
-| Redirect/error status                          | loader/action `Response`                       |
-| Replace one region                             | fragment plus `swap`                           |
-| Focus/keyboard/animation/local DOM integration | controller                                     |
-| Slow independent panel                         | `Suspense`                                     |
-| Shared server value                            | `createContext`                                |
+| Need                                    | Use                                            |
+| --------------------------------------- | ---------------------------------------------- |
+| Navigation                              | `<a href>`                                     |
+| Enhanced same-origin page transitions   | Optional `navigate.js`                         |
+| Data mutation                           | `<form>` plus `action`                         |
+| JSON endpoint                           | loader/action without a component, or `json()` |
+| Redirect/error status                   | loader/action `Response`                       |
+| Replace one region                      | fragment plus `swap`                           |
+| One local DOM listener                  | `on:event` plus `move`                         |
+| Multi-element or lifecycle DOM behavior | controller                                     |
+| Slow independent panel                  | `Suspense`                                     |
+| Shared server value                     | `createContext`                                |
 
 ## Prohibited Patterns
 
@@ -776,11 +813,11 @@ Do not:
 
 - Restore `client.scope`, reactive refs, or adjacent hydration payloads.
 - Serialize or eval inline browser functions.
-- Add JSX event props.
+- Add raw JSX event callbacks outside `on:event={move(...)}`.
 - Build a client VDOM or client component state system into the core runtime.
 - Return/throw `Response` from components.
 - Assume fragments execute route loaders.
-- Put secrets or non-JSON values in controller props.
+- Put secrets or non-JSON values in controller props or moved-event values.
 - Use cross-origin, `data:`, or `blob:` controller URLs.
 - Duplicate or omit controller refs.
 - Pass raw strings to `swap` without `unsafeHTML`.
@@ -798,14 +835,15 @@ Do not:
 2. Implement loader/action/component behavior first.
 3. Prefer native HTML.
 4. Add a fragment only for targeted server HTML.
-5. Add a typed controller only for remaining local DOM behavior.
-6. Add `client.js` only when controllers are used.
-7. Add `SuspenseProvider` and `resolve.js` only when streamed fallback replacement is used.
-8. Add `navigate.js` only as an explicit progressive enhancement.
-9. Regenerate routes/types after route-file changes.
-10. Add server tests under `test/`.
-11. Add runtime DOM tests under `test-dom/`.
-12. Run all gates.
+5. Add a moved event for one remaining local listener.
+6. Add a typed controller only when behavior spans elements or needs a lifecycle.
+7. Add `client.js` only when controllers or moved events are used.
+8. Add `SuspenseProvider` and `resolve.js` only when streamed fallback replacement is used.
+9. Add `navigate.js` only as an explicit progressive enhancement.
+10. Regenerate routes/types after route-file changes.
+11. Add server tests under `test/`.
+12. Add runtime DOM tests under `test-dom/`.
+13. Run all gates.
 
 ## Verification
 

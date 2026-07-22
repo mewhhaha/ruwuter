@@ -1,7 +1,7 @@
 /**
  * @module
  *
- * Browser activation helpers for explicit controller roots.
+ * Browser activation helpers for controllers and moved events.
  */
 
 export type ControllerCleanup = void | (() => void | Promise<void>);
@@ -17,6 +17,7 @@ export type JsonValue =
 type ControllerRefs = Record<string, Element>;
 declare const definedControllerBrand: unique symbol;
 declare const controllerHrefBrand: unique symbol;
+declare const movedHandlerBrand: unique symbol;
 
 export type ControllerRefToken<
   Name extends string = string,
@@ -99,17 +100,35 @@ export type ControllerMount<Refs extends ControllerRefs = ControllerRefs> = {
 
 type EventTargetLike<Target extends EventTarget> = Target | null | undefined;
 
-type TargetedRuntimeEvent<
+export type TargetedRuntimeEvent<
   E extends Event,
   Target extends EventTarget,
 > = Omit<E, "currentTarget"> & {
   readonly currentTarget: Target;
 };
 
+export type MovedHandler<
+  E extends Event = Event,
+  Target extends EventTarget = EventTarget,
+> = {
+  readonly [movedHandlerBrand]: {
+    event: E;
+    target: Target;
+  };
+};
+
+/** @internal */
+export type MovedHandlerToken = MovedHandler & {
+  readonly __ruwuterMovedHandler: true;
+  readonly moduleHref: string;
+  readonly valuesJson: string;
+};
+
 type ListenerOptions = AddEventListenerOptions;
 
 type GlobalDomEventMap = GlobalEventHandlersEventMap;
 const JSON_PROPS_MESSAGE = "controller() props must contain only JSON values.";
+const MOVED_VALUES_MESSAGE = "move() values must contain only JSON values.";
 
 type OnRegistry<Target extends EventTarget> =
   & {
@@ -155,7 +174,11 @@ function escapeJsonForAttribute(json: string): string {
     .replaceAll(/\u2029/g, "\\u2029");
 }
 
-function assertJsonValue(value: unknown, seen = new WeakSet<object>()): asserts value is JsonValue {
+function assertJsonValue(
+  value: unknown,
+  message: string,
+  seen = new WeakSet<object>(),
+): asserts value is JsonValue {
   if (
     value === null ||
     typeof value === "string" ||
@@ -166,23 +189,23 @@ function assertJsonValue(value: unknown, seen = new WeakSet<object>()): asserts 
 
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new TypeError(JSON_PROPS_MESSAGE);
+      throw new TypeError(message);
     }
     return;
   }
 
   if (typeof value !== "object") {
-    throw new TypeError(JSON_PROPS_MESSAGE);
+    throw new TypeError(message);
   }
 
   if (seen.has(value)) {
-    throw new TypeError(JSON_PROPS_MESSAGE);
+    throw new TypeError(message);
   }
   seen.add(value);
 
   if (Array.isArray(value)) {
     for (const item of value) {
-      assertJsonValue(item, seen);
+      assertJsonValue(item, message, seen);
     }
     seen.delete(value);
     return;
@@ -190,28 +213,70 @@ function assertJsonValue(value: unknown, seen = new WeakSet<object>()): asserts 
 
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== null && prototype !== Object.prototype) {
-    throw new TypeError(JSON_PROPS_MESSAGE);
+    throw new TypeError(message);
   }
 
   for (const item of Object.values(value)) {
-    assertJsonValue(item, seen);
+    assertJsonValue(item, message, seen);
   }
   seen.delete(value);
 }
 
-function serializeProps(props: JsonValue | undefined): string | undefined {
-  if (props === undefined) return undefined;
-  assertJsonValue(props);
+function stringifyJsonValue(value: unknown, message: string): string {
+  assertJsonValue(value, message);
   let json: string | undefined;
   try {
-    json = JSON.stringify(props);
+    json = JSON.stringify(value);
   } catch (error) {
-    throw new TypeError(JSON_PROPS_MESSAGE, { cause: error });
+    throw new TypeError(message, { cause: error });
   }
   if (typeof json !== "string") {
-    throw new TypeError(JSON_PROPS_MESSAGE);
+    throw new TypeError(message);
   }
-  return escapeJsonForAttribute(json);
+  return json;
+}
+
+function serializeProps(props: JsonValue | undefined): string | undefined {
+  if (props === undefined) return undefined;
+  return escapeJsonForAttribute(stringifyJsonValue(props, JSON_PROPS_MESSAGE));
+}
+
+export function move<
+  Values extends JsonValue,
+  E extends Event = Event,
+  Target extends EventTarget = EventTarget,
+>(
+  values: Values,
+  callback: (event: TargetedRuntimeEvent<E, Target>, values: Values) => unknown | Promise<unknown>,
+): MovedHandler<E, Target>;
+export function move(values: JsonValue, callback: unknown): MovedHandler {
+  if (typeof callback !== "string") {
+    throw new Error("move() requires the Ruwuter Vite plugin with clientMacro: true.");
+  }
+
+  return {
+    __ruwuterMovedHandler: true,
+    moduleHref: callback,
+    valuesJson: stringifyJsonValue(values, MOVED_VALUES_MESSAGE),
+  } as MovedHandlerToken;
+}
+
+/** @internal */
+export function isMovedHandler(value: unknown): value is MovedHandlerToken {
+  if (typeof value !== "object" || value === null) return false;
+  const token = value as Partial<MovedHandlerToken>;
+  return token.__ruwuterMovedHandler === true && typeof token.moduleHref === "string" &&
+    typeof token.valuesJson === "string";
+}
+
+/** @internal */
+export function serializeMovedEvents(
+  events: readonly (readonly [type: string, handler: MovedHandlerToken])[],
+): string {
+  const descriptors = events.map(([type, handler]) => {
+    return `[${JSON.stringify(type)},${JSON.stringify(handler.moduleHref)},${handler.valuesJson}]`;
+  });
+  return escapeJsonForAttribute(`[${descriptors.join(",")}]`);
 }
 
 function createRefTokens<Refs extends ControllerRefs>(): ControllerRefTokens<Refs> {
