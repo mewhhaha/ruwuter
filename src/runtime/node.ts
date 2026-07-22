@@ -128,6 +128,7 @@ const render = (root: Html): AsyncGenerator<string> => {
 
     if (isAsyncIterable(value)) {
       const iterator = value[Symbol.asyncIterator]();
+      let completed = false;
       try {
         while (true) {
           if (buffer) {
@@ -135,11 +136,14 @@ const render = (root: Html): AsyncGenerator<string> => {
             buffer = "";
           }
           const step = await iterator.next();
-          if (step.done) return;
+          if (step.done) {
+            completed = true;
+            return;
+          }
           yield* walk(step.value, esc);
         }
       } finally {
-        await iterator.return?.(undefined);
+        if (!completed) await iterator.return?.(undefined);
       }
     }
 

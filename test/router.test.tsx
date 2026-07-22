@@ -26,6 +26,29 @@ describe("Router HTML responses", () => {
     expect(rendered).toBe("<p>Streamed</p>");
   });
 
+  it("does not close an async iterable after natural completion", async () => {
+    let closed = false;
+    const chunks = {
+      [Symbol.asyncIterator]() {
+        let emitted = false;
+        return {
+          next: () => {
+            if (emitted) return Promise.resolve({ done: true as const, value: undefined });
+            emitted = true;
+            return Promise.resolve({ done: false as const, value: "complete" });
+          },
+          return: () => {
+            closed = true;
+            return Promise.reject(new Error("completed iterator was closed"));
+          },
+        };
+      },
+    };
+
+    expect(await renderToString(chunks)).toBe("complete");
+    expect(closed).toBe(false);
+  });
+
   it("accepts sync string route renderers through route typing", async () => {
     const fragments: fragment[] = [{
       id: "text",
@@ -100,6 +123,18 @@ describe("Router HTML responses", () => {
     expect(res.status).toBe(202);
     expect(res.headers.get("Content-Type")).toMatch(/application\/json/);
     expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("rejects JSON responses with no serialized representation", () => {
+    let caught: unknown;
+    try {
+      json(undefined);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught instanceof TypeError).toBe(true);
+    expect((caught as Error).message).toContain("undefined");
   });
 
   it("returns HTML for GET with default component", async () => {

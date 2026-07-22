@@ -72,12 +72,7 @@ function initializeActivationRuntime(): void {
   const parseProps = (root: Element): JsonValue | undefined => {
     const text = root.getAttribute(PROPS_ATTR);
     if (!text) return undefined;
-    try {
-      return JSON.parse(text) as JsonValue;
-    } catch (error) {
-      console.error(error);
-      return undefined;
-    }
+    return JSON.parse(text) as JsonValue;
   };
 
   const collectRefs = (root: Element): Record<string, Element> => {

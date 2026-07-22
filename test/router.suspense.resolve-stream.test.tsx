@@ -185,8 +185,9 @@ describe("Resolve streams resolved suspense chunks", () => {
         },
       },
     ];
+    const errors: unknown[][] = [];
     const originalError = console.error;
-    console.error = () => {};
+    console.error = (...args: unknown[]) => errors.push(args);
 
     try {
       const router = Router([[pattern, fragments]]);
@@ -201,6 +202,9 @@ describe("Resolve streams resolved suspense chunks", () => {
       expect(full).toContain("KEEP-THIS-FALLBACK");
       expect(full).toContain("OTHER-READY");
       expect(full).not.toContain("error fallback failure");
+      expect(errors.length).toBe(2);
+      expect((errors[0][1] as Error).message).toBe("boundary failure");
+      expect((errors[1][1] as Error).message).toBe("error fallback failure");
     } finally {
       console.error = originalError;
     }

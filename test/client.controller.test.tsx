@@ -87,12 +87,14 @@ describe("controller activation attributes", () => {
         error = caught;
       }
       expect(error instanceof TypeError).toBe(true);
-      expect((error as Error).message).toContain("JSON-serializable");
+      expect((error as Error).message).toContain("JSON values");
     };
 
     rejects(1n as never);
     rejects({ callback() {} } as never);
     rejects({ dropped: undefined } as never);
     rejects({ value: Number.NaN } as never);
+    rejects(new Date() as never);
+    rejects(new Map() as never);
   });
 });

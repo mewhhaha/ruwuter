@@ -46,4 +46,22 @@ describe("generateTypes", () => {
       await Deno.remove(app, { recursive: true });
     }
   });
+
+  it("reports filesystem errors while reading routes", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(app, "routes"), "not a directory");
+
+      let caught: unknown;
+      try {
+        await generateTypes(app);
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught instanceof Error).toBe(true);
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
 });

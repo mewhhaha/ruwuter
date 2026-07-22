@@ -132,7 +132,11 @@ export function json(value: unknown, init: ResponseInit = {}): Response {
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json; charset=utf-8");
   }
-  return new Response(JSON.stringify(value), {
+  const body = JSON.stringify(value);
+  if (body === undefined) {
+    throw new TypeError(`json() cannot serialize a top-level ${typeof value} value.`);
+  }
+  return new Response(body, {
     ...init,
     headers,
   });
@@ -166,7 +170,7 @@ const toParams = (
 
 const ACTION_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 
-const methodSetForLeaf = (leaf: mod | undefined): Set<string> => {
+const methodSetForLeaf = <Bindings>(leaf: mod<Bindings> | undefined): Set<string> => {
   const methods = new Set<string>();
   if (!leaf) return methods;
   if (leaf.default || leaf.loader) {
@@ -206,9 +210,9 @@ const mergeHeaders = (
   }
 };
 
-const dataResponse = async (
-  f: action | loader,
-  ctx: RequestContext,
+const dataResponse = async <Bindings>(
+  f: action<Bindings> | loader<Bindings>,
+  ctx: RequestContext<Bindings>,
 ): Promise<Response> => {
   const value = await f(ctx);
   if (value instanceof Response) {
@@ -237,9 +241,9 @@ const bindGenerator = (generator: AsyncGenerator<string>): AsyncGenerator<string
   return bound;
 };
 
-const routeData = async (
-  fragments: fragment[],
-  ctx: RequestContext,
+const routeData = async <Bindings>(
+  fragments: fragment<Bindings>[],
+  ctx: RequestContext<Bindings>,
 ): Promise<{ headers: Headers; loaderData: unknown[] }> => {
   const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
   const loaderData: unknown[] = [];
@@ -269,9 +273,9 @@ const routeData = async (
   return { headers, loaderData };
 };
 
-const routeHeadResponse = async (
-  fragments: fragment[],
-  ctx: RequestContext,
+const routeHeadResponse = async <Bindings>(
+  fragments: fragment<Bindings>[],
+  ctx: RequestContext<Bindings>,
 ): Promise<Response> => {
   const { headers } = await routeData(fragments, ctx);
   return new Response(null, {
@@ -280,9 +284,9 @@ const routeHeadResponse = async (
   });
 };
 
-const routeResponse = async (
-  fragments: fragment[],
-  ctx: RequestContext,
+const routeResponse = async <Bindings>(
+  fragments: fragment<Bindings>[],
+  ctx: RequestContext<Bindings>,
 ): Promise<Response> => {
   const { headers, loaderData } = await routeData(fragments, ctx);
 
@@ -356,9 +360,16 @@ const fragmentPath = (pathname: string): { routePath: string; name: string } | u
   const encodedName = pathname.slice(markerIndex + marker.length);
   if (!encodedName || encodedName.includes("/")) return undefined;
 
+  let name: string;
+  try {
+    name = decodeURIComponent(encodedName);
+  } catch {
+    return undefined;
+  }
+
   return {
     routePath: pathname.slice(0, markerIndex) || "/",
-    name: decodeURIComponent(encodedName),
+    name,
   };
 };
 
@@ -435,7 +446,7 @@ export const Router = <Bindings = Env>(
 ): router<Bindings> => {
   const compiled: CompiledRoute<Bindings>[] = routes.map(([pattern, fragments]) => {
     const leaf = fragments[fragments.length - 1]?.mod;
-    const allowed = methodSetForLeaf(leaf as mod | undefined);
+    const allowed = methodSetForLeaf(leaf);
     return { pattern, fragments, leaf, allowed, allow: allowHeader(allowed) };
   });
 
@@ -508,26 +519,26 @@ export const Router = <Bindings = Env>(
 
         if (request.method === "HEAD") {
           if (leaf?.default) {
-            return await routeHeadResponse(fragments as fragment[], ctx as RequestContext);
+            return await routeHeadResponse(fragments, ctx);
           }
           if (leaf?.loader) {
-            return withoutBody(await dataResponse(leaf.loader as loader, ctx as RequestContext));
+            return withoutBody(await dataResponse(leaf.loader, ctx));
           }
           return new Response(null, { status: 404 });
         }
 
         if (request.method === "GET") {
           if (leaf?.default) {
-            return await routeResponse(fragments as fragment[], ctx as RequestContext);
+            return await routeResponse(fragments, ctx);
           }
           if (leaf?.loader) {
-            return await dataResponse(leaf.loader as loader, ctx as RequestContext);
+            return await dataResponse(leaf.loader, ctx);
           }
           return new Response(null, { status: 404 });
         }
 
         if (leaf?.action) {
-          return await dataResponse(leaf.action as action, ctx as RequestContext);
+          return await dataResponse(leaf.action, ctx);
         }
 
         return new Response(null, { status: 404 });

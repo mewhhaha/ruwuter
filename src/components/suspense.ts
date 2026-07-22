@@ -124,8 +124,8 @@ export const Resolve = (): JSX.Element => {
             : settled.errorFallback;
           const html = await fromParts([{ v: fallback, esc: true }]).toPromise();
           yield `<template data-rw-target="${settled.id}">${html}</template>`;
-        } catch {
-          // An error fallback must not cause the stream to fail or recurse.
+        } catch (error) {
+          console.error("Suspense error fallback failed", error);
         }
       }
     })(),
