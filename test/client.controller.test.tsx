@@ -1,5 +1,10 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
-import { controller, type ControllerHref } from "../src/components/client.ts";
+import {
+  controller,
+  type ControllerHref,
+  move,
+  type MovedHandler,
+} from "../src/components/client.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/router.ts";
 import type { JSX } from "../src/runtime/jsx.ts";
@@ -96,5 +101,57 @@ describe("controller activation attributes", () => {
     rejects({ value: Number.NaN } as never);
     rejects(new Date() as never);
     rejects(new Map() as never);
+  });
+
+  it("renders moved event metadata without inline JavaScript", async () => {
+    const movedClick = (move as unknown as (
+      values: { count: number },
+      moduleHref: string,
+    ) => MovedHandler<PointerEvent, HTMLButtonElement>)(
+      { count: 2 },
+      "/assets/counter.js",
+    );
+    const router = Router([[
+      new URLPattern({ pathname: "/" }),
+      [{
+        id: "root",
+        mod: { default: () => <button type="button" on:click={movedClick}>Count</button> },
+      }],
+    ]]);
+    const { ctx } = makeCtx();
+
+    const response = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
+    const html = await response.text();
+
+    expect(html).toContain("data-rw-events=");
+    expect(html).toContain("/assets/counter.js");
+    expect(html).toContain("&quot;count&quot;:2");
+    expect(html).not.toContain("on:click");
+    expect(html).not.toContain("onclick");
+  });
+
+  it("rejects non-JSON moved event values", () => {
+    const transformedMove = move as unknown as (values: never, moduleHref: string) => MovedHandler;
+    let error: unknown;
+    try {
+      transformedMove({ callback() {} } as never, "/assets/counter.js");
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error instanceof TypeError).toBe(true);
+    expect((error as Error).message).toContain("move() values must contain only JSON values");
+  });
+
+  it("requires the Vite transform for moved event callbacks", () => {
+    let error: unknown;
+    try {
+      move({}, () => {});
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error instanceof Error).toBe(true);
+    expect((error as Error).message).toContain("clientMacro: true");
   });
 });

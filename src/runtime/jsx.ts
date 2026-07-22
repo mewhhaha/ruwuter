@@ -1,13 +1,19 @@
 // deno-lint-ignore-file no-namespace
 import type { Html } from "./node.ts";
-import type { ControllerRefToken } from "../components/client.ts";
+import type { ControllerRefToken, MovedHandler } from "../components/client.ts";
 
 type ElementForTag<Name extends string> = Name extends keyof HTMLElementTagNameMap
   ? HTMLElementTagNameMap[Name]
   : Name extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[Name]
   : Element;
 
-type WithRef<Name extends string, Props> = Props & {
+type MovedEvents<Target extends EventTarget> = {
+  [Type in keyof GlobalEventHandlersEventMap as `on:${Type & string}`]?:
+    | MovedHandler<GlobalEventHandlersEventMap[Type], Target>
+    | undefined;
+};
+
+type WithRef<Name extends string, Props> = Props & MovedEvents<ElementForTag<Name>> & {
   ref?:
     | ControllerRefToken<string, ElementForTag<Name>>
     | ControllerRefToken<string, Element>

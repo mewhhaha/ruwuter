@@ -1,7 +1,7 @@
 /**
  * @module
  *
- * Browser runtime for explicit Ruwuter activation controllers.
+ * Browser runtime for explicit Ruwuter controllers and moved events.
  */
 
 import type { Controller, ControllerCleanup, JsonValue } from "../components/client.ts";
@@ -9,15 +9,20 @@ import type { Controller, ControllerCleanup, JsonValue } from "../components/cli
 const CONTROLLER_ATTR = "data-rw-controller";
 const PROPS_ATTR = "data-rw-props";
 const REF_ATTR = "data-rw-ref";
+const EVENTS_ATTR = "data-rw-events";
+const ACTIVATION_SELECTOR = `[${CONTROLLER_ATTR}],[${EVENTS_ATTR}]`;
 
-type ControllerModule = {
+type ClientModule = {
   default?: unknown;
 };
 
-type ControllerModuleLoader = (url: URL) => Promise<ControllerModule>;
+type ClientModuleLoader = (url: URL) => Promise<ClientModule>;
 
-type MountedController = {
-  controller: AbortController;
+type MovedEvent = readonly [type: string, moduleHref: string, values: JsonValue];
+type MovedEventHandler = (event: Event, values: JsonValue) => unknown | Promise<unknown>;
+
+type MountedActivation = {
+  abortController: AbortController;
   cleanup: ControllerCleanup;
 };
 
@@ -28,7 +33,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 function initializeActivationRuntime(): void {
-  const mounted = new WeakMap<Element, MountedController>();
+  const mounted = new WeakMap<Element, MountedActivation>();
 
   const resolveModuleUrl = (spec: string): URL => {
     const base = (typeof document.baseURI === "string" && document.baseURI &&
@@ -46,22 +51,22 @@ function initializeActivationRuntime(): void {
       !["http:", "https:"].includes(url.protocol) ||
       url.origin !== locationUrl.origin
     ) {
-      throw new TypeError(`Controller module URL is not allowed: ${url.href}`);
+      throw new TypeError(`Browser module URL is not allowed: ${url.href}`);
     }
 
     return url;
   };
 
-  const loadModule = async (spec: string): Promise<Controller> => {
+  const loadModule = async <ModuleExport>(spec: string): Promise<ModuleExport> => {
     const url = resolveModuleUrl(spec);
     const customLoader = (globalThis as {
-      __ruwuterControllerModuleLoader?: ControllerModuleLoader;
+      __ruwuterControllerModuleLoader?: ClientModuleLoader;
     }).__ruwuterControllerModuleLoader;
     const mod = customLoader ? await customLoader(url) : await import(url.href);
     if (!mod || typeof mod.default !== "function") {
-      throw new TypeError(`Controller module must default export a function: ${url.href}`);
+      throw new TypeError(`Browser module must default export a function: ${url.href}`);
     }
-    return mod.default as Controller;
+    return mod.default as ModuleExport;
   };
 
   const isConnected = (root: Element): boolean => {
@@ -73,6 +78,12 @@ function initializeActivationRuntime(): void {
     const text = root.getAttribute(PROPS_ATTR);
     if (!text) return undefined;
     return JSON.parse(text) as JsonValue;
+  };
+
+  const parseMovedEvents = (root: Element): MovedEvent[] => {
+    const text = root.getAttribute(EVENTS_ATTR);
+    if (!text) return [];
+    return JSON.parse(text) as MovedEvent[];
   };
 
   const collectRefs = (root: Element): Record<string, Element> => {
@@ -103,37 +114,60 @@ function initializeActivationRuntime(): void {
   const mount = async (root: Element): Promise<void> => {
     if (mounted.has(root)) return;
 
-    const spec = root.getAttribute(CONTROLLER_ATTR);
-    if (!spec) return;
+    const controllerSpec = root.getAttribute(CONTROLLER_ATTR);
+    const hasMovedEvents = root.hasAttribute(EVENTS_ATTR);
+    if (!controllerSpec && !hasMovedEvents) return;
 
-    const controller = new AbortController();
-    mounted.set(root, { controller, cleanup: undefined });
+    const abortController = new AbortController();
+    mounted.set(root, { abortController, cleanup: undefined });
 
     try {
-      const activate = await loadModule(spec);
-      if (controller.signal.aborted || !isConnected(root)) {
-        controller.abort();
+      const movedEvents = parseMovedEvents(root);
+      const [activate, loadedEvents] = await Promise.all([
+        controllerSpec ? loadModule<Controller>(controllerSpec) : Promise.resolve(undefined),
+        Promise.all(movedEvents.map(async ([type, moduleHref, values]) => ({
+          type,
+          values,
+          handler: await loadModule<MovedEventHandler>(moduleHref),
+        }))),
+      ]);
+      if (abortController.signal.aborted || !isConnected(root)) {
+        abortController.abort();
         mounted.delete(root);
         return;
       }
 
-      const cleanup = await activate({
-        root,
-        props: parseProps(root),
-        refs: collectRefs(root),
-        signal: controller.signal,
-      });
+      for (const { type, values, handler } of loadedEvents) {
+        root.addEventListener(type, (event) => {
+          try {
+            Promise.resolve(handler(event, values)).catch((error) => {
+              if (!isAbortError(error)) console.error(error);
+            });
+          } catch (error) {
+            if (!isAbortError(error)) console.error(error);
+          }
+        }, { signal: abortController.signal });
+      }
+
+      const controllerCleanup = activate
+        ? await activate({
+          root,
+          props: parseProps(root),
+          refs: collectRefs(root),
+          signal: abortController.signal,
+        })
+        : undefined;
 
       const current = mounted.get(root);
-      if (!current || current.controller !== controller) {
-        if (typeof cleanup === "function") await cleanup();
+      if (!current || current.abortController !== abortController) {
+        if (typeof controllerCleanup === "function") await controllerCleanup();
         return;
       }
-      current.cleanup = cleanup;
+      current.cleanup = controllerCleanup;
     } catch (error) {
-      const wasAborted = controller.signal.aborted;
+      const wasAborted = abortController.signal.aborted;
       mounted.delete(root);
-      controller.abort();
+      abortController.abort();
       if (!wasAborted && !isAbortError(error)) {
         console.error(error);
       }
@@ -145,7 +179,7 @@ function initializeActivationRuntime(): void {
     if (!current) return;
 
     mounted.delete(root);
-    current.controller.abort();
+    current.abortController.abort();
 
     try {
       if (typeof current.cleanup === "function") {
@@ -160,10 +194,10 @@ function initializeActivationRuntime(): void {
 
   const mountNode = (node: Node): void => {
     if (!(node instanceof Element)) return;
-    if (node.hasAttribute(CONTROLLER_ATTR)) {
+    if (node.matches(ACTIVATION_SELECTOR)) {
       void mount(node);
     }
-    node.querySelectorAll(`[${CONTROLLER_ATTR}]`).forEach((root) => {
+    node.querySelectorAll(ACTIVATION_SELECTOR).forEach((root) => {
       void mount(root);
     });
   };
@@ -172,7 +206,7 @@ function initializeActivationRuntime(): void {
     queueMicrotask(() => {
       if (isConnected(root)) return;
       void dispose(root);
-      root.querySelectorAll(`[${CONTROLLER_ATTR}]`).forEach((child) => {
+      root.querySelectorAll(ACTIVATION_SELECTOR).forEach((child) => {
         if (child instanceof Element && !isConnected(child)) {
           void dispose(child);
         }
@@ -180,7 +214,7 @@ function initializeActivationRuntime(): void {
     });
   };
 
-  document.querySelectorAll(`[${CONTROLLER_ATTR}]`).forEach((root) => {
+  document.querySelectorAll(ACTIVATION_SELECTOR).forEach((root) => {
     void mount(root);
   });
 

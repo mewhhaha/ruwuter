@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createRequire } from "node:module";
 
 type Node = {
   type: string;
@@ -11,6 +12,11 @@ type TransformContext = {
   parse(source: string): Node;
   emitFile(file: { type: "chunk"; id: string; fileName?: string }): string;
   error(error: { message: string; id: string; pos: number }): never;
+  resolve(
+    source: string,
+    importer: string,
+    options: { skipSelf: true },
+  ): Promise<{ id: string } | null>;
 };
 
 type ExtractedModule = {
@@ -134,7 +140,7 @@ const moduleBindings = (program: Node): Map<string, "import" | "local"> => {
   return names;
 };
 
-const clientImportLocals = (program: Node): Set<string> => {
+const browserImportLocals = (program: Node, importedName: "client" | "move"): Set<string> => {
   const locals = new Set<string>();
   for (const statement of program.body as Node[]) {
     if (
@@ -143,12 +149,14 @@ const clientImportLocals = (program: Node): Set<string> => {
     ) continue;
     if (
       (statement.specifiers as Node[]).some((specifier) =>
-        specifier.type === "ImportSpecifier" && ((specifier.imported as Node).name) === "client"
+        specifier.type === "ImportSpecifier" &&
+        ((specifier.imported as Node).name) === importedName
       )
     ) {
       for (const specifier of statement.specifiers as Node[]) {
         if (
-          specifier.type === "ImportSpecifier" && ((specifier.imported as Node).name) === "client"
+          specifier.type === "ImportSpecifier" &&
+          ((specifier.imported as Node).name) === importedName
         ) {
           locals.add((specifier.local as Node).name as string);
         }
@@ -254,12 +262,29 @@ const callbackCaptures = (
   return { imports, locals };
 };
 
-const selectedImportSources = (
+const resolveBrowserSpecifier = async (
+  context: TransformContext,
+  specifier: string,
+  importer: string,
+): Promise<string> => {
+  if (specifier.startsWith(".")) return path.resolve(path.dirname(importer), specifier);
+  if (specifier.startsWith("/") || /^[a-z][\w+.-]*:/i.test(specifier)) return specifier;
+  const resolved = await context.resolve(specifier, importer, { skipSelf: true });
+  if (resolved?.id && resolved.id !== specifier) return resolved.id;
+  try {
+    return createRequire(importer).resolve(specifier);
+  } catch (error) {
+    throw new TypeError(`Browser dependency could not be resolved: ${specifier}`, { cause: error });
+  }
+};
+
+const selectedImportSources = async (
+  context: TransformContext,
   program: Node,
   source: string,
   used: Set<string>,
   importer: string,
-): string => {
+): Promise<string> => {
   const imports: string[] = [];
   for (const statement of program.body as Node[]) {
     if (statement.type !== "ImportDeclaration") continue;
@@ -269,9 +294,7 @@ const selectedImportSources = (
     if (!specifiers.length) continue;
     const originalSpecifier = (statement.source as { value: string }).value;
     const moduleSource = JSON.stringify(
-      originalSpecifier.startsWith(".")
-        ? path.resolve(path.dirname(importer), originalSpecifier)
-        : originalSpecifier,
+      await resolveBrowserSpecifier(context, originalSpecifier, importer),
     );
     const attributes = source.slice((statement.source as Node).end, statement.end)
       .replace(/;\s*$/, "").trim();
@@ -306,9 +329,42 @@ const selectedImportSources = (
   return imports.join("\n");
 };
 
+const extractedCallbackSource = async (
+  context: TransformContext,
+  callback: Node,
+  source: string,
+  importer: string,
+): Promise<string> => {
+  const imports: Array<{ start: number; end: number; specifier: string }> = [];
+  const visit = (node: Node): void => {
+    if (node.type === "ImportExpression") {
+      const specifier = node.source as Node;
+      const value = specifier.value;
+      if (typeof value === "string") {
+        imports.push({ start: specifier.start, end: specifier.end, specifier: value });
+      }
+    }
+    for (const child of childNodes(node)) visit(child);
+  };
+  visit(callback);
+
+  let code = source.slice(callback.start, callback.end);
+  const replacements = await Promise.all(imports.map(async ({ start, end, specifier }) => ({
+    start,
+    end,
+    value: JSON.stringify(await resolveBrowserSpecifier(context, specifier, importer)),
+  })));
+  for (const replacement of replacements.toSorted((a, b) => b.start - a.start)) {
+    const start = replacement.start - callback.start;
+    const end = replacement.end - callback.start;
+    code = code.slice(0, start) + replacement.value + code.slice(end);
+  }
+  return code;
+};
+
 const publicVirtualId = (id: string): string => `/@id/${id.replace("\0", "__x00__")}`;
 
-/** Experimental `client()` extractor. It is deliberately Vite-only and opt-in. */
+/** Experimental `client()` and `move()` extractor. It is deliberately Vite-only and opt-in. */
 export class ClientMacro {
   #modules = new Map<string, ExtractedModule>();
   #nextFile = 0;
@@ -330,11 +386,26 @@ export class ClientMacro {
     return this.#modules.get(id)?.source;
   }
 
-  transform(
+  #registerModule(
+    context: TransformContext,
+    virtualId: string,
+    source: string,
+    assetName: "client" | "move",
+  ): string {
+    this.#modules.set(virtualId, { source });
+    const fileName = `assets/ruwuter-${assetName}-${this.buildId}-${this.#nextFile++}.js`;
+    const reference = this.isBuild()
+      ? context.emitFile({ type: "chunk", id: virtualId, fileName })
+      : undefined;
+    if (!reference) return publicVirtualId(virtualId);
+    return `${this.base().endsWith("/") ? this.base() : `${this.base()}/`}${fileName}`;
+  }
+
+  async transform(
     context: TransformContext,
     source: string,
     id: string,
-  ): { code: string; map: null } | undefined {
+  ): Promise<{ code: string; map: null } | undefined> {
     if (!/\.[cm]?[jt]sx?$/.test(path.basename(id)) || id.startsWith("\0")) return;
     let program: Node;
     try {
@@ -343,8 +414,9 @@ export class ClientMacro {
       return;
     }
     const bindings = moduleBindings(program);
-    const clientLocals = clientImportLocals(program);
-    if (!clientLocals.size) return;
+    const clientLocals = browserImportLocals(program, "client");
+    const moveLocals = browserImportLocals(program, "move");
+    if (!clientLocals.size && !moveLocals.size) return;
     const replacements: Array<{ start: number; end: number; value: string }> = [];
     const handledCalls = new Set<number>();
 
@@ -383,20 +455,19 @@ export class ClientMacro {
           });
         }
         const virtualId = `${VIRTUAL_PREFIX}${encodeURIComponent(id)}:${replacements.length}.ts`;
-        const importCode = selectedImportSources(program, source, captures.imports, id);
-        this.#modules.set(virtualId, {
-          source: `${importCode}\nimport { defineController } from "@mewhhaha/ruwuter/browser";\n` +
-            `export default defineController(${source.slice(callback.start, callback.end)});\n`,
-        });
-        const fileName = `assets/ruwuter-client-${this.buildId}-${this.#nextFile++}.js`;
-        const reference = this.isBuild()
-          ? context.emitFile({ type: "chunk", id: virtualId, fileName })
-          : undefined;
-        const value = reference
-          ? JSON.stringify(
-            `${this.base().endsWith("/") ? this.base() : `${this.base()}/`}${fileName}`,
-          )
-          : JSON.stringify(publicVirtualId(virtualId));
+        const importCode = await selectedImportSources(
+          context,
+          program,
+          source,
+          captures.imports,
+          id,
+        );
+        const moduleSource =
+          `${importCode}\nimport { defineController } from "@mewhhaha/ruwuter/browser";\n` +
+          `export default defineController(${source.slice(callback.start, callback.end)});\n`;
+        const value = JSON.stringify(
+          this.#registerModule(context, virtualId, moduleSource, "client"),
+        );
         replacements.push({ start: init.start, end: init.end, value });
       }
     }
@@ -414,6 +485,124 @@ export class ClientMacro {
       for (const child of childNodes(node)) assertTopLevelCalls(child);
     };
     assertTopLevelCalls(program);
+
+    const visibleBindings = (scope: Scope): Map<string, "import" | "local"> => {
+      const visible = new Map(bindings);
+      const scopes: Scope[] = [];
+      for (let current: Scope | undefined = scope; current; current = current.parent) {
+        scopes.push(current);
+      }
+      for (const current of scopes.toReversed()) {
+        for (const name of current.names) visible.set(name, "local");
+      }
+      return visible;
+    };
+
+    const extractMovedCalls = async (
+      node: Node,
+      scope: Scope,
+      isRoot = false,
+    ): Promise<void> => {
+      if (node.type === "VariableDeclaration" && node.kind !== "var") {
+        for (const declaration of node.declarations as Node[]) {
+          namesInPattern(declaration.id as Node, scope.names);
+        }
+      }
+      if (
+        node.type === "CallExpression" && (node.callee as Node).type === "Identifier" &&
+        moveLocals.has((node.callee as Node).name as string)
+      ) {
+        if (
+          replacements.some((replacement) =>
+            node.start >= replacement.start && node.end <= replacement.end
+          )
+        ) {
+          context.error({
+            message: "[ruwuter] move() cannot be declared inside client().",
+            id,
+            pos: node.start,
+          });
+        }
+        const args = node.arguments as Node[];
+        const callback = args[1];
+        if (
+          args.length !== 2 || !callback ||
+          !["ArrowFunctionExpression", "FunctionExpression"].includes(callback.type)
+        ) {
+          context.error({
+            message: "[ruwuter] move() requires JSON values and one function callback.",
+            id,
+            pos: node.start,
+          });
+        }
+        const captures = callbackCaptures(callback, visibleBindings(scope));
+        if ([...captures.imports].some((name) => moveLocals.has(name))) {
+          context.error({
+            message: "[ruwuter] move() callbacks cannot call move().",
+            id,
+            pos: callback.start,
+          });
+        }
+        if (captures.locals.size) {
+          context.error({
+            message: `[ruwuter] move() callback captures ${
+              [...captures.locals].map((name) => JSON.stringify(name)).join(", ")
+            }. Pass server values through move()'s first argument instead.`,
+            id,
+            pos: callback.start,
+          });
+        }
+        const virtualId = `${VIRTUAL_PREFIX}${encodeURIComponent(id)}:${replacements.length}.ts`;
+        const importCode = await selectedImportSources(
+          context,
+          program,
+          source,
+          captures.imports,
+          id,
+        );
+        const callbackSource = await extractedCallbackSource(context, callback, source, id);
+        const moduleSource = `${importCode}\nexport default ${callbackSource};\n`;
+        const value = JSON.stringify(
+          this.#registerModule(context, virtualId, moduleSource, "move"),
+        );
+        replacements.push({ start: callback.start, end: callback.end, value });
+        return;
+      }
+
+      if (
+        !isRoot &&
+        ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(
+          node.type,
+        )
+      ) {
+        const child: Scope = { parent: scope, names: new Set() };
+        if (node.id) namesInPattern(node.id as Node, child.names);
+        for (const parameter of node.params as Node[]) namesInPattern(parameter, child.names);
+        functionScopedVarNames(node.body as Node, child.names);
+        if ((node.body as Node).type === "BlockStatement") {
+          addDirectBindings(node.body as Node, child);
+        }
+        await extractMovedCalls(node.body as Node, child);
+        return;
+      }
+      if (node.type === "BlockStatement") {
+        const child: Scope = { parent: scope, names: new Set() };
+        addDirectBindings(node, child);
+        for (const childNode of childNodes(node)) await extractMovedCalls(childNode, child);
+        return;
+      }
+      if (node.type === "CatchClause") {
+        const child: Scope = { parent: scope, names: new Set() };
+        if (node.param) namesInPattern(node.param as Node, child.names);
+        await extractMovedCalls(node.body as Node, child);
+        return;
+      }
+      for (const child of childNodes(node)) await extractMovedCalls(child, scope);
+    };
+    const root: Scope = { names: new Set() };
+    addDirectBindings(program, root);
+    await extractMovedCalls(program, root, true);
+
     if (!replacements.length) return;
     let code = source;
     for (const replacement of replacements.toSorted((a, b) => b.start - a.start)) {

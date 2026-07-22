@@ -32,7 +32,7 @@ export interface RuwuterPluginOptions {
    * @default "./app"
    */
   appFolder?: string;
-  /** Enables the experimental Vite-only `client()` extraction macro. */
+  /** Enables the experimental Vite-only `client()` and `move()` extraction macros. */
   clientMacro?: boolean;
 }
 
@@ -51,7 +51,7 @@ type RuwuterPlugin = {
     this: unknown,
     source: string,
     id: string,
-  ) => { code: string; map: null } | undefined;
+  ) => Promise<{ code: string; map: null } | undefined> | { code: string; map: null } | undefined;
 };
 
 const isWithinFolder = (folder: string, file: string): boolean => {
@@ -126,9 +126,9 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
             controllerUrls.load(this as Parameters<ControllerUrls["load"]>[0], id) ??
             clientMacro.load(id);
         },
-        transform(this: unknown, source: string, id: string) {
+        async transform(this: unknown, source: string, id: string) {
           const controller = transformControllerImports(source, id);
-          const macro = clientMacro.transform(
+          const macro = await clientMacro.transform(
             this as Parameters<ClientMacro["transform"]>[0],
             controller?.code ?? source,
             id,

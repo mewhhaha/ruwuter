@@ -1,7 +1,7 @@
 /**
  * @module
  *
- * Browser-only helpers for controller modules.
+ * Browser-only helpers for controllers and moved events.
  */
 
 export {
@@ -15,7 +15,10 @@ export {
   type ControllerRefTokens,
   defineController,
   type JsonValue,
+  move,
+  type MovedHandler,
   on,
+  type TargetedRuntimeEvent,
 } from "./components/client.ts";
 import type {
   Controller,
