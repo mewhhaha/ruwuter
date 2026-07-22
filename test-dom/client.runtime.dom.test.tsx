@@ -252,6 +252,29 @@ describe("Activation runtime DOM behaviour", () => {
     }
   });
 
+  it("does not activate a controller with malformed props", async () => {
+    const href = registerController(() => {
+      document.body.setAttribute("data-malformed-mounted", "yes");
+    });
+    const html = `<section data-rw-controller="${href}" data-rw-props="{"></section>`;
+    const { doc, cleanup } = setupDomEnvironment(html);
+    const originalError = console.error;
+    const errors: unknown[] = [];
+    console.error = (...args: unknown[]) => {
+      errors.push(args[0]);
+    };
+    try {
+      await import(nextRuntimeUrl());
+
+      await waitFor(() => errors.length === 1, 1000);
+      expect(errors[0] instanceof SyntaxError).toBe(true);
+      expect(doc.body.getAttribute("data-malformed-mounted") ?? "").toBe("");
+    } finally {
+      console.error = originalError;
+      cleanup();
+    }
+  });
+
   it("rejects controller URLs outside the current origin", async () => {
     const html = await render("https://evil.example/controller.js");
     const { cleanup } = setupDomEnvironment(html);
