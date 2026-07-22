@@ -356,9 +356,16 @@ const fragmentPath = (pathname: string): { routePath: string; name: string } | u
   const encodedName = pathname.slice(markerIndex + marker.length);
   if (!encodedName || encodedName.includes("/")) return undefined;
 
+  let name: string;
+  try {
+    name = decodeURIComponent(encodedName);
+  } catch {
+    return undefined;
+  }
+
   return {
     routePath: pathname.slice(0, markerIndex) || "/",
-    name: decodeURIComponent(encodedName),
+    name,
   };
 };
 

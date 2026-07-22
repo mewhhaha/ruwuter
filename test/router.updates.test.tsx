@@ -314,6 +314,23 @@ describe("Router updates", () => {
     expect(unmatchedRoute.body).toBe(null);
   });
 
+  it("returns 404 for a malformed encoded fragment name", async () => {
+    const router = Router([[
+      new URLPattern({ pathname: "/items/:id" }),
+      [{ id: "item", mod: { fragments: { details: fragment(() => "details") } } }],
+    ]]);
+    const { ctx } = makeCtx();
+
+    const response = await router.handle(
+      new Request("https://example.com/items/42/_ruwuter/%E0%A4%A"),
+      {} as Env,
+      ctx,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toBe(null);
+  });
+
   it("cannot change a streaming response after it is committed", async () => {
     const router = Router([[
       new URLPattern({ pathname: "/late-error" }),
