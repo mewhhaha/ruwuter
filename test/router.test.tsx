@@ -26,6 +26,29 @@ describe("Router HTML responses", () => {
     expect(rendered).toBe("<p>Streamed</p>");
   });
 
+  it("does not close an async iterable after natural completion", async () => {
+    let closed = false;
+    const chunks = {
+      [Symbol.asyncIterator]() {
+        let emitted = false;
+        return {
+          next: () => {
+            if (emitted) return Promise.resolve({ done: true as const, value: undefined });
+            emitted = true;
+            return Promise.resolve({ done: false as const, value: "complete" });
+          },
+          return: () => {
+            closed = true;
+            return Promise.reject(new Error("completed iterator was closed"));
+          },
+        };
+      },
+    };
+
+    expect(await renderToString(chunks)).toBe("complete");
+    expect(closed).toBe(false);
+  });
+
   it("accepts sync string route renderers through route typing", async () => {
     const fragments: fragment[] = [{
       id: "text",
