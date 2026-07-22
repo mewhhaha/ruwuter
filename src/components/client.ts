@@ -109,6 +109,7 @@ type TargetedRuntimeEvent<
 type ListenerOptions = AddEventListenerOptions;
 
 type GlobalDomEventMap = GlobalEventHandlersEventMap;
+const JSON_PROPS_MESSAGE = "controller() props must contain only JSON values.";
 
 type OnRegistry<Target extends EventTarget> =
   & {
@@ -165,17 +166,17 @@ function assertJsonValue(value: unknown, seen = new WeakSet<object>()): asserts 
 
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new TypeError("controller() props must be JSON-serializable.");
+      throw new TypeError(JSON_PROPS_MESSAGE);
     }
     return;
   }
 
   if (typeof value !== "object") {
-    throw new TypeError("controller() props must be JSON-serializable.");
+    throw new TypeError(JSON_PROPS_MESSAGE);
   }
 
   if (seen.has(value)) {
-    throw new TypeError("controller() props must be JSON-serializable.");
+    throw new TypeError(JSON_PROPS_MESSAGE);
   }
   seen.add(value);
 
@@ -185,6 +186,11 @@ function assertJsonValue(value: unknown, seen = new WeakSet<object>()): asserts 
     }
     seen.delete(value);
     return;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== null && prototype !== Object.prototype) {
+    throw new TypeError(JSON_PROPS_MESSAGE);
   }
 
   for (const item of Object.values(value)) {
@@ -200,10 +206,10 @@ function serializeProps(props: JsonValue | undefined): string | undefined {
   try {
     json = JSON.stringify(props);
   } catch (error) {
-    throw new TypeError("controller() props must be JSON-serializable.", { cause: error });
+    throw new TypeError(JSON_PROPS_MESSAGE, { cause: error });
   }
   if (typeof json !== "string") {
-    throw new TypeError("controller() props must be JSON-serializable.");
+    throw new TypeError(JSON_PROPS_MESSAGE);
   }
   return escapeJsonForAttribute(json);
 }
