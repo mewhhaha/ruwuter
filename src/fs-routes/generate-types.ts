@@ -41,8 +41,9 @@ export const generateTypes = async (
           isDirectory: false,
         };
       });
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") return [];
+    throw error;
   }
 
   const typesRoot = generatedTypesRoot(resolvedAppFolder);
