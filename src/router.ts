@@ -132,7 +132,11 @@ export function json(value: unknown, init: ResponseInit = {}): Response {
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json; charset=utf-8");
   }
-  return new Response(JSON.stringify(value), {
+  const body = JSON.stringify(value);
+  if (body === undefined) {
+    throw new TypeError(`json() cannot serialize a top-level ${typeof value} value.`);
+  }
+  return new Response(body, {
     ...init,
     headers,
   });

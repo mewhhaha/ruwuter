@@ -102,6 +102,18 @@ describe("Router HTML responses", () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
+  it("rejects JSON responses with no serialized representation", () => {
+    let caught: unknown;
+    try {
+      json(undefined);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught instanceof TypeError).toBe(true);
+    expect((caught as Error).message).toContain("undefined");
+  });
+
   it("returns HTML for GET with default component", async () => {
     const pattern = new URLPattern({ pathname: "/" });
     const fragments: fragment[] = [
