@@ -1,7 +1,14 @@
 import { join } from "node:path";
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
-import { generateControllers } from "../src/fs-routes/generate-controllers.ts";
-import { writeGeneratedFiles } from "../src/fs-routes/write.ts";
+import {
+  generateControllers,
+  GENERATED_CONTROLLERS_MARKER,
+} from "../src/fs-routes/generate-controllers.ts";
+import { generatedTypesRoot, writeGeneratedFiles } from "../src/fs-routes/write.ts";
+
+const exists = async (path: string): Promise<boolean> => {
+  return await Deno.stat(path).then(() => true).catch(() => false);
+};
 
 describe("generateControllers", () => {
   it("generates deterministic hrefs whose types come from each default export", async () => {
@@ -67,6 +74,27 @@ describe("generateControllers", () => {
       expect(await Deno.readTextFile(join(app, "controllers.ts"))).toContain("mine");
     } finally {
       await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("removes a marked controllers.ts once no controllers remain", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(app, "routes"), { recursive: true });
+      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
+      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
+      // No `*.client.*` module exists, so the previously generated barrel is stale.
+      await Deno.writeTextFile(
+        join(app, "controllers.ts"),
+        `${GENERATED_CONTROLLERS_MARKER}\nexport const stale = 1;\n`,
+      );
+
+      await writeGeneratedFiles(app, { controllers: true });
+
+      expect(await exists(join(app, "controllers.ts"))).toBe(false);
+    } finally {
+      await Deno.remove(app, { recursive: true });
+      await Deno.remove(generatedTypesRoot(app), { recursive: true }).catch(() => {});
     }
   });
 });

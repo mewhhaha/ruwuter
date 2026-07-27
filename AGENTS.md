@@ -60,6 +60,23 @@ repository.
   controller for behavior spanning elements.
 - Function-valued HTML attributes are not supported; only HTML-compatible values, controller
   root/ref metadata, and moved-event module metadata are emitted.
+- Attribute names must match `/^[A-Za-z_:][A-Za-z0-9_.:-]*$/`. Any other key throws a `TypeError`
+  naming it, so a spread key cannot break out of the attribute and inject markup. The invariant is
+  that no key reaches the markup as an attribute name without passing the check, and the check runs
+  before any value can suppress the attribute, so a key whose value is falsy and emits nothing is
+  still rejected. The directive keys the runtime consumes itself — `ref`, `on:*`, and a
+  `dangerouslySetInnerHTML` carrying `{ __html: string }` — return before the check; they emit a
+  fixed `data-rw-*` name or inline HTML rather than a caller-controlled attribute name. A
+  `dangerouslySetInnerHTML` of any other shape falls through and is checked like an ordinary
+  attribute. Keep it that way when adding directives.
+- Attribute _values_ are escaped for `&` and `"` only, which keeps them inside the quoted attribute.
+  They are not validated: `<a href={untrusted}>` emits a `javascript:` URL verbatim. Value safety is
+  an application concern, not a runtime guarantee — do not document it as one.
+- Tag names must match `/^[A-Za-z][A-Za-z0-9-]*$/`. Any other string tag throws a `TypeError` naming
+  it, so a caller-controlled tag (`const Tag = untrusted; <Tag />`) cannot break out and inject
+  markup. The empty-string tag is exempt: it emits no markup and is the internal fragment path.
+- Boolean children render nothing, like `null` and `undefined`, on both the synchronous and the
+  streamed path. Do not reintroduce `true` as literal text.
 - Do not emit JavaScript source or evaluated code in event metadata.
 
 ## FS‑Routes

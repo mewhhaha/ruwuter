@@ -162,12 +162,32 @@ A default route component receives its own `loaderData` and nested `children`. I
 Rules:
 
 - `.` separates URL segments.
-- `$name` is a parameter.
-- Bare `$` is a catch-all.
+- `$name` is a parameter. The name is the leading `[A-Za-z_][A-Za-z0-9_]*` run; the rest of the
+  segment is a literal suffix. This is deliberately narrower than the identifier grammar
+  `URLPattern` accepts — `$` stays available as the param sigil so `[$]` remains an escapable
+  literal — and the generator ends the name explicitly, so the emitted group name is always the name
+  parsed back out.
+- Bare `$`, or a `$` whose name part is empty (`$-b`, `$1x`), is a catch-all.
 - Parentheses make a segment optional.
+- Catch-alls and optional literal segments are anonymous groups. They are named by their positional
+  index among anonymous groups — `"0"`, `"1"`, … — exactly as `URLPattern` names them, so
+  `(a).b.tsx` reports a `"0"` parameter.
+- A _bare_ `$` catch-all compiles to `*`, which swallows the rest of the path, so segments after it
+  are unreachable and contribute no pattern and no parameters.
+- A catch-all carrying a literal suffix (`$-b`, `$1x`) is bounded by that suffix and does **not**
+  swallow the rest of the path. The segments after it are kept: `a.$-b.c.tsx` compiles to `/a/*-b/c`
+  and serves `/a/x-b/c`, and their groups are numbered as usual (`$-b.(c).d.tsx` reports `"0"` and
+  `"1"`). Note that `*` still crosses `/`, so `/a/*-b/c` also matches `/a/p/x-b/c` with `0` set to
+  `p/x`.
 - A segment beginning with `_` is pathless.
 - `_index` contributes no URL segment.
-- Brackets escape route syntax.
+- Brackets escape route syntax. An escaped literal is backslash-escaped when it is spliced into the
+  `URLPattern` source, so `[:]id.tsx`, `[*].tsx`, and `a.[?]b.tsx` match that literal text and
+  contribute no parameter. Known limitation: an escaped literal inside an _optional_ segment
+  compiles into a regex group, and `URLPattern` percent-encodes the pathname but not a group's
+  contents, so an escaped character that percent-encodes (`([?]b).c.tsx`, `([{]b).c.tsx`) never
+  matches there. Required segments and optional literals that survive encoding (`([:]b).c.tsx`) are
+  unaffected.
 - Directories under `app/routes` are accepted and load `route.tsx`.
 - Static routes sort before parameter routes.
 - Equivalent patterns and generated symbol collisions are rejected.
@@ -631,9 +651,17 @@ Rules:
   Transition when available.
 - A superseded navigation's signal prevents its stale response from mutating the DOM.
 - With `client.js` loaded, removed controller roots clean up and newly inserted roots activate.
-- Followed redirects and enhancement failures become real document loads with interception removed.
+- Followed redirects, and failures once the request has been sent, become real document loads of the
+  destination with interception removed; a sent submission is never repeated.
+- A failure _before_ the request leaves the browser hands the navigation back to the browser
+  instead. The original form is re-submitted natively when it is still reachable — through
+  `sourceElement`, or through the submit event that started the navigation — so the submission is
+  preserved. With no form to recover, the runtime falls back to a plain document load of the
+  destination, which navigates but drops the request body. Either branch reaches the server exactly
+  once.
 - Use `<meta name="rw-navigate" content="reload">` on streamed Suspense destinations so their
-  response finishes as a normal load and retains progressive streaming.
+  response finishes as a normal load and retains progressive streaming. This opt-out is honoured for
+  GET only: a POST renders the response it already fetched rather than submitting a second time.
 - Calling `enhanceNavigation(options)` replaces the auto-installed listener; `target` and
   `viewTransition` are configurable.
 
@@ -675,8 +703,13 @@ Available APIs:
 
 Context is server-only and request-local when rendered through `Router`.
 
+Each provider derives its own immutable store, so sibling branches never observe one another's
+values and a `Suspense` child still sees the providers that lexically enclose its boundary even
+though its content resolves after the surrounding branch has streamed.
+
 References: [src/components/context.ts](./src/components/context.ts),
-[test/context.nesting.test.tsx](./test/context.nesting.test.tsx).
+[test/context.nesting.test.tsx](./test/context.nesting.test.tsx),
+[test/context.suspense.test.tsx](./test/context.suspense.test.tsx).
 
 ## Streaming Suspense
 
@@ -716,7 +749,10 @@ Rules:
 - Boundaries stream in completion order.
 - Rejected boundaries are logged and contained. `errorFallback` may be an element or error function;
   without it, the original fallback remains.
-- Provider-specific UUID target ids prevent collisions between independently rendered registries.
+- Target ids are `rw-<uuid>-<n>`: a `crypto.randomUUID()` per provider plus a per-boundary counter.
+  The counter keeps boundaries unique inside one registry; the UUID keeps independently rendered
+  registries apart, since a cold isolate answering a fragment request restarts the counter at zero
+  and its HTML is swapped into a document another isolate rendered.
 - Nested unresolved templates are retried when targets appear.
 - Resolved controller roots activate when `client.js` is also loaded.
 - Without a provider, children render directly.
@@ -729,8 +765,21 @@ References: [src/components/suspense.ts](./src/components/suspense.ts),
 ## JSX Rules
 
 - Ordinary text and child values are escaped.
+- Boolean children render nothing, like `null` and `undefined`, so `{!!user}` never leaks text.
 - Use `class`, not `className`.
 - Use HTML-style attribute names accepted by Ruwuter’s JSX types.
+- Attribute names must match `/^[A-Za-z_:][A-Za-z0-9_.:-]*$/`; anything else throws a `TypeError`
+  instead of being emitted, so a spread key cannot break out of the attribute and inject markup. No
+  key becomes an attribute name without passing the check, and the check runs before any value can
+  suppress the attribute, so a key whose value is falsy and emits nothing still throws. `ref`,
+  `on:*`, and a well-formed `dangerouslySetInnerHTML` are consumed before it — they emit a fixed
+  `data-rw-*` attribute or inline HTML, never the key itself.
+- Attribute values are escaped for `&` and `"`, which keeps them inside the quoted attribute; they
+  are not otherwise validated. `<a href={untrusted}>` emits a `javascript:` URL as written, so URL
+  and value safety stays an application concern.
+- String tag names must match `/^[A-Za-z][A-Za-z0-9-]*$/`; anything else throws a `TypeError` before
+  any markup is written, so a caller-controlled tag cannot break out of the tag and inject markup.
+  The empty string is exempt: it is the internal fragment path and emits no markup.
 - `true` emits a boolean attribute; false and nullish values are omitted.
 - `dangerouslySetInnerHTML` bypasses escaping.
 - `ref` accepts only a controller ref token.

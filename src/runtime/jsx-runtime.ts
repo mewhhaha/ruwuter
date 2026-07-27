@@ -72,7 +72,8 @@ const append = (parts: Part[], text: string): void => {
  * deferred parts and resolved during rendering with escaping enabled.
  */
 const pushChild = (parts: Part[], child: unknown): void => {
-  if (child == null || child === false) return;
+  // Booleans render nothing, so `{cond && <X />}` and `{!!x}` never leak text.
+  if (child == null || typeof child === "boolean") return;
 
   switch (typeof child) {
     case "string":
@@ -81,9 +82,6 @@ const pushChild = (parts: Part[], child: unknown): void => {
     case "number":
     case "bigint":
       append(parts, child.toString());
-      return;
-    case "boolean":
-      append(parts, "true");
       return;
     case "function":
       parts.push({ v: child, esc: true });
@@ -128,6 +126,37 @@ export const Fragment = (props: { children?: unknown }): Html => {
 
 const ATTR_ESCAPE_PATTERN = /[&"]/;
 
+/**
+ * Conservative HTML/SVG attribute-name shape. Anything outside it (whitespace,
+ * quotes, `=`, `<`, `>`) could break out of the attribute and inject markup,
+ * so such keys are rejected instead of escaped.
+ */
+const ATTR_NAME_PATTERN = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/;
+
+const assertAttributeName = (key: string): void => {
+  if (ATTR_NAME_PATTERN.test(key)) return;
+  throw new TypeError(`[ruwuter] Invalid attribute name ("${key}").`);
+};
+
+/**
+ * Conservative HTML/SVG tag-name shape. Covers every `JSX.IntrinsicElements`
+ * name, including SVG camelCase (`feTurbulence`) and custom elements
+ * (`my-element`). Anything outside it (whitespace, quotes, `=`, `/`, `<`, `>`)
+ * could break out of the tag and inject markup, so such tags are rejected
+ * instead of escaped.
+ */
+const TAG_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9-]*$/;
+
+const assertTagName = (tag: string): void => {
+  if (TAG_NAME_PATTERN.test(tag)) return;
+  throw new TypeError(`[ruwuter] Invalid tag name ("${tag}").`);
+};
+
+/**
+ * Renders an attribute value as a quoted-attribute-safe string, or `undefined`
+ * when the value has no textual form. Booleans never arrive here: callers
+ * either pass a string or handle `true`/`false` before calling.
+ */
 const sanitize = (value: unknown): string | undefined => {
   switch (typeof value) {
     case "string":
@@ -135,8 +164,6 @@ const sanitize = (value: unknown): string | undefined => {
       return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
     case "number":
       return value.toString();
-    case "boolean":
-      return value ? "true" : undefined;
     default:
       return undefined;
   }
@@ -158,6 +185,10 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
     // are active when they execute. Plain-string results are escaped.
     return fromParts([{ v: () => tag(props), esc: true }]);
   }
+
+  // An empty tag emits no markup at all (the fragment path), so there is
+  // nothing for a hostile name to break out of.
+  if (tag) assertTagName(tag);
 
   let attrs = "";
   let dangerousHtml: string | undefined;
@@ -190,7 +221,7 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
       continue;
     }
 
-    if ((key.charCodeAt(0) | 32) === 111 && (key.charCodeAt(1) | 32) === 110) {
+    if (/^on/i.test(key)) {
       throw new TypeError(
         `[ruwuter] Inline event attributes are unsupported ("${key}"). Use controller() with a client module instead.`,
       );
@@ -205,6 +236,8 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
       dangerousHtml = value.__html;
       continue;
     }
+
+    assertAttributeName(key);
 
     // Boolean/static attributes — render presence for true, skip false/null/undefined
     if (value === true) {

@@ -11,8 +11,12 @@ function setupDomEnvironment(html: string) {
     "text/html",
   )! as unknown as Document;
 
+  const observers: Array<(mutations: MutationRecord[]) => void> = [];
+
   class TestMutationObserver {
-    constructor(_cb: (mutations: MutationRecord[]) => void) {}
+    constructor(cb: (mutations: MutationRecord[]) => void) {
+      observers.push(cb);
+    }
     observe() {}
     disconnect() {}
   }
@@ -49,6 +53,7 @@ function setupDomEnvironment(html: string) {
 
   return {
     doc,
+    observers,
     cleanup() {
       (globalThis as any).window = saved.window;
       if (typeof saved.document === "undefined") delete (globalThis as any).document;
@@ -113,6 +118,58 @@ describe("Resolve runtime DOM behaviour", () => {
       expect(doc.getElementById("inner-ready")?.textContent).toContain("inner ready");
       expect(doc.body.textContent).toContain("inner ready");
       expect(doc.querySelector("template[data-rw-target]")).toBe(null);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("resolves nested templates with a single pass per mutation batch", async () => {
+    const { doc, observers, cleanup } = setupDomEnvironment("");
+
+    try {
+      await import(nextResolveRuntimeUrl());
+      const notify = observers[0];
+      expect(typeof notify).toBe("function");
+
+      // Streamed chunk: the outer template's content carries the fallback target that
+      // the earlier inner template resolves (nested Suspense).
+      doc.body.innerHTML = `
+        <div id="outer">outer loading</div>
+        <template data-rw-target="inner">
+          <span id="inner-ready">inner ready</span>
+        </template>
+        <template data-rw-target="outer">
+          <section id="inner">inner loading</section>
+        </template>
+      `;
+
+      const originalQuerySelectorAll = doc.querySelectorAll.bind(doc);
+      let scans = 0;
+      (doc as any).querySelectorAll = (selector: string) => {
+        if (selector.includes("data-rw-target")) scans += 1;
+        return originalQuerySelectorAll(selector);
+      };
+
+      // A streamed render delivers many records in one batch; scanning per record is
+      // quadratic, so the runtime must scan per batch instead.
+      const batch = Array.from({ length: 20 }, () => ({
+        addedNodes: [],
+        removedNodes: [],
+      })) as unknown as MutationRecord[];
+
+      try {
+        notify(batch);
+      } finally {
+        (doc as any).querySelectorAll = originalQuerySelectorAll;
+      }
+
+      expect(doc.getElementById("inner-ready")?.textContent).toContain("inner ready");
+      expect(doc.body.textContent).not.toContain("outer loading");
+      expect(doc.querySelector("template[data-rw-target]")).toBe(null);
+      // Bounded by the nesting depth (plus a final no-progress pass), never by the
+      // number of records in the batch.
+      expect(scans).toBeGreaterThanOrEqual(1);
+      expect(scans).toBeLessThanOrEqual(4);
     } finally {
       cleanup();
     }

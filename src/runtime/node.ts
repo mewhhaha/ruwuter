@@ -77,7 +77,8 @@ const render = (root: Html): AsyncGenerator<string> => {
   let buffer = "";
 
   async function* walk(value: unknown, esc: boolean): AsyncGenerator<string> {
-    if (value == null || value === false) return;
+    // Booleans render nothing, matching `null`/`undefined`.
+    if (value == null || typeof value === "boolean") return;
 
     switch (typeof value) {
       case "string":
@@ -86,9 +87,6 @@ const render = (root: Html): AsyncGenerator<string> => {
       case "number":
       case "bigint":
         buffer += value.toString();
-        return;
-      case "boolean":
-        buffer += "true";
         return;
       case "function":
         yield* walk((value as () => unknown)(), esc);

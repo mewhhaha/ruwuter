@@ -43,17 +43,40 @@ const isAbortError = (error: unknown): boolean =>
   typeof error === "object" && error !== null &&
   (error as { name?: unknown }).name === "AbortError";
 
-const formSource = (event: NavigateEventLike) => {
-  const source = event.sourceElement as (Element & { form?: HTMLFormElement | null }) | undefined;
-  const form = source?.tagName === "FORM" ? source as unknown as HTMLFormElement : source?.form;
-  return { form, source };
+type Submission = { form?: HTMLFormElement; submitter?: HTMLElement };
+
+/** The submission awaiting its navigate event, kept because `sourceElement` is not universal. */
+let submission: Submission | undefined;
+
+const rememberSubmission = (event: SubmitEvent): void => {
+  // Listening in the bubble phase means the page's own handlers have run: a submission it
+  // cancelled never navigates, so keeping it would strand a form for an unrelated navigation.
+  submission = event.defaultPrevented
+    ? undefined
+    : { form: event.target as HTMLFormElement, submitter: event.submitter ?? undefined };
 };
 
-const formBody = (event: NavigateEventLike, headers: Headers): BodyInit | null => {
+/** Resolves, and consumes, the form this navigation is submitting. */
+const submissionOf = (event: NavigateEventLike): Submission => {
+  const pending = submission;
+  submission = undefined;
+  const source = event.sourceElement as (Element & { form?: HTMLFormElement | null }) | undefined;
+  if (source?.tagName === "FORM") return { form: source as unknown as HTMLFormElement };
+  if (source?.form) return { form: source.form, submitter: source as HTMLElement };
+  // Without `sourceElement` the submit event that started this navigation still names the form,
+  // so its encoding is preserved and a POST is never mistaken for a plain link. Only a form
+  // submission carries `formData`, which is what keeps another navigation from claiming it.
+  return (event.formData ? pending : undefined) ?? {};
+};
+
+const formBody = (
+  event: NavigateEventLike,
+  headers: Headers,
+  { form, submitter }: Submission,
+): BodyInit | null => {
   if (!event.formData) return null;
 
-  const { form, source } = formSource(event);
-  const enctype = (source?.getAttribute("formenctype") || form?.enctype ||
+  const enctype = (submitter?.getAttribute("formenctype") || form?.enctype ||
     "application/x-www-form-urlencoded").toLowerCase();
   if (enctype === "multipart/form-data") return event.formData;
 
@@ -70,25 +93,47 @@ const formBody = (event: NavigateEventLike, headers: Headers): BodyInit | null =
 
 let stopActiveNavigation: (() => void) | undefined;
 
-const hardNavigate = (url: URL, event?: NavigateEventLike): void => {
-  // A fallback must be a real document load, not another intercepted navigation.
+/**
+ * Loads `url` as a document. Safe at any point: it never repeats a form submission.
+ * Interception is dropped first so the fallback is a real load, not another swap.
+ */
+const loadDocument = (url: URL): void => {
   stopActiveNavigation?.();
-  const { form, source } = event ? formSource(event) : {};
-  if (event?.formData && form) {
-    form.requestSubmit(source?.tagName === "FORM" ? undefined : source as HTMLElement);
+  globalThis.location.assign(url.href);
+};
+
+/**
+ * Hands the navigation back to the browser by running it again. Only valid *before* the
+ * request has been sent, because re-submitting a form posts it a second time.
+ */
+const replayNavigation = (
+  event: NavigateEventLike,
+  url: URL,
+  { form, submitter }: Submission,
+): void => {
+  // A plain load turns a POST into a GET and drops the body, so it is the last resort: with
+  // no form left to submit, landing on the destination still beats dropping the navigation.
+  if (!event.formData || !form) {
+    loadDocument(url);
     return;
   }
-  globalThis.location.assign(url.href);
+  stopActiveNavigation?.();
+  form.requestSubmit(submitter);
 };
 
 const replaceDocumentTarget = async (
   html: string,
   options: NavigateOptions,
   signal: AbortSignal,
+  repeatable: boolean,
 ): Promise<boolean> => {
   signal.throwIfAborted();
   const nextDocument = new DOMParser().parseFromString(html, "text/html");
-  if (nextDocument.querySelector('meta[name="rw-navigate"][content="reload"]')) return false;
+  // Opting back into a native load only works when the navigation can be repeated. A POST
+  // has already reached the server, so it renders the buffered response it has instead.
+  if (repeatable && nextDocument.querySelector('meta[name="rw-navigate"][content="reload"]')) {
+    return false;
+  }
   const selector = targetSelector(options);
   const current = document.querySelector(selector);
   const next = nextDocument.querySelector(selector);
@@ -125,10 +170,12 @@ export const enhanceNavigation = (options: NavigateOptions = {}): () => void => 
   }
 
   const listener = (event: NavigateEventLike): void => {
+    const submitted = submissionOf(event);
     if (
       !event.canIntercept || event.hashChange || event.downloadRequest !== null ||
       event.navigationType === "reload" ||
-      event.sourceElement?.closest("[data-rw-reload]")
+      // The recovered form carries the opt-out too, otherwise it is inert without a source.
+      (event.sourceElement ?? submitted.form)?.closest("[data-rw-reload]")
     ) return;
 
     const destination = new URL(event.destination.url, location.href);
@@ -140,9 +187,13 @@ export const enhanceNavigation = (options: NavigateOptions = {}): () => void => 
 
     event.intercept({
       async handler() {
+        let sent = false;
         try {
           const headers = new Headers({ Accept: "text/html" });
-          const body = formBody(event, headers);
+          const body = formBody(event, headers, submitted);
+          // From here on the request may have reached the server, so no fallback is
+          // allowed to issue it again.
+          sent = true;
           const response = await (options.fetch ?? fetch)(destination, {
             body,
             headers,
@@ -151,7 +202,7 @@ export const enhanceNavigation = (options: NavigateOptions = {}): () => void => 
           });
           const responseUrl = response.url ? new URL(response.url) : destination;
           if (response.redirected || responseUrl.href !== destination.href) {
-            hardNavigate(responseUrl);
+            loadDocument(responseUrl);
             return;
           }
           if (
@@ -161,24 +212,33 @@ export const enhanceNavigation = (options: NavigateOptions = {}): () => void => 
           ) {
             throw new Error("navigate: destination did not return HTML.");
           }
-          if (!await replaceDocumentTarget(await response.text(), options, event.signal)) {
-            hardNavigate(destination, event);
-          }
+          const swapped = await replaceDocumentTarget(
+            await response.text(),
+            options,
+            event.signal,
+            body === null,
+          );
+          // Only a GET reaches this branch, so repeating it as a document load is safe.
+          if (!swapped) loadDocument(destination);
         } catch (error) {
           if (event.signal.aborted || isAbortError(error)) return;
           console.error(error);
-          hardNavigate(destination, event);
+          if (sent) loadDocument(destination);
+          else replayNavigation(event, destination, submitted);
         }
       },
     });
   };
 
   navigation.addEventListener("navigate", listener);
+  document.addEventListener("submit", rememberSubmission);
   let active = true;
   const stop = () => {
     if (!active) return;
     active = false;
     navigation.removeEventListener("navigate", listener);
+    document.removeEventListener("submit", rememberSubmission);
+    submission = undefined;
     if (stopActiveNavigation === stop) stopActiveNavigation = undefined;
   };
   stopActiveNavigation = stop;

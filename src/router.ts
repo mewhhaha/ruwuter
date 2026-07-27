@@ -225,12 +225,18 @@ const dataResponse = async <Bindings>(
  * Wraps a generator so every advance runs under the context store that is
  * active now. Stream pulls happen outside the request's AsyncLocalStorage
  * scope, so lazily rendered components would otherwise lose context values.
+ * `next`, `return` and `throw` all resume the generator body, so all three are
+ * bound.
+ *
+ * @internal
  */
-const bindGenerator = (generator: AsyncGenerator<string>): AsyncGenerator<string> => {
+export const bindGenerator = (generator: AsyncGenerator<string>): AsyncGenerator<string> => {
   const bound: AsyncGenerator<string> = {
     next: bindContext(() => generator.next()) as AsyncGenerator<string>["next"],
     return: bindContext(() => generator.return(undefined)) as AsyncGenerator<string>["return"],
-    throw: (error?: unknown) => generator.throw(error),
+    throw: bindContext(
+      (error: unknown) => generator.throw(error),
+    ) as AsyncGenerator<string>["throw"],
     [Symbol.asyncIterator]() {
       return bound;
     },

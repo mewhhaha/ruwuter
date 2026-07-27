@@ -1,4 +1,4 @@
-import { splitRouteSegments, unescapeSegment } from "./route-name.ts";
+import { parseSegment, splitRouteSegments } from "./route-name.ts";
 
 const segments = (a: string) => splitRouteSegments(a);
 
@@ -7,21 +7,11 @@ type SegmentInfo = {
   optional: boolean;
 };
 
+/** Literals beat suffixed dynamic segments, which beat bare dynamic segments. */
 const segmentInfo = (raw: string): SegmentInfo => {
-  const optional = raw.startsWith("(") && raw.endsWith(")");
-  const actual = optional ? raw.slice(1, -1) : raw;
-  const escaped = unescapeSegment(actual);
-  const wasEscaped = actual.startsWith("[");
-
-  if (!wasEscaped && escaped.startsWith("$")) {
-    const rest = escaped.slice(1);
-    const match = /^([A-Za-z0-9_]*)(.*)$/.exec(rest);
-    const suffix = match?.[2] ?? "";
-    const hasSuffix = suffix.length > 0;
-    return { weight: hasSuffix ? 2 : 1, optional };
-  }
-
-  return { weight: 3, optional };
+  const segment = parseSegment(raw);
+  if (segment.kind === "static") return { weight: 3, optional: segment.optional };
+  return { weight: segment.suffix.length > 0 ? 2 : 1, optional: segment.optional };
 };
 
 /**

@@ -4,7 +4,7 @@
  * Suspense components for progressive rendering in Ruwuter applications.
  */
 
-import { createContext } from "./context.ts";
+import { bindContext, createContext } from "./context.ts";
 import { Fragment, into, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
 import { fromParts } from "../runtime/node.ts";
 
@@ -14,13 +14,14 @@ type Settled =
     id: string;
     ok: false;
     error: unknown;
-    errorFallback: SuspenseErrorFallback | undefined;
+    /** Renders the boundary's error fallback under the boundary's own context. */
+    renderErrorFallback: ((error: unknown) => Promise<string>) | undefined;
   };
 
 type SuspenseErrorFallback = JSX.Element | ((error: unknown) => JSX.Element);
 
 type SuspenseRegistry = {
-  /** Unique prefix that keeps this provider's boundary ids document-scoped. */
+  /** Unique prefix that keeps this registry's boundary ids document-scoped. */
   prefix: string;
   /** Monotonic id source for boundaries within one render. */
   counter: number;
@@ -74,9 +75,22 @@ export const Suspense = ({
       // With registry -> register the resolving content and stream fallback now
       const id = `rw-${registry.prefix}-${registry.counter++}`;
       registry.pending++;
-      content.toPromise().then(
+      // The boundary's content and error fallback both render after this
+      // generator returns, outside the branch that declared them. Bind the
+      // store so providers above the boundary stay visible to either path.
+      const renderContent = bindContext(() => content.toPromise());
+      const renderErrorFallback = errorFallback === undefined
+        ? undefined
+        : bindContext((error: unknown) =>
+          fromParts([{
+            v: typeof errorFallback === "function" ? errorFallback(error) : errorFallback,
+            esc: true,
+          }]).toPromise()
+        );
+
+      renderContent().then(
         (html) => settle(registry, { id, ok: true, html }),
-        (error) => settle(registry, { id, ok: false, error, errorFallback }),
+        (error) => settle(registry, { id, ok: false, error, renderErrorFallback }),
       );
 
       // Emit fallback wrapper immediately
@@ -116,13 +130,10 @@ export const Resolve = (): JSX.Element => {
         }
 
         console.error("Suspense boundary failed", settled.error);
-        if (!settled.errorFallback) continue;
+        if (!settled.renderErrorFallback) continue;
 
         try {
-          const fallback = typeof settled.errorFallback === "function"
-            ? settled.errorFallback(settled.error)
-            : settled.errorFallback;
-          const html = await fromParts([{ v: fallback, esc: true }]).toPromise();
+          const html = await settled.renderErrorFallback(settled.error);
           yield `<template data-rw-target="${settled.id}">${html}</template>`;
         } catch (error) {
           console.error("Suspense error fallback failed", error);

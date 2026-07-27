@@ -29,30 +29,25 @@ function initializeResolveRuntime(): void {
     return true;
   };
 
-  const scanRoot = (root: Document | DocumentFragment | Element): void => {
-    const nodeList = root.querySelectorAll?.("template[data-rw-target]");
-    let replaced = false;
-    nodeList?.forEach((node) => {
-      if (node instanceof HTMLTemplateElement) {
+  // Resolves every template whose target is already in the document. Replacing one
+  // target can reveal another template's target (nested Suspense), so repeat until a
+  // pass makes no progress. Bounded: every extra pass consumes at least one template.
+  const resolveTemplates = (): void => {
+    let replaced = true;
+    while (replaced) {
+      replaced = false;
+      document.querySelectorAll("template[data-rw-target]").forEach((node) => {
         replaced = processTemplate(node) || replaced;
-      }
-    });
-    if (replaced) scanRoot(document);
+      });
+    }
   };
 
-  scanRoot(document);
+  resolveTemplates();
 
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      mutation.addedNodes?.forEach((node) => {
-        if (node instanceof HTMLTemplateElement) {
-          processTemplate(node);
-        } else if (node instanceof Element) {
-          scanRoot(node);
-        }
-      });
-      scanRoot(document);
-    }
+  // One pass per mutation batch, not per record: streamed renders deliver many records
+  // and each pass already covers the whole document.
+  const observer = new MutationObserver(() => {
+    resolveTemplates();
   });
 
   observer.observe(document, { childList: true, subtree: true });
