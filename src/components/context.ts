@@ -8,40 +8,46 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { Fragment, into, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
 
-type Store = Map<symbol, unknown[]>;
+/**
+ * Immutable snapshot of the context values visible on one render branch.
+ * Providers derive a new store instead of mutating a shared one, so branches
+ * that render concurrently (Suspense, sibling awaits) stay isolated.
+ */
+type Store = ReadonlyMap<symbol, unknown>;
 
 const storage = new AsyncLocalStorage<Store>();
 
 const getStore = (): Store | undefined => storage.getStore();
 
-function pushValue<T>(key: symbol, value: T): () => void {
-  const store = getStore();
-  if (!store) {
-    return () => {};
-  }
+/** Copies the active store with `key` set to `value`. */
+const derive = (key: symbol, value: unknown): Store => {
+  const store = new Map(getStore());
+  store.set(key, value);
+  return store;
+};
 
-  let stack = store.get(key) as T[] | undefined;
-  if (!stack) {
-    stack = [];
-    store.set(key, stack);
-  }
-
-  stack.push(value);
-
-  return () => {
-    stack!.pop();
-    if (stack!.length === 0) {
-      store.delete(key);
-    }
+/**
+ * Wraps a generator so every pull runs under `store`. The renderer interleaves
+ * branches, so the store that is ambient at a pull site is not necessarily the
+ * one this branch was created with. `next`, `return`, `throw` and disposal all
+ * resume the generator body, so all four are bound.
+ */
+const bindGenerator = (
+  store: Store,
+  generator: AsyncGenerator<string>,
+): AsyncGenerator<string> => {
+  const bound: AsyncGenerator<string> = {
+    next: () => storage.run(store, () => generator.next()),
+    return: (value) => storage.run(store, () => generator.return(value)),
+    throw: (error) => storage.run(store, () => generator.throw(error)),
+    [Symbol.asyncIterator]() {
+      return bound;
+    },
+    [Symbol.asyncDispose]() {
+      return storage.run(store, () => generator[Symbol.asyncDispose]?.() ?? Promise.resolve());
+    },
   };
-}
-
-const isPromise = (value: unknown): value is Promise<unknown> => {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "then" in (value as Record<string | symbol, unknown>)
-  );
+  return bound;
 };
 
 /**
@@ -80,7 +86,8 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
   const key = Symbol("ruwuter.context");
 
   /**
-   * Context Provider component. Pushes a value for the duration of its children.
+   * Context Provider component. Renders its children under a store that has
+   * `value` set for this context.
    */
   const Provider = ({
     value,
@@ -90,22 +97,7 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
     children?: JSX.HtmlNode;
   }): JSX.Element => {
     const content = Fragment({ children });
-    const store = getStore();
-    if (!store) {
-      return content;
-    }
-
-    const release = pushValue(key, value);
-
-    return into(
-      (async function* () {
-        try {
-          yield* content.generator;
-        } finally {
-          release();
-        }
-      })(),
-    );
+    return into(bindGenerator(derive(key, value), content.generator));
   };
 
   /**
@@ -113,34 +105,19 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
    */
   const use = (): T => {
     const store = getStore();
-    if (!store) {
+    if (!store?.has(key)) {
       return defaultValue;
     }
 
-    const stack = store.get(key) as T[] | undefined;
-    if (!stack || stack.length === 0) {
-      return defaultValue;
-    }
-
-    return stack[stack.length - 1];
+    return store.get(key) as T;
   };
 
   /**
-   * Runs a function with the provided value, restoring the previous value afterwards.
+   * Runs a function with the provided value. The value is scoped to `fn` and to
+   * everything it awaits; the caller's own store is untouched.
    */
   function withValue<R>(value: T, fn: () => R): R {
-    const release = pushValue(key, value);
-    try {
-      const result = fn();
-      if (isPromise(result)) {
-        return result.finally(release) as R;
-      }
-      release();
-      return result;
-    } catch (error) {
-      release();
-      throw error;
-    }
+    return storage.run(derive(key, value), fn);
   }
 
   const api: CreatedContext<T> = { Provider, use, withValue };

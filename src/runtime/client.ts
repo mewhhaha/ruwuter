@@ -28,8 +28,7 @@ type MountedActivation = {
 
 function isAbortError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
-  const name = (error as { name?: unknown }).name;
-  return typeof name === "string" && name === "AbortError";
+  return (error as { name?: unknown }).name === "AbortError";
 }
 
 function initializeActivationRuntime(): void {

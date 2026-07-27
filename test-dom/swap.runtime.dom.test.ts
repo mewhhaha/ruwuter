@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
-import { swap, type SwapInput } from "../src/runtime/swap.ts";
+import { swap, type SwapInput, type SwapMode } from "../src/runtime/swap.ts";
 
 class FakeElement {
   innerHTML = "";
@@ -122,6 +122,36 @@ describe("swap runtime DOM behaviour", () => {
 
       await swap(null, { target: asElement(target), unsafeHTML: "<em>raw</em>" });
       expect(target.innerHTML).toBe("<em>raw</em>");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("rejects write modes that merely embed an insert position", async () => {
+    const { cleanup } = setupDom();
+    try {
+      const target = new FakeElement();
+      let modeError: unknown;
+      try {
+        await swap(null, {
+          target: asElement(target),
+          unsafeHTML: "<p>ok</p>",
+          write: "xbeforebeginy" as SwapMode,
+        });
+      } catch (error) {
+        modeError = error;
+      }
+
+      expect(modeError instanceof Error).toBe(true);
+      expect((modeError as Error).message).toContain('unsupported swap mode "xbeforebeginy"');
+      expect(target.insertions.length).toBe(0);
+
+      await swap(null, {
+        target: asElement(target),
+        unsafeHTML: "<p>ok</p>",
+        write: "beforeend",
+      });
+      expect(target.insertions).toEqual([{ position: "beforeend", html: "<p>ok</p>" }]);
     } finally {
       cleanup();
     }

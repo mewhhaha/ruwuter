@@ -193,6 +193,13 @@ const prepareDomValue = async (
   return options.trustedTypesPolicy ? options.trustedTypesPolicy.createHTML(sanitized) : sanitized;
 };
 
+const INSERT_POSITIONS: readonly string[] = [
+  "beforebegin",
+  "afterbegin",
+  "beforeend",
+  "afterend",
+];
+
 const applySwap = (
   target: Element,
   mode: SwapMode,
@@ -213,7 +220,7 @@ const applySwap = (
     writable.innerHTML = domValue;
   } else if (mode === "outerHTML") {
     writable.outerHTML = domValue;
-  } else if (/(before|after)(begin|end)/.test(mode)) {
+  } else if (INSERT_POSITIONS.includes(mode)) {
     // Keep TrustedHTML branded values intact for Trusted Types enforcement
     writable.insertAdjacentHTML(mode as InsertPosition, domValue);
   } else {

@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import { DOMParser as LinkeDOMParser } from "linkedom";
+import { DOMParser as LinkeDOMParser, Event as LinkeDOMEvent } from "linkedom";
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { enhanceNavigation } from "../src/runtime/navigate.ts";
 
@@ -91,6 +91,36 @@ const setupDom = (navigation?: FakeNavigation, body = "<main>current</main>") =>
         else (globalThis as any)[name] = value;
       }
     },
+  };
+};
+
+/** Builds a form plus submitter whose native `requestSubmit` is counted instead of run. */
+const stubForm = (document: Document, enctype = "application/x-www-form-urlencoded") => {
+  const form = document.createElement("form") as HTMLFormElement;
+  let submits = 0;
+  Object.defineProperty(form, "enctype", { value: enctype });
+  Object.defineProperty(form, "requestSubmit", { value: () => submits++ });
+  const submitter = document.createElement("button");
+  Object.defineProperty(submitter, "form", { value: form });
+  return { form, submitter, submits: () => submits };
+};
+
+/** Form data that fails while being read, i.e. before any request can be sent. */
+const unreadableFormData = () => {
+  const formData = new FormData();
+  Object.defineProperty(formData, Symbol.iterator, {
+    value: () => {
+      throw new Error("navigate: unreadable form data.");
+    },
+  });
+  return formData;
+};
+
+const silenceErrors = () => {
+  const original = console.error;
+  console.error = () => {};
+  return () => {
+    console.error = original;
   };
 };
 
@@ -267,35 +297,345 @@ describe("enhanced navigation runtime", () => {
     }
   });
 
-  it("replays a failed enhanced POST through the native form", async () => {
+  it("does not re-send a POST whose response opts back into a native load", async () => {
     const navigation = new FakeNavigation();
     const { assigned, document, cleanup } = setupDom(navigation);
-    const originalError = console.error;
-    console.error = () => {};
-    let submitted = 0;
+    let requests = 0;
     try {
-      enhanceNavigation({
-        fetch: (() =>
-          Promise.resolve(
-            new Response("{}", { headers: { "Content-Type": "application/json" } }),
-          )) as typeof fetch,
+      const stop = enhanceNavigation({
+        fetch: (() => {
+          requests++;
+          return Promise.resolve(
+            new Response(
+              '<html><head><meta name="rw-navigate" content="reload"></head>' +
+                "<body><p>saved</p></body></html>",
+              { headers: { "Content-Type": "text/html" } },
+            ),
+          );
+        }) as typeof fetch,
       });
+      const { form, submitter, submits } = stubForm(document);
       const event = new FakeNavigateEvent("https://example.test/save");
       event.formData = new FormData();
-      const form = document.createElement("form") as HTMLFormElement;
-      Object.defineProperty(form, "enctype", { value: "application/x-www-form-urlencoded" });
-      Object.defineProperty(form, "requestSubmit", { value: () => submitted++ });
-      const submitter = document.createElement("button");
-      Object.defineProperty(submitter, "form", { value: form });
+      event.formData.set("name", "Ada Lovelace");
       event.sourceElement = submitter;
+      document.body.append(form);
 
       navigation.navigate(event);
       await event.handler?.();
 
-      expect(submitted).toBe(1);
+      expect(requests).toBe(1);
+      expect(submits()).toBe(0);
       expect(assigned.length).toBe(0);
+      expect(document.body.innerHTML).toBe("<p>saved</p>");
+      stop();
     } finally {
-      console.error = originalError;
+      cleanup();
+    }
+  });
+
+  it("does not re-send a POST when the response is missing the target", async () => {
+    const navigation = new FakeNavigation();
+    const { assigned, document, cleanup } = setupDom(navigation, '<main id="app">current</main>');
+    const restoreErrors = silenceErrors();
+    let requests = 0;
+    try {
+      const stop = enhanceNavigation({
+        target: "#app",
+        fetch: (() => {
+          requests++;
+          return Promise.resolve(
+            new Response("<html><body><p>saved</p></body></html>", {
+              headers: { "Content-Type": "text/html" },
+            }),
+          );
+        }) as typeof fetch,
+      });
+      const { form, submitter, submits } = stubForm(document);
+      const event = new FakeNavigateEvent("https://example.test/save");
+      event.formData = new FormData();
+      event.formData.set("name", "Ada Lovelace");
+      event.sourceElement = submitter;
+      document.body.append(form);
+
+      navigation.navigate(event);
+      await event.handler?.();
+
+      expect(requests).toBe(1);
+      expect(submits()).toBe(0);
+      expect(assigned).toEqual(["https://example.test/save"]);
+      stop();
+    } finally {
+      restoreErrors();
+      cleanup();
+    }
+  });
+
+  it("does not re-send a POST that already reached the server", async () => {
+    const navigation = new FakeNavigation();
+    const { assigned, document, cleanup } = setupDom(navigation);
+    const restoreErrors = silenceErrors();
+    let requests = 0;
+    try {
+      const stop = enhanceNavigation({
+        fetch: (() => {
+          requests++;
+          return Promise.resolve(
+            new Response("{}", { headers: { "Content-Type": "application/json" } }),
+          );
+        }) as typeof fetch,
+      });
+      const { form, submitter, submits } = stubForm(document);
+      const event = new FakeNavigateEvent("https://example.test/save");
+      event.formData = new FormData();
+      event.sourceElement = submitter;
+      document.body.append(form);
+
+      navigation.navigate(event);
+      await event.handler?.();
+
+      expect(requests).toBe(1);
+      expect(submits()).toBe(0);
+      expect(assigned).toEqual(["https://example.test/save"]);
+      stop();
+    } finally {
+      restoreErrors();
+      cleanup();
+    }
+  });
+
+  it("replays the submission when the request never left the browser", async () => {
+    const navigation = new FakeNavigation();
+    const { assigned, document, cleanup } = setupDom(navigation);
+    const restoreErrors = silenceErrors();
+    let requests = 0;
+    try {
+      const stop = enhanceNavigation({
+        fetch: (() => {
+          requests++;
+          return Promise.resolve(new Response("", { headers: { "Content-Type": "text/html" } }));
+        }) as typeof fetch,
+      });
+      const { form, submitter, submits } = stubForm(document);
+      const event = new FakeNavigateEvent("https://example.test/save");
+      event.formData = unreadableFormData();
+      event.sourceElement = submitter;
+      document.body.append(form);
+
+      navigation.navigate(event);
+      await event.handler?.();
+
+      expect(requests).toBe(0);
+      expect(submits()).toBe(1);
+      expect(assigned.length).toBe(0);
+      stop();
+    } finally {
+      restoreErrors();
+      cleanup();
+    }
+  });
+
+  it("loads the destination when a pre-send failure leaves no form to replay", async () => {
+    const navigation = new FakeNavigation();
+    const { assigned, cleanup } = setupDom(navigation);
+    const restoreErrors = silenceErrors();
+    let requests = 0;
+    try {
+      const stop = enhanceNavigation({
+        fetch: (() => {
+          requests++;
+          return Promise.resolve(new Response("", { headers: { "Content-Type": "text/html" } }));
+        }) as typeof fetch,
+      });
+      const event = new FakeNavigateEvent("https://example.test/save");
+      event.formData = unreadableFormData();
+      event.sourceElement = null;
+
+      navigation.navigate(event);
+      await event.handler?.();
+
+      // Exactly one request reaches the server: the document load, never a fetch as well.
+      expect(requests).toBe(0);
+      expect(assigned).toEqual(["https://example.test/save"]);
+      stop();
+    } finally {
+      restoreErrors();
+      cleanup();
+    }
+  });
+
+  it("does not replay a remembered submission on a later unrelated navigation", async () => {
+    const navigation = new FakeNavigation();
+    const { assigned, document, cleanup } = setupDom(navigation);
+    const restoreErrors = silenceErrors();
+    let requests = 0;
+    try {
+      const stop = enhanceNavigation({
+        fetch: (() => {
+          requests++;
+          return Promise.resolve(
+            new Response("<html><body><p>next</p></body></html>", {
+              headers: { "Content-Type": "text/html" },
+            }),
+          );
+        }) as typeof fetch,
+      });
+      const { form, submits } = stubForm(document);
+      document.body.append(form);
+      form.dispatchEvent(new LinkeDOMEvent("submit", { bubbles: true }) as unknown as Event);
+
+      const link = new FakeNavigateEvent("https://example.test/next");
+      navigation.navigate(link);
+      await link.handler?.();
+
+      const later = new FakeNavigateEvent("https://example.test/save");
+      later.formData = unreadableFormData();
+      later.sourceElement = null;
+
+      navigation.navigate(later);
+      await later.handler?.();
+
+      expect(submits()).toBe(0);
+      expect(requests).toBe(1);
+      expect(assigned).toEqual(["https://example.test/save"]);
+      stop();
+    } finally {
+      restoreErrors();
+      cleanup();
+    }
+  });
+
+  it("drops a submission the page handled itself instead of navigating", async () => {
+    const navigation = new FakeNavigation();
+    const { assigned, document, cleanup } = setupDom(navigation);
+    const restoreErrors = silenceErrors();
+    let requests = 0;
+    try {
+      const stop = enhanceNavigation({
+        fetch: (() => {
+          requests++;
+          return Promise.resolve(new Response("", { headers: { "Content-Type": "text/html" } }));
+        }) as typeof fetch,
+      });
+      const { form, submits } = stubForm(document);
+      document.body.append(form);
+      form.addEventListener("submit", (event) => event.preventDefault());
+      form.dispatchEvent(
+        new LinkeDOMEvent("submit", { bubbles: true, cancelable: true }) as unknown as Event,
+      );
+
+      // A later submission that names no source element must not reach the cancelled form.
+      const later = new FakeNavigateEvent("https://example.test/save");
+      later.formData = unreadableFormData();
+      later.sourceElement = null;
+      navigation.navigate(later);
+      await later.handler?.();
+
+      expect(submits()).toBe(0);
+      expect(requests).toBe(0);
+      expect(assigned).toEqual(["https://example.test/save"]);
+      stop();
+    } finally {
+      restoreErrors();
+      cleanup();
+    }
+  });
+
+  it("honors data-rw-reload on the submitted form when sourceElement is missing", () => {
+    const navigation = new FakeNavigation();
+    const { document, cleanup } = setupDom(navigation);
+    try {
+      const stop = enhanceNavigation({
+        fetch: (() => {
+          throw new Error("navigate: opted-out navigation must not be intercepted.");
+        }) as unknown as typeof fetch,
+      });
+      const { form } = stubForm(document);
+      form.setAttribute("data-rw-reload", "");
+      document.body.append(form);
+      form.dispatchEvent(new LinkeDOMEvent("submit", { bubbles: true }) as unknown as Event);
+
+      const event = new FakeNavigateEvent("https://example.test/save");
+      event.formData = new FormData();
+      event.formData.set("name", "Ada Lovelace");
+      event.sourceElement = null;
+      navigation.navigate(event);
+
+      expect(event.handler).toBe(undefined);
+      stop();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("does not let a stranded submission opt a later navigation out", async () => {
+    const navigation = new FakeNavigation();
+    const { document, cleanup } = setupDom(navigation);
+    let requests = 0;
+    try {
+      const stop = enhanceNavigation({
+        fetch: (() => {
+          requests++;
+          return Promise.resolve(
+            new Response("<html><body><p>next</p></body></html>", {
+              headers: { "Content-Type": "text/html" },
+            }),
+          );
+        }) as typeof fetch,
+      });
+      // A `target="_blank"` submit is neither cancelled nor followed by a navigation in this
+      // frame, so the submission stays remembered with nothing of its own to be consumed by.
+      const { form, submits } = stubForm(document);
+      form.setAttribute("data-rw-reload", "");
+      document.body.append(form);
+      form.dispatchEvent(new LinkeDOMEvent("submit", { bubbles: true }) as unknown as Event);
+
+      // An unrelated link carries no form data, so it must not inherit the form's opt-out.
+      const link = new FakeNavigateEvent("https://example.test/next");
+      link.sourceElement = null;
+      navigation.navigate(link);
+      await link.handler?.();
+
+      expect(typeof link.handler).toBe("function");
+      expect(requests).toBe(1);
+      expect(submits()).toBe(0);
+      stop();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("keeps POST encoding when sourceElement is unavailable", async () => {
+    const navigation = new FakeNavigation();
+    const { document, cleanup } = setupDom(navigation);
+    let requestInit: RequestInit | undefined;
+    try {
+      const stop = enhanceNavigation({
+        fetch: ((_input: URL | RequestInfo, init?: RequestInit) => {
+          requestInit = init;
+          return Promise.resolve(
+            new Response("<html><body><p>saved</p></body></html>", {
+              headers: { "Content-Type": "text/html" },
+            }),
+          );
+        }) as typeof fetch,
+      });
+      const { form } = stubForm(document, "multipart/form-data");
+      document.body.append(form);
+      form.dispatchEvent(new LinkeDOMEvent("submit", { bubbles: true }) as unknown as Event);
+
+      const event = new FakeNavigateEvent("https://example.test/upload");
+      event.formData = new FormData();
+      event.formData.set("name", "Ada Lovelace");
+      event.sourceElement = null;
+
+      navigation.navigate(event);
+      await event.handler?.();
+
+      expect(requestInit?.method).toBe("POST");
+      expect(requestInit?.body).toBe(event.formData);
+      stop();
+    } finally {
       cleanup();
     }
   });

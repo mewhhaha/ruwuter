@@ -28,8 +28,11 @@ or use `nodejs_compat` when the application needs broader Node compatibility:
 
 Do not replace `node:async_hooks` with a no-op or module-global mock. Ruwuter uses
 `AsyncLocalStorage` to keep server context and streamed Suspense state isolated across concurrent
-requests and asynchronous stream pulls. A runtime without equivalent async-context semantics is not
-currently supported; a Promise-only userland polyfill cannot reliably provide them.
+requests and asynchronous stream pulls. Each context provider derives its own store, so sibling
+branches never observe one another's values and server context stays readable inside a `Suspense`
+boundary whose content resolves after the surrounding branch has streamed. A runtime without
+equivalent async-context semantics is not currently supported; a Promise-only userland polyfill
+cannot reliably provide them.
 
 The other Node built-in imports (`node:fs`, `node:path`, and `node:process`) are confined to the
 file-route generator, CLI, and Vite build integration. They are not part of the deployed router
@@ -321,8 +324,10 @@ export default function Page() {
 ```
 
 A rejected boundary is logged and contained: its `errorFallback` replaces that boundary while other
-boundaries keep streaming. Without `errorFallback`, its original fallback stays in place.
-Provider-prefixed UUID targets keep independently rendered boundary sets from colliding.
+boundaries keep streaming. Without `errorFallback`, its original fallback stays in place. Target ids
+combine a per-provider `crypto.randomUUID()` with a counter, so boundaries stay unique within a
+render and a cold isolate answering a fragment request cannot reissue an id the host page already
+used.
 
 ## Enhanced Navigation
 
@@ -355,8 +360,9 @@ unsupported browsers keep native behavior. Configure it from a module with
 
 Enhanced navigation waits for the complete response. Pages relying on progressive out-of-order
 Suspense streaming should include `<meta name="rw-navigate" content="reload">`; the runtime then
-finishes with a normal document load. Add `data-rw-reload` to an individual link or form to skip
-interception before fetching.
+finishes with a normal document load. Because that reload would repeat a submission, it applies to
+GET navigations only — a POST renders the response it already fetched. Add `data-rw-reload` to an
+individual link or form to skip interception before fetching.
 
 ## Checks
 
