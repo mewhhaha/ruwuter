@@ -107,6 +107,8 @@ const pushChild = (parts: Part[], child: unknown): void => {
     return;
   }
 
+  // A later sibling can reject while an earlier sibling still owns the stream.
+  if (child instanceof Promise) child.catch(() => {});
   // Promises, iterables, and other objects resolve during rendering.
   parts.push({ v: child, esc: true });
 };

@@ -21,7 +21,7 @@ describe("generateTypes", () => {
 
       const routeTypeFile = outputs.find((file) => file.path.includes("+types.api.users.ts"));
       expect(routeTypeFile != null).toBe(true);
-      expect(routeTypeFile?.contents).toContain("export type Context<Bindings = undefined>");
+      expect(routeTypeFile?.contents).toContain("export type Context<Bindings = unknown>");
     } finally {
       await Deno.remove(app, { recursive: true });
     }

@@ -80,3 +80,65 @@ Deno.test("reader cancellation and request abort propagate during pending render
     await stopped.promise;
   }
 });
+
+Deno.test("complex URLPatterns match the full URL and expose their real groups", async () => {
+  const host = new URLPattern({ hostname: "example.test", pathname: "/only", search: "version=2" });
+  const app = router().get(host, () => new Response("yes"))
+    .get("/products/:id([0-9]+)", ({ params }) => new Response(params.id))
+    .route("/only", { OPTIONS: () => new Response("custom", { headers: { "X-Route": "yes" } }) });
+  assertEquals(await (await app.fetch(request("/only?version=2"))).text(), "yes");
+  assertEquals((await app.fetch(new Request("https://other.test/only?version=2"))).status, 405);
+  assertEquals(await (await app.fetch(request("/products/42"))).text(), "42");
+  const options = await app.fetch(request("/only", "OPTIONS"));
+  assertEquals(options.headers.get("Allow"), "OPTIONS");
+  assertEquals(options.headers.get("X-Route"), "yes");
+  assertEquals(await options.text(), "custom");
+});
+
+Deno.test("a slow error fallback leaves ready sibling panels free to stream", async () => {
+  const recover = Promise.withResolvers<void>();
+  const app = router().get("/", () =>
+    html(
+      <>
+        <Deferred
+          fallback="pending"
+          errorFallback={async () => {
+            await recover.promise;
+            return <b>Recovered</b>;
+          }}
+        >
+          {() => Promise.reject(new Error("panel failed"))}
+        </Deferred>
+        <Deferred fallback="waiting">{<b>Ready</b>}</Deferred>
+      </>,
+    ));
+  const reader = (await app.fetch(request("/"))).body!.pipeThrough(new TextDecoderStream())
+    .getReader();
+  let text = "";
+  try {
+    while (!text.includes("<b>Ready</b>")) {
+      const step = await reader.read();
+      assert(!step.done);
+      text += step.value;
+    }
+    assert(!text.includes("<b>Recovered</b>"));
+  } finally {
+    recover.resolve();
+    while (true) {
+      const step = await reader.read();
+      if (step.done) break;
+      text += step.value;
+    }
+  }
+  assert(text.includes("<b>Recovered</b>"));
+});
+
+Deno.test("failed handlers abort work they already started", async () => {
+  const observed: AbortSignal[] = [];
+  const app = router().get("/", ({ signal }) => {
+    observed.push(signal);
+    throw new Error("could not respond");
+  });
+  await assertRejects(() => app.fetch(request("/")), Error, "could not respond");
+  assert(observed[0].aborted);
+});

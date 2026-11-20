@@ -45,6 +45,28 @@ for (const engine of [chromium, firefox, webkit]) {
           </body>
         </html>,
       ));
+    const bundle = await new Deno.Command(Deno.execPath(), {
+      args: ["bundle", "--platform=browser", "--quiet", "src/runtime/swap.ts"],
+      stdout: "piped",
+    }).output();
+    assert(bundle.success);
+    app.get(
+      "/swap.js",
+      () => new Response(bundle.stdout, { headers: { "content-type": "text/javascript" } }),
+    )
+      .get("/host", () =>
+        html(
+          <main>
+            <section id="slot"></section>
+          </main>,
+        ))
+      .get("/part", () =>
+        html(
+          <Deferred fallback="loading fragment">
+            <p>Finished fragment</p>
+          </Deferred>,
+        ));
+
     const server = Deno.serve(
       { hostname: "127.0.0.1", port: 0, onListen() {} },
       async (request) => {
@@ -103,6 +125,14 @@ for (const engine of [chromium, firefox, webkit]) {
         slow.resolve();
         await page.locator("#slow").waitFor();
         assertEquals(await page.locator("script[src]").count(), 1);
+        await page.goto(url + "/host");
+        assertEquals(await page.locator("script").count(), 0);
+        await page.evaluate(async (moduleUrl) => {
+          const { swap } = await import(moduleUrl);
+          await swap(fetch("/part"), { target: "#slot", viewTransition: false });
+        }, url + "/swap.js");
+        await page.getByText("Finished fragment", { exact: true }).waitFor();
+        assertEquals(await page.locator("template[data-rw-target]").count(), 0);
       } finally {
         await browser.close();
       }

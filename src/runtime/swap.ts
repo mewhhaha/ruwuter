@@ -5,6 +5,8 @@
  * Supports fetchable inputs and Trusted Types-aware HTML sinks.
  */
 
+import { resolvePanels } from "./panels.ts";
+
 declare const trustedHTMLBrand: unique symbol;
 
 type TrustedHTMLValue = typeof globalThis extends {
@@ -262,7 +264,15 @@ export const swap = async (
   const domValue = await prepareDomValue(html, options, response);
   const resolvedText = typeof domValue === "string" ? domValue : String(domValue);
 
-  await runWithTransition(() => applySwap(target, writeMode, domValue), options.viewTransition);
+  await runWithTransition(() => {
+    const scope = target.parentNode ?? target;
+    applySwap(target, writeMode, domValue);
+    // HTML insertion leaves scripts inert. A buffered fragment already has all
+    // its panels, so it can finish synchronously, even on a script-free host.
+    if (writeMode !== "remove" && resolvedText.includes("<!--rw-end-->")) {
+      resolvePanels(scope as Document | DocumentFragment | Element);
+    }
+  }, options.viewTransition);
 
   return {
     target,

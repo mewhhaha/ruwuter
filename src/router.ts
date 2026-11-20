@@ -8,7 +8,7 @@ export { type Html, unsafeHTML } from "./runtime/node.ts";
 export type { JSX } from "./runtime/jsx.ts";
 
 type Params = Record<string, string | undefined>;
-export interface HandlerContext<Bindings = undefined, Parameters = Params> {
+export interface HandlerContext<Bindings = unknown, Parameters = Params> {
   request: Request;
   params: Parameters;
   env: Bindings;
@@ -19,21 +19,32 @@ type Method = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
 type Handler<Bindings, Parameters> = (
   context: HandlerContext<Bindings, Parameters>,
 ) => Response | Promise<Response>;
-export type RouteHandlers<Bindings = undefined, Parameters = Params> = Partial<
+export type RouteHandlers<Bindings = unknown, Parameters = Params> = Partial<
   Record<Method, Handler<Bindings, Parameters>>
 >;
 type Pattern = string | URLPattern;
-type Segment<S extends string> = S extends `:${infer N}?` ? { [K in N]?: string }
-  : S extends `:${infer N}` ? { [K in N]: string }
+// Infer ordinary :name and :name? segments. URLPattern handles the full grammar;
+// complex patterns conservatively expose a dictionary of possibly absent groups.
+type SimpleName<S extends string> = S extends `${infer C}${infer Rest}`
+  ? C extends "_" | "$" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+    ? SimpleName<Rest>
+  : Lowercase<C> extends Uppercase<C> ? false
+  : SimpleName<Rest>
+  : true;
+type Segment<S extends string> = S extends `:${infer N}?`
+  ? SimpleName<N> extends true ? { [K in N]?: string } : Params
+  : S extends `:${infer N}` ? SimpleName<N> extends true ? { [K in N]: string } : Params
+  : S extends `${string}${"*" | ":" | "(" | "{"}${string}` ? Params
   : unknown;
 type PathParams<Path extends Pattern> = Path extends string ? string extends Path ? Params
   : Path extends `${infer First}/${infer Rest}` ? Segment<First> & PathParams<Rest>
   : Segment<Path>
   : Params;
-type PlatformArgs<B> = [B] extends [undefined]
+type PlatformArgs<B> = unknown extends B
   ? [platform?: unknown, executionContext?: HandlerContext["executionContext"]]
+  : [B] extends [undefined] ? [env?: B, executionContext?: HandlerContext["executionContext"]]
   : [env: B, executionContext?: HandlerContext["executionContext"]];
-export interface HttpRouter<Bindings = undefined> {
+export interface HttpRouter<Bindings = unknown> {
   route<Path extends Pattern>(
     path: Path,
     handlers: RouteHandlers<Bindings, PathParams<Path>>,
@@ -58,7 +69,7 @@ const resolverResponse = () =>
   });
 
 /** Build a Fetch handler. Paths match in registration order. */
-export function router<Bindings = undefined>(
+export function router<Bindings = unknown>(
   table: readonly (readonly [URLPattern, RouteHandlers<Bindings, never>])[] = [],
 ): HttpRouter<Bindings> {
   const routes = new Map<
@@ -99,9 +110,8 @@ export function router<Bindings = undefined>(
       return app.route(path, { POST: handler });
     },
     async fetch(request, ...[env, executionContext]) {
-      const pathname = new URL(request.url).pathname;
       for (const { pattern, handlers, allow } of routes.values()) {
-        const match = pattern.exec({ pathname });
+        const match = pattern.exec(request.url);
         if (!match) continue;
         const head = request.method === "HEAD";
         let handler = handlers[request.method as Method];
@@ -115,30 +125,45 @@ export function router<Bindings = undefined>(
         const signal = AbortSignal.any([request.signal, lifetime.signal]);
         signal.throwIfAborted();
         const cancel = (reason: unknown) => lifetime.abort(reason);
-        const result = await renderRequest.withValue(
-          { signal, cancel, head },
-          () =>
-            handler({
-              request,
-              params: match.pathname.groups,
-              env: env as Bindings,
-              executionContext,
-              signal,
-            }),
-        );
-        if (!(result instanceof Response)) {
-          throw new TypeError("A route handler must return a Response.");
+        try {
+          const result = await renderRequest.withValue(
+            { signal, cancel, head },
+            () =>
+              handler({
+                request,
+                params: match.pathname.groups,
+                env: env as Bindings,
+                executionContext,
+                signal,
+              }),
+          );
+          if (!(result instanceof Response)) {
+            throw new TypeError("A route handler must return a Response.");
+          }
+          if (head) {
+            cancel(new DOMException("HEAD omits the body.", "AbortError"));
+            if (!result.body) return result;
+            void result.body.cancel().catch(() => {});
+            return new Response(null, {
+              status: result.status,
+              statusText: result.statusText,
+              headers: result.headers,
+            });
+          }
+          if (request.method === "OPTIONS" && result.status && !result.headers.has("Allow")) {
+            const headers = new Headers(result.headers);
+            headers.set("Allow", allow);
+            return new Response(result.body, {
+              status: result.status,
+              statusText: result.statusText,
+              headers,
+            });
+          }
+          return result;
+        } catch (error) {
+          cancel(error);
+          throw error;
         }
-        if (head && result.body) {
-          cancel(new DOMException("HEAD omits the body.", "AbortError"));
-          void result.body.cancel().catch(() => {});
-          return new Response(null, {
-            status: result.status,
-            statusText: result.statusText,
-            headers: result.headers,
-          });
-        }
-        return result;
       }
       return new Response(null, { status: 404 });
     },

@@ -35,7 +35,8 @@ Register other methods with `.route(path, { PUT, PATCH, DELETE, HEAD, OPTIONS })
 matching pattern owns the request. Repeated registrations of the same path string add methods. GET
 supplies a bodyless HEAD by default. OPTIONS and 405 include Allow. A miss returns 404.
 `router<Bindings>()` types the platform bindings at `ctx.env`. Pass `ctx.signal` into fetches and
-other interruptible work. Cancelling a routed HTML body also signals its handler's work.
+other interruptible work. Explicit OPTIONS handlers can supply their own Allow value. Cancelling a
+routed HTML body also signals its handler's work.
 
 ## Stream slow content
 
@@ -101,7 +102,8 @@ Include the activation script once on pages with controllers. Vite emits the typ
 and compiled runtime. Without Vite, serve the compiled browser modules yourself and pass their
 same-origin URLs. Use static `ref={mounted.refs.name}` tokens for a multi-element widget. For a
 targeted refresh, fetch an ordinary HTML route and pass the response to `swap` from
-`@mewhhaha/ruwuter/browser`.
+`@mewhhaha/ruwuter/browser`. A buffered swap applies completed panels even when the host page
+started without a resolver.
 
 ## Optional file routes
 
@@ -113,7 +115,7 @@ group files. Compose layouts as ordinary components in the handler.
 // app/routes/products.$id.tsx
 import { type HandlerContext, html } from "@mewhhaha/ruwuter";
 
-export function GET({ params }: HandlerContext<undefined, { id: string }>) {
+export function GET({ params }: HandlerContext<unknown, { id: string }>) {
   return html(<h1>Product {params.id}</h1>);
 }
 ```

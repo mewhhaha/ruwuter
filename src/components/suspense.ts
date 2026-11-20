@@ -9,17 +9,8 @@ import { Fragment, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
 import { registerBodyTail } from "../runtime/body-tail.ts";
 import { fromParts, into, rendered } from "../runtime/node.ts";
 
-type Settled =
-  | { id: string; ok: true; html: string }
-  | {
-    id: string;
-    ok: false;
-    error: unknown;
-    /** Renders the boundary's error fallback under the boundary's own context. */
-    renderErrorFallback: ((error: unknown) => Promise<string>) | undefined;
-  };
-
-type SuspenseErrorFallback = JSX.Element | ((error: unknown) => JSX.Element);
+type Settled = { id: string; html: string };
+type SuspenseErrorFallback = JSX.HtmlNode | ((error: unknown) => JSX.HtmlNode);
 
 type SuspenseRegistry = {
   /** Unique prefix that keeps this registry's boundary ids document-scoped. */
@@ -39,19 +30,12 @@ type SuspenseRegistry = {
 
 const context = createContext<SuspenseRegistry | undefined>(undefined);
 
-const settle = (registry: SuspenseRegistry, result: Settled): void => {
-  if (registry.signal?.aborted) return;
-  registry.pending--;
-  registry.queue.push(result);
-  registry.wake?.();
-};
-
 type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
   as?: AS;
-  fallback: JSX.Element;
+  fallback: JSX.HtmlNode;
   /** Content to replace the fallback when the boundary's child rejects. */
   errorFallback?: SuspenseErrorFallback;
-  children?: JSX.Element | (() => Promise<JSX.Element>);
+  children?: JSX.HtmlNode | (() => JSX.HtmlNode);
 } & Omit<JSX.IntrinsicElements[AS], "children">;
 
 /**
@@ -81,23 +65,30 @@ export const Suspense = ({
       registry.prefix ??= crypto.randomUUID();
       const id = `rw-${registry.prefix}-${registry.counter++}`;
       registry.pending++;
-      // The boundary's content and error fallback both render after this
-      // generator returns, outside the branch that declared them. Bind the
-      // store so providers above the boundary stay visible to either path.
-      const renderContent = bindContext(() => content.toPromise());
-      const renderErrorFallback = errorFallback === undefined
-        ? undefined
-        : bindContext((error: unknown) =>
-          fromParts([{
-            v: typeof errorFallback === "function" ? errorFallback(error) : errorFallback,
-            esc: true,
-          }]).toPromise()
-        );
-
-      renderContent().then(
-        (html) => settle(registry, { id, ok: true, html }),
-        (error) => settle(registry, { id, ok: false, error, renderErrorFallback }),
-      );
+      // Resolve recovery content in the boundary's own task and lexical context.
+      // A slow recovery must not block delivery of another finished panel.
+      const run = bindContext(async () => {
+        let html: string | undefined;
+        try {
+          html = await content.toPromise();
+        } catch (error) {
+          if (registry.signal?.aborted) return;
+          console.error("Suspense boundary failed", error);
+          if (errorFallback === undefined) return;
+          try {
+            let fallback: unknown = errorFallback;
+            if (typeof errorFallback === "function") fallback = await errorFallback(error);
+            html = await into(fallback).toPromise();
+          } catch (cause) {
+            if (!registry.signal?.aborted) console.error("Suspense error fallback failed", cause);
+          }
+        } finally {
+          registry.pending--;
+          if (html !== undefined && !registry.signal?.aborted) registry.queue.push({ id, html });
+          registry.wake?.();
+        }
+      });
+      void run();
 
       // Emit fallback wrapper immediately
       yield* jsx(As, { ...props, id, children: fallback }).generator;
@@ -128,25 +119,12 @@ export const Resolve = (): JSX.Element => {
           continue;
         }
 
-        const settled = registry.queue.shift()!;
-        let html: string;
-        if (settled.ok) {
-          html = settled.html;
-        } else {
-          console.error("Suspense boundary failed", settled.error);
-          if (!settled.renderErrorFallback) continue;
-          try {
-            html = await settled.renderErrorFallback(settled.error);
-          } catch (error) {
-            console.error("Suspense error fallback failed", error);
-            continue;
-          }
-        }
+        const { id, html } = registry.queue.shift()!;
         if (registry.automatic && !registry.bootstrapped) {
           registry.bootstrapped = true;
           yield `<script src="${resolverPath}"></script>`;
         }
-        yield `<template data-rw-target="${settled.id}">${html}</template><!--rw-end-->`;
+        yield `<template data-rw-target="${id}">${html}</template><!--rw-end-->`;
       }
     })(),
   );
