@@ -1,5 +1,6 @@
 """Render the published figures from the recorded samples. Requires Matplotlib."""
 import json
+import subprocess
 import sys
 from io import StringIO
 from pathlib import Path
@@ -42,7 +43,10 @@ def style(ax):
 def save(fig, name):
     svg = StringIO()
     fig.savefig(svg, format="svg", metadata={"Title": fig.get_label(), "Date": None})
-    (source.parent / name).write_text("\n".join(line.rstrip() for line in svg.getvalue().splitlines()) + "\n")
+    path = source.parent / name
+    path.write_text("\n".join(line.rstrip() for line in svg.getvalue().splitlines()) + "\n")
+    subprocess.run(["deno", "fmt", "--config", Path(__file__).resolve().parents[1] / "deno.json", path],
+                   check=True)
     plt.close(fig)
 
 
