@@ -6,7 +6,7 @@ and fragment-swap modules both grew.
 
 ## Streaming latency
 
-![Median time for the fast panel to reach the live document in Chromium, Firefox and WebKit](streaming.png)
+![Median time for the fast panel to reach the live document in Chromium, Firefox and WebKit](streaming.svg)
 
 Each cell shows the 0.6 median → 0.7 median, in milliseconds from navigation start. The shell is the
 page heading. The fast and slow panels are independent components whose work takes 100 and 600 ms. A
@@ -28,7 +28,7 @@ empty HTTP cache.
 
 ## Package and page payload
 
-![Compressed package archives and optional browser bundles for the two revisions](payload.png)
+![Compressed package archives and optional browser bundles for the two revisions](payload.svg)
 
 | Package measurement                        | 0.6 (bytes) | 0.7 (bytes) |           Change |
 | ------------------------------------------ | ----------: | ----------: | ---------------: |
@@ -68,7 +68,7 @@ markup that makes each streamed replacement safe to apply.
 
 ## Server request cost
 
-![Time per request across sixteen matched batches of a thousand serial GETs](server.png)
+![Time per request across sixteen matched batches of a thousand serial GETs](server.svg)
 
 A second workload renders a greeting from `GET /hello/:name`. Each iteration constructs a request,
 dispatches it, reads the complete body, and checks the exact same HTML and status. The 0.6 route
@@ -94,7 +94,7 @@ temporary directories. Measurement and plotting run outside the published packag
 deno ci
 deno task browsers:install
 python3 bench/compare.py ee65994 149fbf2 docs/benchmarks/results.json
-# Use a Python environment with Matplotlib to redraw the figures.
+# Use a Python environment with Matplotlib to regenerate the SVG charts.
 python3 bench/plot.py docs/benchmarks/results.json
 ```
 

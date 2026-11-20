@@ -1,11 +1,12 @@
 """Render the published figures from the recorded samples. Requires Matplotlib."""
 import json
 import sys
+from io import StringIO
 from pathlib import Path
 from statistics import median
 
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use("svg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
@@ -17,10 +18,11 @@ plt.rcParams.update({"font.size": 10, "font.family": "DejaVu Sans", "text.color"
                      "axes.labelcolor": ink, "xtick.color": ink, "ytick.color": ink,
                      "axes.spines.top": False, "axes.spines.right": False,
                      "axes.spines.left": False, "axes.edgecolor": "#cbd4db",
-                     "savefig.facecolor": "white"})
+                     "savefig.facecolor": "white", "svg.fonttype": "none", "svg.hashsalt": "ruwuter"})
 
 
 def heading(fig, title, subtitle):
+    fig.set_label(title)
     fig.text(.04, .96, title, fontsize=18, fontweight="bold", va="top")
     fig.text(.04, .885, subtitle, fontsize=10, va="top")
     handles = [Line2D([], [], marker="o", linestyle="", markersize=8, color=color)
@@ -38,7 +40,9 @@ def style(ax):
 
 
 def save(fig, name):
-    fig.savefig(source.parent / name, dpi=150)
+    svg = StringIO()
+    fig.savefig(svg, format="svg", metadata={"Title": fig.get_label(), "Date": None})
+    (source.parent / name).write_text("\n".join(line.rstrip() for line in svg.getvalue().splitlines()) + "\n")
     plt.close(fig)
 
 
@@ -68,7 +72,7 @@ ax.set_xlabel("Time from navigation start (ms)")
 style(ax)
 fig.text(.04, .035, "Short horizontal ranges show the fastest and slowest observed runs.",
          color="#475d6c", fontsize=9)
-save(fig, "streaming.png")
+save(fig, "streaming.svg")
 
 fig, axes = plt.subplots(2, 1, figsize=(8.8, 6.7), gridspec_kw={"height_ratios": [2, 4]})
 fig.subplots_adjust(left=.27, right=.90, top=.71, bottom=.09, hspace=.82)
@@ -97,7 +101,7 @@ for ax, title, labels, rows in panels:
     ax.set_ylim(len(labels) - .49, -.49)
     ax.set_xlim(0, max(v for row in rows for v in row if v is not None) * 1.14)
     style(ax)
-save(fig, "payload.png")
+save(fig, "payload.svg")
 
 fig, ax = plt.subplots(figsize=(8.8, 4.5))
 fig.subplots_adjust(left=.12, right=.95, top=.68, bottom=.18)
@@ -118,4 +122,4 @@ ax.grid(axis="y", color="#e0e6ea", linewidth=.7)
 ax.tick_params(length=0, pad=6)
 fig.text(.04, .035, "Each revision returned the same HTML. The timed loop includes reading the response body.",
          color="#475d6c", fontsize=9)
-save(fig, "server.png")
+save(fig, "server.svg")
