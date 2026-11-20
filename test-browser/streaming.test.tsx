@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { chromium, firefox, webkit } from "playwright-core";
 import { productApp } from "../examples/product.tsx";
-import { html } from "../src/router.ts";
+import { html, unsafeHTML } from "../src/router.ts";
 import { Deferred } from "../src/components/index.ts";
 
 for (const engine of [chromium, firefox, webkit]) {
@@ -25,6 +25,7 @@ for (const engine of [chromium, firefox, webkit]) {
       html(
         <html>
           <head>
+            <base href="https://example.invalid/" />
             <title>Panels</title>
           </head>
           <body>
@@ -58,6 +59,10 @@ for (const engine of [chromium, firefox, webkit]) {
         html(
           <main>
             <section id="slot"></section>
+            <p id="outside">Keep</p>
+            {unsafeHTML(
+              '<template data-rw-target="outside"><p>Wrong target</p></template><!--rw-end-->',
+            )}
           </main>,
         ))
       .get("/part", () =>
@@ -125,14 +130,17 @@ for (const engine of [chromium, firefox, webkit]) {
         slow.resolve();
         await page.locator("#slow").waitFor();
         assertEquals(await page.locator("script[src]").count(), 1);
-        await page.goto(url + "/host");
-        assertEquals(await page.locator("script").count(), 0);
-        await page.evaluate(async (moduleUrl) => {
-          const { swap } = await import(moduleUrl);
-          await swap(fetch("/part"), { target: "#slot", viewTransition: false });
-        }, url + "/swap.js");
-        await page.getByText("Finished fragment", { exact: true }).waitFor();
-        assertEquals(await page.locator("template[data-rw-target]").count(), 0);
+        for (const mode of ["innerHTML", "outerHTML", "beforebegin", "afterend"] as const) {
+          await page.goto(url + "/host");
+          assertEquals(await page.locator("script").count(), 0);
+          await page.evaluate(async ({ moduleUrl, mode }) => {
+            const { swap } = await import(moduleUrl);
+            await swap(fetch("/part"), { target: "#slot", write: mode, viewTransition: false });
+          }, { moduleUrl: url + "/swap.js", mode });
+          await page.getByText("Finished fragment", { exact: true }).waitFor();
+          assertEquals(await page.locator("#outside").textContent(), "Keep");
+          assertEquals(await page.locator("template[data-rw-target]").count(), 1);
+        }
       } finally {
         await browser.close();
       }

@@ -34,13 +34,12 @@ const escapeLiteral = (value: string): string => value.replace(PATTERN_META_REGE
 
 const escapeRegexLiteral = (value: string): string => value.replace(REGEX_META_REGEX, "\\$&");
 
-const patternPart = (segment: RouteSegment): string => {
+const patternPart = (segment: RouteSegment, _index: number, segments: RouteSegment[]): string => {
   if (segment.kind === "static") {
     // An optional literal compiles to a regex group, so its contents are read
     // by the regex engine rather than by the URLPattern parser.
-    return segment.optional
-      ? `(${escapeRegexLiteral(segment.value)})?`
-      : escapeLiteral(segment.value);
+    if (segment.optional) return `/(${escapeRegexLiteral(segment.value)})?`;
+    return `/${escapeLiteral(segment.value)}`;
   }
 
   const suffix = escapeLiteral(segment.suffix);
@@ -49,10 +48,12 @@ const patternPart = (segment: RouteSegment): string => {
   // the suffix as literal text.
   const boundary = NAME_BOUNDARY_REGEX.test(segment.suffix) ? "\\" : "";
   const body = segment.kind === "wildcard" ? `*${suffix}` : `:${segment.name}${boundary}${suffix}`;
-  if (!segment.optional) return body;
+  if (!segment.optional) return `/${body}`;
   // `?` binds to whatever directly precedes it, so a suffix has to be grouped
   // with the param for the modifier to cover the whole segment.
-  return suffix === "" ? `${body}?` : `{${body}}?`;
+  if (suffix === "") return `/${body}?`;
+  if (segments.length === 1) return `/{${body}}?`;
+  return `{/${body}}?`;
 };
 
 /** @internal */
@@ -63,7 +64,7 @@ export const generatePatternString = (routePath: string): string => {
     return "/";
   }
 
-  return segments.map((segment) => `/${patternPart(segment)}`).join("");
+  return segments.map(patternPart).join("");
 };
 
 const canonicalPattern = (pattern: string): string => {

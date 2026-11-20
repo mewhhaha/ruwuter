@@ -21,7 +21,7 @@
  */
 
 import { bodyTail } from "./body-tail.ts";
-import { escapeHtml, fromParts, type Html, into, isHtml, type Part } from "./node.ts";
+import { escapeHtml, fromParts, type Html, into, isHtml, observeInput, type Part } from "./node.ts";
 import { isControllerRefToken } from "../components/client.ts";
 import "./typed.ts";
 import type { JSX } from "./typed.ts";
@@ -108,7 +108,7 @@ const pushChild = (parts: Part[], child: unknown): void => {
   }
 
   // A later sibling can reject while an earlier sibling still owns the stream.
-  if (child instanceof Promise) child.catch(() => {});
+  observeInput(child);
   // Promises, iterables, and other objects resolve during rendering.
   parts.push({ v: child, esc: true });
 };
@@ -179,6 +179,11 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
   props: Props,
 ): Html {
   if (typeof tag === "function") {
+    // Data props can hold already-started work. Leave getters and lazy callbacks
+    // untouched while a preceding sibling or HEAD keeps this component unrendered.
+    for (const key of Object.keys(props)) {
+      observeInput(Object.getOwnPropertyDescriptor(props, key)?.value);
+    }
     // Components run lazily during rendering so context providers up the tree
     // are active when they execute. Plain-string results are escaped.
     return fromParts([{ v: () => tag(props), esc: true }]);

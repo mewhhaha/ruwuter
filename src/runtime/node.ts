@@ -245,10 +245,23 @@ export const fromParts = (parts: Part[]): Html => {
   return html;
 };
 
+/** Observe already-started work without running component functions or consuming iterators. */
+export function observeInput(value: unknown, seen?: Set<unknown>): void {
+  if (value instanceof Promise) {
+    value.catch(() => {});
+  } else if (Array.isArray(value)) {
+    seen ??= new Set();
+    if (seen.has(value)) return;
+    seen.add(value);
+    for (const child of value) observeInput(child, seen);
+  }
+}
+
 /** Converts public render inputs to HTML, escaping ordinary text at any depth. */
 export const into = (value: unknown): Html => {
   if (isHtml(value)) return value;
   if (typeof value === "string") return fromParts([escapeHtml(value)]);
+  observeInput(value);
   return fromParts([{ v: value, esc: true }]);
 };
 

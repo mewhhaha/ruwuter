@@ -34,11 +34,15 @@ type SimpleName<S extends string> = S extends `${infer C}${infer Rest}`
 type Segment<S extends string> = S extends `:${infer N}?`
   ? SimpleName<N> extends true ? { [K in N]?: string } : Params
   : S extends `:${infer N}` ? SimpleName<N> extends true ? { [K in N]: string } : Params
-  : S extends `${string}${"*" | ":" | "(" | "{"}${string}` ? Params
+  : S extends `${string}:${string}` ? Params
   : unknown;
+type SimplePathParams<Path extends string> = Path extends `${infer First}/${infer Rest}`
+  ? Segment<First> & SimplePathParams<Rest>
+  : Segment<Path>;
+type PatternSyntax = "(" | ")" | "{" | "}" | "*" | "+" | "\\";
 type PathParams<Path extends Pattern> = Path extends string ? string extends Path ? Params
-  : Path extends `${infer First}/${infer Rest}` ? Segment<First> & PathParams<Rest>
-  : Segment<Path>
+  : Path extends `${string}${PatternSyntax}${string}` ? Params
+  : SimplePathParams<Path>
   : Params;
 type PlatformArgs<B> = unknown extends B
   ? [platform?: unknown, executionContext?: HandlerContext["executionContext"]]
@@ -127,7 +131,7 @@ export function router<Bindings = unknown>(
         const cancel = (reason: unknown) => lifetime.abort(reason);
         try {
           const result = await renderRequest.withValue(
-            { signal, cancel, head },
+            { signal, cancel, head, requestURL: request.url },
             () =>
               handler({
                 request,

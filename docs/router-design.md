@@ -1,9 +1,9 @@
 # A smaller Ruwuter
 
-I would build Ruwuter around a Fetch handler, streaming JSX, and one way to attach a browser module
-to an element. The first page worth building is a product page with a slow reviews section and a
-working review form. It exercises routing, status codes, streaming, and interactivity with a single
-example.
+Ruwuter 0.7 is built around a Fetch handler, streaming JSX, and one way to attach a browser module
+to an element. The [product example](../examples/product.tsx) is a page with a slow reviews section
+and a working review form. It exercises routing, status codes, streaming, and interactivity with a
+single example.
 
 ## 1. Fix what the reader sees first
 
@@ -35,9 +35,9 @@ body cannot catch either failure.
 ## 2. Let the handler decide when the page can start
 
 In 0.6 one action handles four mutation methods, a plain loader result can become JSON, and a page
-waits for every matched loader before rendering. I would accept explicit method/path handlers
-returning a standard `Response`. A document, a fragment, and a form submission can then be ordinary
-URLs. File routing can generate the same table that a small app writes by hand.
+waits for every matched loader before rendering. The new router accepts explicit method/path
+handlers returning a standard `Response`. A document, a fragment, and a form submission can then be
+ordinary URLs. File routing can generate the same table that a small app writes by hand.
 
 The method API supports this product page.
 
@@ -80,16 +80,14 @@ author can write the component without wiring a provider and resolver into every
 
 For a button that needs local behavior, keep an explicit browser module with a DOM root, typed
 props, and an abort signal for cleanup. A module can attach one listener or manage a whole widget.
-Keep the existing typed refs for widgets that need them. I would leave same-file callback extraction
-out of the first version. Its optional build transform alone is 613 source lines at `ee65994`, and
-the controller already covers both cases.
+Typed refs identify the descendants a widget owns. Removing same-file callback extraction also
+removed its 613-line build transform at `ee65994`.
 
 Keep whole-page navigation native in the first version. The removed 0.6 navigation runtime waits for
 `response.text()` before replacing the page. A fast response can hide that cost, while a slow
 reviews section exposes it on every navigation. A targeted refresh can fetch a normal HTML route and
 update one element.
 
-**For the first milestone**, serve the example above from a hand-written route with JavaScript
-disabled, submit the form exactly once, and show the heading while reviews are still pending. Then
-enable an out-of-order panel and pass the split-template browser test. Those two pages give the
-file-route and Vite adapters a concrete contract to implement.
+The [browser suite](../test-browser/streaming.test.tsx) exercises the product form with scripting
+disabled, a template arriving in two pieces while a slower panel stays pending, and a targeted
+refresh on a page that started without a resolver. CI runs it across Chromium, Firefox and WebKit.

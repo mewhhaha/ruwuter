@@ -19,6 +19,9 @@ type GroupCase = {
  * the URL the route id exists to serve.
  */
 const groupCases: GroupCase[] = [
+  { routeId: "items.($id[.pdf])", serves: "/items", groups: ["id"] },
+  { routeId: "items.($id[.pdf])", serves: "/items/42.pdf", groups: ["id"] },
+  { routeId: "($id[.pdf])", serves: "/", groups: ["id"] },
   // A suffixed wildcard is bounded by its suffix, so later segments stay reachable.
   { routeId: "$-b.c", serves: "/x-b/c", groups: ["0"], rejects: ["/x-b"] },
   { routeId: "a.$1x.b", serves: "/a/v1x/b", groups: ["0"], rejects: ["/a/v1x"] },

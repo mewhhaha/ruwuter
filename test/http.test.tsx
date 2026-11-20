@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { html, renderToStream, renderToString, router, unsafeHTML } from "../src/router.ts";
-import { Deferred } from "../src/components/index.ts";
+import { createContext, Deferred } from "../src/components/index.ts";
 
 const request = (path: string, method = "GET") =>
   new Request("https://example.test" + path, { method });
@@ -141,4 +141,66 @@ Deno.test("failed handlers abort work they already started", async () => {
   });
   await assertRejects(() => app.fetch(request("/")), Error, "could not respond");
   assert(observed[0].aborted);
+});
+
+Deno.test("optional groups spanning path segments expose possibly absent parameters", async () => {
+  const app = router().get("/items{/:org/extra}?", ({ params }) => {
+    // @ts-expect-error The entire group can be absent.
+    const name: string = params.org;
+    return new Response(name ?? "all");
+  });
+  assertEquals(await (await app.fetch(request("/items"))).text(), "all");
+  assertEquals(await (await app.fetch(request("/items/shop/extra"))).text(), "shop");
+});
+
+Deno.test("an eager rejected input stays observed until rendering, including HEAD", async () => {
+  const turn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  const gate = Promise.withResolvers<string>();
+  const app = router().get("/", () =>
+    html(
+      <main>
+        {gate.promise}
+        <Deferred fallback="loading" errorFallback={<p>Recovered</p>}>
+          {Promise.reject(new Error("early rejection"))}
+        </Deferred>
+      </main>,
+    )).get("/head", () => html(Promise.reject(new Error("head"))));
+  const response = await app.fetch(request("/"));
+  const arrayResponse = html([gate.promise, Promise.reject(new Error("array rejection"))]);
+  assertEquals((await app.fetch(request("/head", "HEAD"))).body, null);
+  await turn();
+  gate.resolve("ready");
+  assert((await response.text()).includes("<p>Recovered</p>"));
+  await assertRejects(() => arrayResponse.text(), Error, "array rejection");
+});
+
+Deno.test("nested ordered renders isolate panels while keeping lexical application context", async () => {
+  const theme = createContext("outer");
+  const Name = () => <i>{theme.use()}</i>;
+  const doc = () => (
+    <html>
+      <body>
+        <Deferred fallback="inner pending">
+          <Name />
+        </Deferred>
+      </body>
+    </html>
+  );
+  const app = router().get("/", () =>
+    html(
+      <theme.Provider value="inside">
+        <Deferred as="section" fallback="outer pending">
+          {async () => {
+            const first = await renderToString(doc());
+            const second = await new Response(renderToStream(doc())).text();
+            return <p>{first + second}</p>;
+          }}
+        </Deferred>
+      </theme.Provider>,
+    ));
+  const output = await (await app.fetch(request("/"))).text();
+  assertEquals(output.match(/<template data-rw-target=/g)?.length, 1);
+  assertEquals(output.match(/&lt;i&gt;inside&lt;\/i&gt;/g)?.length, 2);
+  assert(!output.includes("inner pending"));
+  assert(output.includes("<section"));
 });
