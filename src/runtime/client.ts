@@ -9,17 +9,13 @@ import type { Controller, ControllerCleanup, JsonValue } from "../components/cli
 const CONTROLLER_ATTR = "data-rw-controller";
 const PROPS_ATTR = "data-rw-props";
 const REF_ATTR = "data-rw-ref";
-const EVENTS_ATTR = "data-rw-events";
-const ACTIVATION_SELECTOR = `[${CONTROLLER_ATTR}],[${EVENTS_ATTR}]`;
+const ACTIVATION_SELECTOR = `[${CONTROLLER_ATTR}]`;
 
 type ClientModule = {
   default?: unknown;
 };
 
 type ClientModuleLoader = (url: URL) => Promise<ClientModule>;
-
-type MovedEvent = readonly [type: string, moduleHref: string, values: JsonValue];
-type MovedEventHandler = (event: Event, values: JsonValue) => unknown | Promise<unknown>;
 
 type MountedActivation = {
   abortController: AbortController;
@@ -79,12 +75,6 @@ function initializeActivationRuntime(): void {
     return JSON.parse(text) as JsonValue;
   };
 
-  const parseMovedEvents = (root: Element): MovedEvent[] => {
-    const text = root.getAttribute(EVENTS_ATTR);
-    if (!text) return [];
-    return JSON.parse(text) as MovedEvent[];
-  };
-
   const collectRefs = (root: Element): Record<string, Element> => {
     const refs: Record<string, Element> = Object.create(null);
     const add = (element: Element) => {
@@ -114,48 +104,25 @@ function initializeActivationRuntime(): void {
     if (mounted.has(root)) return;
 
     const controllerSpec = root.getAttribute(CONTROLLER_ATTR);
-    const hasMovedEvents = root.hasAttribute(EVENTS_ATTR);
-    if (!controllerSpec && !hasMovedEvents) return;
+    if (!controllerSpec) return;
 
     const abortController = new AbortController();
     mounted.set(root, { abortController, cleanup: undefined });
 
     try {
-      const movedEvents = parseMovedEvents(root);
-      const [activate, loadedEvents] = await Promise.all([
-        controllerSpec ? loadModule<Controller>(controllerSpec) : Promise.resolve(undefined),
-        Promise.all(movedEvents.map(async ([type, moduleHref, values]) => ({
-          type,
-          values,
-          handler: await loadModule<MovedEventHandler>(moduleHref),
-        }))),
-      ]);
+      const activate = await loadModule<Controller>(controllerSpec);
       if (abortController.signal.aborted || !isConnected(root)) {
         abortController.abort();
-        mounted.delete(root);
+        if (mounted.get(root)?.abortController === abortController) mounted.delete(root);
         return;
       }
 
-      for (const { type, values, handler } of loadedEvents) {
-        root.addEventListener(type, (event) => {
-          try {
-            Promise.resolve(handler(event, values)).catch((error) => {
-              if (!isAbortError(error)) console.error(error);
-            });
-          } catch (error) {
-            if (!isAbortError(error)) console.error(error);
-          }
-        }, { signal: abortController.signal });
-      }
-
-      const controllerCleanup = activate
-        ? await activate({
-          root,
-          props: parseProps(root),
-          refs: collectRefs(root),
-          signal: abortController.signal,
-        })
-        : undefined;
+      const controllerCleanup = await activate({
+        root,
+        props: parseProps(root),
+        refs: collectRefs(root),
+        signal: abortController.signal,
+      });
 
       const current = mounted.get(root);
       if (!current || current.abortController !== abortController) {
@@ -165,7 +132,7 @@ function initializeActivationRuntime(): void {
       current.cleanup = controllerCleanup;
     } catch (error) {
       const wasAborted = abortController.signal.aborted;
-      mounted.delete(root);
+      if (mounted.get(root)?.abortController === abortController) mounted.delete(root);
       abortController.abort();
       if (!wasAborted && !isAbortError(error)) {
         console.error(error);

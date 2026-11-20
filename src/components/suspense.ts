@@ -4,25 +4,20 @@
  * Suspense components for progressive rendering in Ruwuter applications.
  */
 
-import { bindContext, createContext } from "./context.ts";
-import { Fragment, into, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
-import { fromParts } from "../runtime/node.ts";
+import { createContext } from "./context.ts";
+import { Fragment, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
+import { registerBodyTail } from "../runtime/body-tail.ts";
+import { fromParts, into, rendered } from "../runtime/node.ts";
 
-type Settled =
-  | { id: string; ok: true; html: string }
-  | {
-    id: string;
-    ok: false;
-    error: unknown;
-    /** Renders the boundary's error fallback under the boundary's own context. */
-    renderErrorFallback: ((error: unknown) => Promise<string>) | undefined;
-  };
-
-type SuspenseErrorFallback = JSX.Element | ((error: unknown) => JSX.Element);
+type Settled = { id: string; html: string };
+type SuspenseErrorFallback = JSX.HtmlNode | ((error: unknown) => JSX.HtmlNode);
 
 type SuspenseRegistry = {
   /** Unique prefix that keeps this registry's boundary ids document-scoped. */
-  prefix: string;
+  prefix?: string;
+  requestURL?: string;
+  signal?: AbortSignal;
+  bootstrapped?: boolean;
   /** Monotonic id source for boundaries within one render. */
   counter: number;
   /** Boundaries registered but not yet settled. */
@@ -34,32 +29,27 @@ type SuspenseRegistry = {
 };
 
 const context = createContext<SuspenseRegistry | undefined>(undefined);
-
-const settle = (registry: SuspenseRegistry, result: Settled): void => {
-  registry.pending--;
-  registry.queue.push(result);
-  registry.wake?.();
-};
+const shell = createContext<SuspenseRegistry | undefined>(undefined);
 
 type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
   as?: AS;
-  fallback: JSX.Element;
+  fallback: JSX.HtmlNode;
   /** Content to replace the fallback when the boundary's child rejects. */
   errorFallback?: SuspenseErrorFallback;
-  children?: JSX.Element | (() => Promise<JSX.Element>);
+  children?: JSX.HtmlNode | (() => JSX.HtmlNode);
 } & Omit<JSX.IntrinsicElements[AS], "children">;
 
 /**
  * Suspense boundary that streams fallback immediately and resolved content later.
  */
-export const Suspense = ({
+export function Suspense<AS extends keyof JSX.IntrinsicElements = "div">({
   fallback,
   errorFallback,
-  as: As = "div",
+  as,
   children,
   ...props
-}: SuspenseProps): JSX.Element => {
-  return into(
+}: SuspenseProps<AS>): JSX.Element {
+  return rendered(
     (async function* () {
       const registry = context.use();
       // Function children are called lazily by the renderer; escaping applies
@@ -73,71 +63,69 @@ export const Suspense = ({
       }
 
       // With registry -> register the resolving content and stream fallback now
+      registry.prefix ??= crypto.randomUUID();
       const id = `rw-${registry.prefix}-${registry.counter++}`;
       registry.pending++;
-      // The boundary's content and error fallback both render after this
-      // generator returns, outside the branch that declared them. Bind the
-      // store so providers above the boundary stay visible to either path.
-      const renderContent = bindContext(() => content.toPromise());
-      const renderErrorFallback = errorFallback === undefined
-        ? undefined
-        : bindContext((error: unknown) =>
-          fromParts([{
-            v: typeof errorFallback === "function" ? errorFallback(error) : errorFallback,
-            esc: true,
-          }]).toPromise()
-        );
-
-      renderContent().then(
-        (html) => settle(registry, { id, ok: true, html }),
-        (error) => settle(registry, { id, ok: false, error, renderErrorFallback }),
-      );
+      // Resolve recovery content in the boundary's own task and lexical context.
+      // A slow recovery must not block delivery of another finished panel.
+      const run = async () => {
+        let html: string | undefined;
+        try {
+          html = await content.toPromise();
+        } catch (error) {
+          if (registry.signal?.aborted) return;
+          console.error("Suspense boundary failed", error);
+          if (errorFallback === undefined) return;
+          try {
+            let fallback: unknown = errorFallback;
+            if (typeof errorFallback === "function") fallback = await errorFallback(error);
+            html = await into(fallback).toPromise();
+          } catch (cause) {
+            if (!registry.signal?.aborted) console.error("Suspense error fallback failed", cause);
+          }
+        } finally {
+          registry.pending--;
+          if (html !== undefined && !registry.signal?.aborted) registry.queue.push({ id, html });
+          registry.wake?.();
+        }
+      };
+      void shell.withValue(undefined, run);
 
       // Emit fallback wrapper immediately
-      yield* jsx(As, { ...props, id, children: fallback }).generator;
+      yield* jsx(as ?? "div", { ...props, id, children: fallback }).generator;
     })(),
   );
-};
+}
 
 /**
  * Streams resolved Suspense content. Define once near the end of <body>.
- * If a strict CSP is used, supply a nonce so the defining script can run.
+ * The router serves its parser-executed resolver as a same-origin external asset.
  */
 export const Resolve = (): JSX.Element => {
-  return into(
+  return rendered(
     (async function* () {
       const registry = context.use();
       if (!registry) return;
 
-      // If we arrived before any Suspense registered, allow one tick for registration
-      if (registry.pending === 0 && registry.queue.length === 0) {
-        await Promise.resolve();
-      }
-
       while (registry.pending > 0 || registry.queue.length > 0) {
+        registry.signal?.throwIfAborted();
         if (registry.queue.length === 0) {
-          await new Promise<void>((resolve) => {
-            registry.wake = resolve;
-          });
+          const next = Promise.withResolvers<void>();
+          const wake = () => next.resolve();
+          registry.wake = wake;
+          registry.signal?.addEventListener("abort", wake, { once: true });
+          await next.promise;
+          registry.signal?.removeEventListener("abort", wake);
           registry.wake = undefined;
           continue;
         }
 
-        const settled = registry.queue.shift()!;
-        if (settled.ok) {
-          yield `<template data-rw-target="${settled.id}">${settled.html}</template>`;
-          continue;
+        const { id, html } = registry.queue.shift()!;
+        if (registry.requestURL && !registry.bootstrapped) {
+          registry.bootstrapped = true;
+          yield* jsx("script", { src: new URL(resolverPath, registry.requestURL).href }).generator;
         }
-
-        console.error("Suspense boundary failed", settled.error);
-        if (!settled.renderErrorFallback) continue;
-
-        try {
-          const html = await settled.renderErrorFallback(settled.error);
-          yield `<template data-rw-target="${settled.id}">${html}</template>`;
-        } catch (error) {
-          console.error("Suspense error fallback failed", error);
-        }
+        yield `<template data-rw-target="${id}">${html}</template><!--rw-end-->`;
       }
     })(),
   );
@@ -154,7 +142,6 @@ export const SuspenseProvider = ({
   children,
 }: SuspenseProviderProps): JSX.Element => {
   const registry: SuspenseRegistry = {
-    prefix: crypto.randomUUID(),
     counter: 0,
     pending: 0,
     queue: [],
@@ -169,3 +156,35 @@ export const SuspenseProvider = ({
     children: provided,
   });
 };
+
+/** @internal The classic asset is served by router().fetch. */
+export const resolverPath = "/_ruwuter/resolve-v1.js";
+
+registerBodyTail(() => {
+  const scope = context.use();
+  if (scope && scope === shell.use() && (scope.pending || scope.queue.length)) return Resolve();
+});
+
+/** @internal Each response owns its boundaries, including fragment-only responses. */
+export function withPanels(value: unknown, signal: AbortSignal, requestURL: string): JSX.Element {
+  const registry: SuspenseRegistry = {
+    signal,
+    requestURL,
+    counter: 0,
+    pending: 0,
+    queue: [],
+    wake: undefined,
+  };
+  return shell.withValue(
+    registry,
+    () => context.Provider({ value: registry, children: [into(value), jsx(Resolve, {})] }),
+  );
+}
+
+/** @internal Capture the caller's application context, isolating the inner render's panel queue. */
+export function ordered(value: unknown): JSX.Element {
+  return context.Provider({ value: undefined, children: into(value) });
+}
+
+/** A deferred HTML panel. Outside a routed response its children render in order. */
+export const Deferred: typeof Suspense = Suspense;

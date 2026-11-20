@@ -1,5 +1,5 @@
 import { expect, it } from "../test-support/deno_vitest_shim.ts";
-import { bindGenerator } from "../src/router.ts";
+import { bindGenerator } from "../src/legacy.ts";
 import { createContext, runWithContextStore } from "../src/components/context.ts";
 
 // The provider value lives in the request scope only. Nothing inside the page

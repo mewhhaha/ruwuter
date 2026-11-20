@@ -6,4 +6,4 @@
  */
 
 export * from "./context.ts";
-export * from "./suspense.ts";
+export { Deferred, Resolve, Suspense, SuspenseProvider } from "./suspense.ts";

@@ -27,8 +27,6 @@ describe("generateRouter", () => {
       expect(patternMatches.length).toBe(2);
       expect(contents).toContain('pathname: "/a/b"');
       expect(contents).toContain('pathname: "/a"');
-      expect(contents).toContain("[$document,$$a,$$a_b]");
-      expect(contents).toContain("[$document,$$a]]");
     } finally {
       await Deno.remove(app, { recursive: true });
     }
@@ -50,7 +48,6 @@ describe("generateRouter", () => {
       expect(patternMatches.length).toBe(1);
       expect(contents).toContain('pathname: "/b"');
       expect(contents).not.toContain('pathname: "/"');
-      expect(contents).toContain("[$document,$$_app,$$_app_b]");
     } finally {
       await Deno.remove(app, { recursive: true });
     }
@@ -72,8 +69,6 @@ describe("generateRouter", () => {
       expect(patternMatches.length).toBe(1);
       expect(contents).toContain('pathname: "/b"');
       expect(contents).not.toContain('pathname: "/c"');
-      expect(contents).toContain("[$document,$$_a_b]");
-      expect(contents).toContain('id: "_a.b._c"'); // remains available for children
     } finally {
       await Deno.remove(app, { recursive: true });
     }
@@ -104,7 +99,6 @@ describe("generateRouter", () => {
       expect(contents).toContain('pathname: "/dolla-bills-$"');
       expect(contents).toContain('pathname: "/[so-weird]"');
       expect(contents).toContain('pathname: "/reports/:id.pdf"');
-      expect(contents).toContain('params: ["id"]');
     } finally {
       await Deno.remove(app, { recursive: true });
     }
@@ -211,7 +205,7 @@ describe("generateRouter", () => {
     }
   });
 
-  it("serializes route ids as JSON string literals", async () => {
+  it("quotes route file names as JSON string literals", async () => {
     const app = await Deno.makeTempDir();
     try {
       const routesDir = join(app, "routes");
@@ -220,8 +214,7 @@ describe("generateRouter", () => {
 
       const [routerFile] = await generateRouter(app);
 
-      expect(routerFile.contents).toContain(`id: ${JSON.stringify('quote["]')}`);
-      expect(routerFile.contents).not.toContain('id: "quote""');
+      expect(routerFile.contents).toContain(JSON.stringify('./routes/quote["].tsx'));
     } finally {
       await Deno.remove(app, { recursive: true });
     }

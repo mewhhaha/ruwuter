@@ -5,6 +5,8 @@
  * Supports fetchable inputs and Trusted Types-aware HTML sinks.
  */
 
+import { resolvePanels } from "./panels.ts";
+
 declare const trustedHTMLBrand: unique symbol;
 
 type TrustedHTMLValue = typeof globalThis extends {
@@ -130,9 +132,7 @@ const assertResponseAllowed = (
 };
 
 const throwIfAborted = (signal?: AbortSignal | null): void => {
-  if (!signal?.aborted) return;
-  signal.throwIfAborted?.();
-  throw new DOMException("The operation was aborted.", "AbortError");
+  signal?.throwIfAborted();
 };
 
 const readResponse = async (
@@ -156,7 +156,7 @@ const toHtml = async (
     return { html: input, response: null };
   }
 
-  const resolvedInput = input instanceof Promise ? await input : input;
+  let resolvedInput = await input;
   throwIfAborted(options.init?.signal);
 
   if (typeof resolvedInput === "string") {
@@ -165,12 +165,11 @@ const toHtml = async (
     );
   }
 
+  if (resolvedInput instanceof Request || resolvedInput instanceof URL) {
+    resolvedInput = await fetch(resolvedInput, options.init);
+  }
   if (resolvedInput instanceof Response) {
     return { html: await readResponse(resolvedInput, options), response: resolvedInput };
-  }
-  if (resolvedInput instanceof Request || resolvedInput instanceof URL) {
-    const response = await fetch(resolvedInput, options.init);
-    return { html: await readResponse(response, options), response };
   }
   if (resolvedInput && typeof (resolvedInput as { text?: unknown }).text === "function") {
     const text = await (resolvedInput as { text: () => Promise<string> }).text();
@@ -228,21 +227,17 @@ const applySwap = (
   }
 };
 
-type StartViewTransition = (updateCallback: () => void) => { finished: Promise<unknown> };
-
 const runWithTransition = async (
   update: () => void,
   enabled?: boolean,
 ): Promise<void> => {
-  const doc = document as Document & { startViewTransition?: StartViewTransition };
-  const start = enabled !== false && doc.startViewTransition
-    ? doc.startViewTransition.bind(doc)
-    : (cb: () => void) => {
-      cb();
-      return { finished: Promise.resolve() };
-    };
-
-  await start(update).finished.catch(() => {});
+  if (enabled === false || !document.startViewTransition) {
+    update();
+    return;
+  }
+  const transition = document.startViewTransition(update);
+  await transition.updateCallbackDone;
+  await transition.finished.catch(() => {});
 };
 
 /**
@@ -262,7 +257,21 @@ export const swap = async (
   const domValue = await prepareDomValue(html, options, response);
   const resolvedText = typeof domValue === "string" ? domValue : String(domValue);
 
-  await runWithTransition(() => applySwap(target, writeMode, domValue), options.viewTransition);
+  await runWithTransition(() => {
+    if (writeMode === "remove" || !resolvedText.includes("<!--rw-end-->")) {
+      applySwap(target, writeMode, domValue);
+      return;
+    }
+    let scope: Document | DocumentFragment | Element = target;
+    let existing: Set<Element> | undefined;
+    if (writeMode !== "innerHTML") {
+      scope = (target.parentNode ?? target) as typeof scope;
+      // Only nodes introduced by this write participate in the protocol.
+      existing = new Set(scope.querySelectorAll("[id],template[data-rw-target]"));
+    }
+    applySwap(target, writeMode, domValue);
+    resolvePanels(scope, existing);
+  }, options.viewTransition);
 
   return {
     target,

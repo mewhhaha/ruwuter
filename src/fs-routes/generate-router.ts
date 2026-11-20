@@ -1,7 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path/posix";
 import {
-  extractRouteParams,
   isRouteModuleName,
   patternSegments,
   type RouteSegment,
@@ -35,13 +34,12 @@ const escapeLiteral = (value: string): string => value.replace(PATTERN_META_REGE
 
 const escapeRegexLiteral = (value: string): string => value.replace(REGEX_META_REGEX, "\\$&");
 
-const patternPart = (segment: RouteSegment): string => {
+const patternPart = (segment: RouteSegment, _index: number, segments: RouteSegment[]): string => {
   if (segment.kind === "static") {
     // An optional literal compiles to a regex group, so its contents are read
     // by the regex engine rather than by the URLPattern parser.
-    return segment.optional
-      ? `(${escapeRegexLiteral(segment.value)})?`
-      : escapeLiteral(segment.value);
+    if (segment.optional) return `/(${escapeRegexLiteral(segment.value)})?`;
+    return `/${escapeLiteral(segment.value)}`;
   }
 
   const suffix = escapeLiteral(segment.suffix);
@@ -50,10 +48,12 @@ const patternPart = (segment: RouteSegment): string => {
   // the suffix as literal text.
   const boundary = NAME_BOUNDARY_REGEX.test(segment.suffix) ? "\\" : "";
   const body = segment.kind === "wildcard" ? `*${suffix}` : `:${segment.name}${boundary}${suffix}`;
-  if (!segment.optional) return body;
+  if (!segment.optional) return `/${body}`;
   // `?` binds to whatever directly precedes it, so a suffix has to be grouped
   // with the param for the modifier to cover the whole segment.
-  return suffix === "" ? `${body}?` : `{${body}}?`;
+  if (suffix === "") return `/${body}?`;
+  if (segments.length === 1) return `/{${body}}?`;
+  return `{/${body}}?`;
 };
 
 /** @internal */
@@ -64,7 +64,7 @@ export const generatePatternString = (routePath: string): string => {
     return "/";
   }
 
-  return segments.map((segment) => `/${patternPart(segment)}`).join("");
+  return segments.map(patternPart).join("");
 };
 
 const canonicalPattern = (pattern: string): string => {
@@ -142,7 +142,6 @@ export const generateRouter = async (
     const segments = splitRouteSegments(routeId);
     const pattern = generatePatternString(routeId);
     const canonical = canonicalPattern(pattern);
-    const params = Array.from(extractRouteParams(routeId).paramNames);
     const pathless = isPathlessLayout(segments);
     if (!pathless) {
       const previousPattern = seenPatterns.get(canonical);
@@ -157,57 +156,16 @@ export const generateRouter = async (
       routeId,
       name,
       pattern,
-      params,
       pathless,
     };
   });
 
   const routes = [...routeData].sort((a, b) => bySpecificity(a.routeId, b.routeId));
 
-  const routable = routes
-    .filter(({ pathless }) => !pathless)
-    .map(({ routeId, name, pattern }) => {
-      return [routeId, name, pattern] as const;
-    });
-
-  const routeVars = routes
-    .map(({ routeId, name, params }) => {
-      if (params.length > 0) {
-        return `const $${name} = { id: ${JSON.stringify(routeId)}, mod: ${name}, params: [${
-          params
-            .map((param: string) => JSON.stringify(param))
-            .join(",")
-        }] };`;
-      }
-      return `const $${name} = { id: ${JSON.stringify(routeId)}, mod: ${name} };`;
-    })
-    .join("\n");
-
-  const routeItems = routable
-    .map(([file, name, pattern]) => {
-      const fragments = [
-        "$document",
-        ...routes
-          .filter(({ routeId }) => file.startsWith(`${routeId}.`))
-          .map(({ name: nestedName }) => `$${nestedName}`)
-          .reverse(),
-        `$${name}`,
-      ];
-
-      return `[new URLPattern({ pathname: ${JSON.stringify(pattern)} }), [${fragments.join(",")}]]`;
-    })
-    .join(",\n");
-
-  const file = `
-import * as document from "./document.tsx";
-import { type route } from "@mewhhaha/ruwuter";
-${routeImports}
-const $document = { id: "", mod: document };
-${routeVars}
-
-export const routes: route[] = [${routeItems}];
-`;
-
+  const items = routes.filter((route) => !route.pathless).map(({ pattern, name }) =>
+    `  [new URLPattern({ pathname: ${JSON.stringify(pattern)} }), ${name}]`
+  );
+  const file = `${routeImports}\n\nexport const routes = [\n${items.join(",\n")}\n] as const;\n`;
   const outputPath = path.join(appFolder, "routes.ts");
   return [{ path: outputPath, contents: file }];
 };

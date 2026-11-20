@@ -1,19 +1,13 @@
 // deno-lint-ignore-file no-namespace
 import type { Html } from "./node.ts";
-import type { ControllerRefToken, MovedHandler } from "../components/client.ts";
+import type { ControllerRefToken } from "../components/client.ts";
 
 type ElementForTag<Name extends string> = Name extends keyof HTMLElementTagNameMap
   ? HTMLElementTagNameMap[Name]
   : Name extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[Name]
   : Element;
 
-type MovedEvents<Target extends EventTarget> = {
-  [Type in keyof GlobalEventHandlersEventMap as `on:${Type & string}`]?:
-    | MovedHandler<GlobalEventHandlersEventMap[Type], Target>
-    | undefined;
-};
-
-type WithRef<Name extends string, Props> = Props & MovedEvents<ElementForTag<Name>> & {
+type WithRef<Name extends string, Props> = Props & {
   ref?:
     | ControllerRefToken<string, ElementForTag<Name>>
     | ControllerRefToken<string, Element>
@@ -191,7 +185,6 @@ export namespace JSX {
     virtualkeyboardpolicy?: VirtualKeyboardPolicy | undefined;
     writingsuggestions?: WritingSuggestions | undefined;
     children?: HtmlNode;
-    dangerouslySetInnerHTML?: { __html: string } | undefined;
     [dataAttr: `data-${string}`]: string | number | boolean | undefined;
   }
   export interface HtmlAnchorTag extends HtmlTag {
@@ -588,7 +581,9 @@ export namespace JSX {
 
   export type Element = Html;
 
-  export type HtmlNode =
+  export type ElementType = keyof IntrinsicElements | ((props: never) => HtmlNode);
+  export type HtmlNode = HtmlValue | Promise<HtmlValue>;
+  export type HtmlValue =
     | Element
     | string
     | number

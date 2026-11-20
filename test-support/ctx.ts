@@ -1,4 +1,4 @@
-import type { ExecutionContext } from "../src/router.ts";
+import type { ExecutionContext } from "../src/legacy.ts";
 
 export const makeCtx = () => {
   const pending: Promise<unknown>[] = [];

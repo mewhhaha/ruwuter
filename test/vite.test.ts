@@ -182,20 +182,17 @@ export default function Document({ children }: { children?: unknown }) {
       await Deno.writeTextFile(
         join(routesDir, "index.ts"),
         `
-export const loader = () => ({ ok: true });
-export default function Index() {
-  return "ok";
-}
+export const GET = () => new Response("ok");
 `,
       );
       await Deno.writeTextFile(
         join(app, "entry.ts"),
         `
-import { Router } from "@mewhhaha/ruwuter";
+import { router } from "@mewhhaha/ruwuter";
 import { routes } from "./routes.ts";
 
 export const assetHref = new URL("./asset.txt", import.meta.url).href;
-export const router = Router(routes);
+export const app = router(routes);
 `,
       );
 
@@ -223,7 +220,7 @@ export const router = Router(routes);
           outDir: distDir,
           ssr: join(app, "entry.ts"),
           target: "esnext",
-          rollupOptions: {
+          rolldownOptions: {
             output: {
               entryFileNames: "entry.js",
             },
@@ -236,6 +233,8 @@ export const router = Router(routes);
 
       const bundledEntry = await Deno.readTextFile(join(distDir, "entry.js"));
       expect(bundledEntry).toContain("import.meta.url");
+      const { app: built } = await import(pathToFileURL(join(distDir, "entry.js")).href);
+      expect(await (await built.fetch(new Request("https://example.org/index"))).text()).toBe("ok");
       expect(bundledEntry).not.toContain('"file://"');
     } finally {
       await Deno.remove(app, { recursive: true }).catch(() => {});
@@ -303,7 +302,7 @@ export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
           outDir: dist,
           ssr: join(app, "entry.ts"),
           minify: false,
-          rollupOptions: { output: { entryFileNames: "entry.js" } },
+          rolldownOptions: { output: { entryFileNames: "entry.js" } },
         },
       });
       const mod = await import(pathToFileURL(join(dist, "entry.js")).href) as {
@@ -335,8 +334,8 @@ export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
       await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
       await Deno.writeTextFile(
         join(app, "entry.ts"),
-        `import navigateRuntime from "@mewhhaha/ruwuter/navigate.js?url&no-inline";
-export { navigateRuntime };`,
+        `import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
+export { clientRuntime };`,
       );
       const dist = join(app, "dist");
       await build({
@@ -347,366 +346,27 @@ export { navigateRuntime };`,
         plugins: [ruwuter({ appFolder: app })],
         resolve: {
           alias: [{
-            find: /^@mewhhaha\/ruwuter\/navigate\.js$/,
-            replacement: resolve("src/runtime/navigate.ts"),
+            find: /^@mewhhaha\/ruwuter\/client\.js$/,
+            replacement: resolve("src/runtime/client.ts"),
           }],
         },
         build: {
           outDir: dist,
           ssr: join(app, "entry.ts"),
           minify: false,
-          rollupOptions: { output: { entryFileNames: "entry.js" } },
+          rolldownOptions: { output: { entryFileNames: "entry.js" } },
         },
       });
 
       const serverModule = await import(pathToFileURL(join(dist, "entry.js")).href) as {
-        navigateRuntime: string;
+        clientRuntime: string;
       };
-      expect(serverModule.navigateRuntime.startsWith("/docs/assets/ruwuter-navigate-")).toBe(true);
-      const runtimePath = join(dist, serverModule.navigateRuntime.slice("/docs/".length));
+      expect(serverModule.clientRuntime.startsWith("/docs/assets/ruwuter-client-")).toBe(true);
+      const runtimePath = join(dist, serverModule.clientRuntime.slice("/docs/".length));
       const runtimeCode = await Deno.readTextFile(runtimePath);
-      expect(runtimeCode).toContain('addEventListener("navigate"');
-      expect(runtimeCode).not.toContain("type NavigateEventLike");
+      expect(runtimeCode).toContain("data-rw-controller");
+      expect(runtimeCode).not.toContain("type MountedActivation");
       await import(pathToFileURL(runtimePath).href);
-    } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
-    }
-  });
-
-  it("extracts opt-in client() callbacks into production controller chunks", async () => {
-    const { build } = await import("vite");
-    const app = await Deno.makeTempDir();
-    const typesRoot = generatedTypesRoot(app);
-    try {
-      const routesDir = join(app, "routes");
-      const distDir = join(app, "dist");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "index.ts"), "export default 1;");
-      await Deno.writeTextFile(
-        join(app, "helper.ts"),
-        `export const report = (value: unknown) => console.log(value);
-export default report;`,
-      );
-      await Deno.writeTextFile(
-        join(app, "entry.ts"),
-        `
-import { client as browserClient } from "@mewhhaha/ruwuter/browser";
-import { report } from "./helper.ts";
-export const controllerHref = browserClient<{ props: { label: string } }>(({ root, props }) => report([root, props.label]));
-`,
-      );
-
-      await build({
-        root: app,
-        base: "/docs/",
-        configFile: false,
-        logLevel: "silent",
-        plugins: [ruwuter({ appFolder: app, clientMacro: true })],
-        resolve: {
-          alias: [{
-            find: "@mewhhaha/ruwuter/browser",
-            replacement: resolve("src/browser.ts"),
-          }],
-        },
-        build: {
-          emptyOutDir: true,
-          minify: false,
-          outDir: distDir,
-          ssr: join(app, "entry.ts"),
-          target: "esnext",
-          rollupOptions: { output: { entryFileNames: "entry.js" } },
-        },
-      });
-
-      const output = await Deno.readTextFile(join(distDir, "entry.js"));
-      expect(output).not.toContain("client((");
-      const mod = await import(pathToFileURL(join(distDir, "entry.js")).href) as {
-        controllerHref: string;
-      };
-      expect(mod.controllerHref.startsWith("/docs/assets/")).toBe(true);
-      expect(mod.controllerHref.startsWith("file:")).toBe(false);
-    } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
-    }
-  });
-
-  it("extracts move() callbacks and their dynamic imports into browser chunks", async () => {
-    const { build } = await import("vite");
-    const app = await Deno.makeTempDir();
-    const typesRoot = generatedTypesRoot(app);
-    try {
-      const routesDir = join(app, "routes");
-      const distDir = join(app, "dist");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "index.ts"), "export default 1;");
-      await Deno.writeTextFile(
-        join(app, "helper.ts"),
-        "export const report = (value: unknown) => console.log(value);",
-      );
-      const dependencyDir = join(app, "node_modules", "browser-effect");
-      await Deno.mkdir(dependencyDir, { recursive: true });
-      await Deno.writeTextFile(
-        join(dependencyDir, "package.json"),
-        JSON.stringify({ name: "browser-effect", type: "module", exports: "./index.js" }),
-      );
-      await Deno.writeTextFile(
-        join(dependencyDir, "index.js"),
-        "export const celebrate = () => document.body.dataset.celebrated = 'yes';",
-      );
-      await Deno.writeTextFile(
-        join(app, "entry.ts"),
-        `
-import { move as moveToBrowser } from "@mewhhaha/ruwuter/browser";
-export const movedClick = (count: number) => moveToBrowser({ count }, async (event, values) => {
-  const { report } = await import("./helper.ts");
-  const { celebrate } = await import("browser-effect");
-  report([event.type, values.count]);
-  celebrate();
-});
-`,
-      );
-
-      await build({
-        root: app,
-        base: "/docs/",
-        configFile: false,
-        logLevel: "silent",
-        plugins: [ruwuter({ appFolder: app, clientMacro: true })],
-        resolve: {
-          alias: [{
-            find: "@mewhhaha/ruwuter/browser",
-            replacement: resolve("src/browser.ts"),
-          }],
-        },
-        build: {
-          emptyOutDir: true,
-          minify: false,
-          outDir: distDir,
-          ssr: join(app, "entry.ts"),
-          target: "esnext",
-          rollupOptions: { output: { entryFileNames: "entry.js" } },
-        },
-      });
-
-      const serverModule = await import(pathToFileURL(join(distDir, "entry.js")).href) as {
-        movedClick(count: number): { moduleHref: string; valuesJson: string };
-      };
-      const moved = serverModule.movedClick(3);
-      expect(moved.moduleHref.startsWith("/docs/assets/ruwuter-move-")).toBe(true);
-      expect(moved.valuesJson).toBe('{"count":3}');
-      const movePath = join(distDir, moved.moduleHref.slice("/docs/".length));
-      const moveCode = await Deno.readTextFile(movePath);
-      expect(moveCode).toContain("values.count");
-      expect(moveCode).toMatch(/import\("\.\/helper-[^"]+\.m?js"\)/);
-      expect(moveCode).not.toContain('import("browser-effect")');
-      expect(moveCode).toContain("celebrate");
-    } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
-    }
-  });
-
-  it("rejects server bindings captured by move() callbacks", async () => {
-    const { build } = await import("vite");
-    const app = await Deno.makeTempDir();
-    const typesRoot = generatedTypesRoot(app);
-    try {
-      await Deno.mkdir(join(app, "routes"), { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
-      await Deno.writeTextFile(
-        join(app, "entry.ts"),
-        `
-import { move } from "@mewhhaha/ruwuter/browser";
-export const movedClick = (count: number) => move({ count }, () => console.log(count));
-`,
-      );
-
-      let error: unknown;
-      try {
-        await build({
-          root: app,
-          configFile: false,
-          logLevel: "silent",
-          plugins: [ruwuter({ appFolder: app, clientMacro: true })],
-          resolve: {
-            alias: [{
-              find: "@mewhhaha/ruwuter/browser",
-              replacement: resolve("src/browser.ts"),
-            }],
-          },
-          build: { outDir: join(app, "dist"), ssr: join(app, "entry.ts") },
-        });
-      } catch (caught) {
-        error = caught;
-      }
-
-      expect(error instanceof Error).toBe(true);
-      expect((error as Error).message).toContain('move() callback captures "count"');
-    } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
-    }
-  });
-
-  it("serves extracted client() callbacks through Vite in development", async () => {
-    const { createServer } = await import("vite");
-    const app = await Deno.makeTempDir();
-    const typesRoot = generatedTypesRoot(app);
-    try {
-      await Deno.mkdir(join(app, "routes"), { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
-      await Deno.writeTextFile(
-        join(app, "helper.ts"),
-        "export const report = (value: unknown) => console.log(value);",
-      );
-      await Deno.writeTextFile(
-        join(app, "entry.ts"),
-        `
-import { client as browserClient } from "@mewhhaha/ruwuter/browser";
-import report, * as helpers from "./helper.ts";
-export const controllerHref = browserClient(({ root }) => {
-  report(root);
-  helpers.report(root);
-});
-`,
-      );
-      const server = await createServer({
-        root: app,
-        configFile: false,
-        logLevel: "silent",
-        plugins: [ruwuter({ appFolder: app, clientMacro: true })],
-        resolve: {
-          alias: [{
-            find: "@mewhhaha/ruwuter/browser",
-            replacement: resolve("src/browser.ts"),
-          }],
-        },
-      });
-      try {
-        const entry = await server.transformRequest("/entry.ts");
-        const href = entry?.code.match(/"(\/@id\/__x00__ruwuter-client:[^"]+)"/)?.[1];
-        if (!href) throw new Error("Expected the client macro URL in transformed entry");
-        const controller = await server.transformRequest(href);
-        expect(controller?.code).toContain("defineController");
-        expect(controller?.code).toContain("helper.ts");
-        expect(controller?.code).toContain("report, * as helpers");
-        expect(controller?.code).not.toContain('from "./helper.ts"');
-      } finally {
-        await server.close();
-      }
-    } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
-    }
-  });
-
-  it("allows globals but rejects captured locals and non-top-level client() calls", async () => {
-    const { build, createServer } = await import("vite");
-    const app = await Deno.makeTempDir();
-    const typesRoot = generatedTypesRoot(app);
-    try {
-      await Deno.mkdir(join(app, "routes"), { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
-      await Deno.writeTextFile(
-        join(app, "globals.ts"),
-        `import { client as browserClient } from "@mewhhaha/ruwuter/browser";
-export const href = browserClient(() => fetch(location.href));`,
-      );
-      await Deno.writeTextFile(
-        join(app, "capture.ts"),
-        `import { client } from "@mewhhaha/ruwuter/browser";
-const serverValue = "server";
-export const href = client(() => {
-  const shadow = (serverValue: string) => serverValue;
-  console.log(serverValue, shadow("browser"));
-});`,
-      );
-      await Deno.writeTextFile(
-        join(app, "nested.ts"),
-        `import { client } from "@mewhhaha/ruwuter/browser";
-export const make = () => client(() => console.log("browser"));`,
-      );
-      await Deno.writeTextFile(
-        join(app, "nested-default.ts"),
-        `import { client } from "@mewhhaha/ruwuter/browser";
-const serverValue = "server";
-export const href = client(() => {
-  const nested = (value = serverValue) => value;
-  console.log(nested());
-});`,
-      );
-      await Deno.writeTextFile(
-        join(app, "var-hoist.ts"),
-        `import { client } from "@mewhhaha/ruwuter/browser";
-const value = "server";
-export const href = client(() => {
-  if (location.href) { var value = "client"; }
-  for (var index = 0; index < 1; index++) {}
-  console.log(value, index);
-});`,
-      );
-      await Deno.writeTextFile(
-        join(app, "module-var.ts"),
-        `import { client } from "@mewhhaha/ruwuter/browser";
-if (true) { var moduleValue = "server"; }
-export const href = client(() => console.log(moduleValue));`,
-      );
-      const server = await createServer({
-        root: app,
-        configFile: false,
-        logLevel: "silent",
-        plugins: [ruwuter({ appFolder: app, clientMacro: true })],
-        resolve: {
-          alias: [{ find: "@mewhhaha/ruwuter/browser", replacement: resolve("src/browser.ts") }],
-        },
-      });
-      try {
-        const globals = await server.transformRequest("/globals.ts");
-        expect(globals?.code).toContain("/@id/__x00__ruwuter-client:");
-        const varHoist = await server.transformRequest("/var-hoist.ts");
-        expect(varHoist?.code).toContain("/@id/__x00__ruwuter-client:");
-        for (
-          const [file, message] of [
-            ["capture.ts", 'captures "serverValue"'],
-            ["nested.ts", "top-level const"],
-            ["nested-default.ts", 'captures "serverValue"'],
-            ["module-var.ts", 'captures "moduleValue"'],
-          ] as const
-        ) {
-          let error: unknown;
-          try {
-            await build({
-              root: app,
-              configFile: false,
-              logLevel: "silent",
-              plugins: [ruwuter({ appFolder: app, clientMacro: true })],
-              resolve: {
-                alias: [{
-                  find: "@mewhhaha/ruwuter/browser",
-                  replacement: resolve("src/browser.ts"),
-                }],
-              },
-              build: {
-                outDir: join(app, `dist-${file}`),
-                ssr: join(app, file),
-              },
-            });
-          } catch (caught) {
-            error = caught;
-          }
-          expect(error instanceof Error).toBe(true);
-          expect((error as Error).message).toContain(message);
-        }
-      } finally {
-        await server.close();
-      }
     } finally {
       await Deno.remove(app, { recursive: true }).catch(() => {});
       await Deno.remove(typesRoot, { recursive: true }).catch(() => {});

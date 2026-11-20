@@ -5,8 +5,9 @@
  * Provides a small Provider/use API that mirrors React's ergonomics.
  */
 
+import { rendered } from "../runtime/node.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { Fragment, into, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
+import { Fragment, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
 
 /**
  * Immutable snapshot of the context values visible on one render branch.
@@ -97,7 +98,7 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
     children?: JSX.HtmlNode;
   }): JSX.Element => {
     const content = Fragment({ children });
-    return into(bindGenerator(derive(key, value), content.generator));
+    return rendered(bindGenerator(derive(key, value), content.generator));
   };
 
   /**

@@ -19,7 +19,7 @@
  * ```
  */
 
-import type { Env, RequestContext } from "./router.ts";
+import type { Env, RequestContext } from "./legacy.ts";
 import type { JSX } from "./runtime/jsx.ts";
 
 /**

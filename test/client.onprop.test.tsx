@@ -1,6 +1,6 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { jsx } from "../src/runtime/jsx-runtime.ts";
-import type { JSX } from "../src/router.ts";
+import type { JSX } from "../src/legacy.ts";
 
 describe("on prop removal", () => {
   it("does not expose inline event attributes in JSX types", () => {
@@ -10,9 +10,9 @@ describe("on prop removal", () => {
     expect("onClick" in props).toBe(true);
   });
 
-  it("requires moved event tokens for typed event directives", () => {
+  it("rejects JSX event directives", () => {
     const props: JSX.IntrinsicElements["button"] = {
-      // @ts-expect-error Raw callbacks are not valid moved event tokens.
+      // @ts-expect-error DOM listeners belong in controllers.
       "on:click": () => {},
     };
 

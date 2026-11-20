@@ -20,13 +20,9 @@
  * ```
  */
 
-import { escapeHtml, fromParts, type Html, into, isHtml, type Part } from "./node.ts";
-import {
-  isControllerRefToken,
-  isMovedHandler,
-  type MovedHandlerToken,
-  serializeMovedEvents,
-} from "../components/client.ts";
+import { bodyTail } from "./body-tail.ts";
+import { escapeHtml, fromParts, type Html, into, isHtml, observeInput, type Part } from "./node.ts";
+import { isControllerRefToken } from "../components/client.ts";
 import "./typed.ts";
 import type { JSX } from "./typed.ts";
 export type * from "./typed.ts";
@@ -111,6 +107,8 @@ const pushChild = (parts: Part[], child: unknown): void => {
     return;
   }
 
+  // A later sibling can reject while an earlier sibling still owns the stream.
+  observeInput(child);
   // Promises, iterables, and other objects resolve during rendering.
   parts.push({ v: child, esc: true });
 };
@@ -181,6 +179,11 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
   props: Props,
 ): Html {
   if (typeof tag === "function") {
+    // Data props can hold already-started work. Leave getters and lazy callbacks
+    // untouched while a preceding sibling or HEAD keeps this component unrendered.
+    for (const key of Object.keys(props)) {
+      observeInput(Object.getOwnPropertyDescriptor(props, key)?.value);
+    }
     // Components run lazily during rendering so context providers up the tree
     // are active when they execute. Plain-string results are escaped.
     return fromParts([{ v: () => tag(props), esc: true }]);
@@ -191,9 +194,6 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
   if (tag) assertTagName(tag);
 
   let attrs = "";
-  let dangerousHtml: string | undefined;
-  const movedEvents: Array<readonly [string, MovedHandlerToken]> = [];
-
   for (const key in props) {
     if (key === "children") continue;
     const value = props[key];
@@ -209,32 +209,14 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
       continue;
     }
 
-    if (key.startsWith("on:")) {
-      if (!isMovedHandler(value)) {
-        throw new TypeError(
-          `[ruwuter] ${key} requires move(values, callback) with the Ruwuter Vite plugin.`,
-        );
-      }
-      const eventType = key.slice(3);
-      if (!eventType) throw new TypeError("[ruwuter] Moved event type is required.");
-      movedEvents.push([eventType, value]);
-      continue;
-    }
-
     if (/^on/i.test(key)) {
       throw new TypeError(
         `[ruwuter] Inline event attributes are unsupported ("${key}"). Use controller() with a client module instead.`,
       );
     }
 
-    if (
-      key === "dangerouslySetInnerHTML" &&
-      typeof value === "object" &&
-      value !== null &&
-      "__html" in value && typeof value.__html === "string"
-    ) {
-      dangerousHtml = value.__html;
-      continue;
+    if (key === "dangerouslySetInnerHTML") {
+      throw new TypeError("Use unsafeHTML() as a child for trusted markup.");
     }
 
     assertAttributeName(key);
@@ -257,22 +239,14 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
     attrs += ` ${key}="${sanitized}"`;
   }
 
-  if (movedEvents.length > 0) {
-    attrs += ` data-rw-events="${sanitize(serializeMovedEvents(movedEvents))}"`;
-  }
-
   const parts: Part[] = [];
   if (tag) {
     parts.push(`<${tag}${attrs}>`);
   }
 
-  // If dangerouslySetInnerHTML is provided, use it instead of children
-  if (dangerousHtml !== undefined) {
-    append(parts, dangerousHtml);
-  } else {
-    pushChild(parts, props.children);
-  }
+  pushChild(parts, props.children);
 
+  if (tag.toLowerCase() === "body") parts.push({ v: bodyTail, esc: false });
   if (tag && !voidElements.has(tag)) {
     append(parts, `</${tag}>`);
   }

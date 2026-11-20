@@ -2,7 +2,7 @@ import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { jsx } from "../src/runtime/jsx-runtime.ts";
 import { into } from "../src/runtime/node.ts";
 import { makeCtx } from "../test-support/ctx.ts";
-import { type Env, type fragment, type JSX, Router } from "../src/router.ts";
+import { type Env, type fragment, type JSX, Router } from "../src/legacy.ts";
 import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";
 
 const render = (node: { toPromise: () => Promise<string> }) => node.toPromise();

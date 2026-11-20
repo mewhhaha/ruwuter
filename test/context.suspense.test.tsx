@@ -1,7 +1,7 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import { createContext } from "../src/components/context.ts";
-import { type Env, type fragment, Router } from "../src/router.ts";
+import { type Env, type fragment, Router } from "../src/legacy.ts";
 import { into } from "../src/runtime/jsx-runtime.ts";
 import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";
 import type * as suspenseModule from "../src/components/suspense.ts";

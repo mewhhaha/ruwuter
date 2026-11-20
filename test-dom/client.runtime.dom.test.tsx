@@ -3,11 +3,10 @@ import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import "./setup.ts";
 import { DOMParser } from "linkedom";
-import { controller, move, type MovedHandler } from "../src/components/client.ts";
-import { type Env, type fragment, Router } from "../src/router.ts";
+import { controller } from "../src/components/client.ts";
+import { type Env, type fragment, Router } from "../src/legacy.ts";
 import { nextClientRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 import type { JsonValue } from "../src/browser.ts";
-import { enhanceNavigation } from "../src/runtime/navigate.ts";
 
 const nextRuntimeUrl = () => nextClientRuntimeUrl();
 const controllerModules = new Map<string, { default?: unknown }>();
@@ -26,12 +25,6 @@ async function waitFor(check: () => boolean, timeoutMs = 500) {
     await new Promise((r) => setTimeout(r, 5));
   }
   throw new Error("waitFor timeout");
-}
-
-function dispatchDomEvent(doc: Document, target: Element, type: string): void {
-  const EventConstructor = doc.defaultView?.Event;
-  if (!EventConstructor) throw new Error("expected DOM event constructor");
-  target.dispatchEvent(new EventConstructor(type));
 }
 
 function setupDomEnvironment(html: string) {
@@ -188,29 +181,6 @@ async function render(htmlHref: string, props: JsonValue = {}) {
   return await res.text();
 }
 
-async function renderMovedClick(htmlHref: string, values: JsonValue) {
-  const movedClick = (move as unknown as (
-    values: JsonValue,
-    moduleHref: string,
-  ) => MovedHandler<PointerEvent, HTMLButtonElement>)(values, htmlHref);
-  const fragments: fragment[] = [{
-    id: "root",
-    mod: {
-      default: () => (
-        <html>
-          <body>
-            <button id="moved-root" type="button" on:click={movedClick}>Run</button>
-          </body>
-        </html>
-      ),
-    },
-  }];
-  const router = Router([[new URLPattern({ pathname: "/" }), fragments]]);
-  const { ctx } = makeCtx();
-  const response = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
-  return await response.text();
-}
-
 describe("Activation runtime DOM behaviour", () => {
   it("mounts explicit controller roots and passes props", async () => {
     const href = registerController(({ root, props, refs }: any) => {
@@ -232,53 +202,6 @@ describe("Activation runtime DOM behaviour", () => {
         "yes",
       );
     } finally {
-      cleanup();
-    }
-  });
-
-  it("runs moved event modules with their JSON values", async () => {
-    const href = registerController((event: Event, values: { count: number }) => {
-      const button = event.currentTarget as HTMLButtonElement;
-      button.setAttribute("data-count", String(values.count));
-    });
-    const html = await renderMovedClick(href, { count: 2 });
-    const { doc, cleanup } = setupDomEnvironment(html);
-    try {
-      await import(nextRuntimeUrl());
-
-      const button = doc.getElementById("moved-root");
-      if (!button) throw new Error("expected moved event root");
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      dispatchDomEvent(doc, button, "click");
-
-      await waitFor(() => button.getAttribute("data-count") === "2", 1000);
-      expect(button.getAttribute("data-count")).toBe("2");
-    } finally {
-      cleanup();
-    }
-  });
-
-  it("reports rejected moved event callbacks", async () => {
-    const href = registerController(() => Promise.reject(new Error("moved event failed")));
-    const html = await renderMovedClick(href, null);
-    const { doc, cleanup } = setupDomEnvironment(html);
-    const originalError = console.error;
-    const errors: unknown[] = [];
-    console.error = (...args: unknown[]) => {
-      errors.push(args[0]);
-    };
-    try {
-      await import(nextRuntimeUrl());
-
-      const button = doc.getElementById("moved-root");
-      if (!button) throw new Error("expected moved event root");
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      dispatchDomEvent(doc, button, "click");
-
-      await waitFor(() => errors.length === 1, 1000);
-      expect((errors[0] as Error).message).toBe("moved event failed");
-    } finally {
-      console.error = originalError;
       cleanup();
     }
   });
@@ -468,75 +391,6 @@ describe("Activation runtime DOM behaviour", () => {
 
       await waitFor(() => root.getAttribute("data-streamed-mounted") === "yes", 1000);
       expect(root.getAttribute("data-streamed-mounted")).toBe("yes");
-    } finally {
-      cleanup();
-    }
-  });
-
-  it("cleans up old controllers and mounts new ones after enhanced navigation", async () => {
-    const href = registerController(({ root }: any) => {
-      root.setAttribute("data-mounted", "yes");
-      return () => document.body.setAttribute("data-old-cleaned", "yes");
-    });
-    const html = await render(href);
-    const { doc, notify, cleanup } = setupDomEnvironment(html);
-
-    class Navigation extends EventTarget {}
-    class Navigate extends Event {
-      canIntercept = true;
-      destination = { url: "https://example.com/next" };
-      downloadRequest = null;
-      formData = null;
-      hashChange = false;
-      navigationType = "push" as const;
-      signal = new AbortController().signal;
-      sourceElement = null;
-      handler?: () => Promise<void>;
-
-      constructor() {
-        super("navigate");
-      }
-
-      intercept({ handler }: { handler: () => Promise<void> }) {
-        this.handler = handler;
-      }
-    }
-
-    try {
-      await import(nextRuntimeUrl());
-      const oldRoot = doc.getElementById("controller-root");
-      if (!oldRoot) throw new Error("expected old controller root");
-      await waitFor(() => oldRoot.getAttribute("data-mounted") === "yes", 1000);
-
-      const navigation = new Navigation();
-      (globalThis as any).navigation = navigation;
-      const stop = enhanceNavigation({
-        fetch: (() =>
-          Promise.resolve(
-            new Response(
-              `<html><head><title>Next</title></head><body>` +
-                `<section id="next-controller" data-rw-controller="${href}"></section>` +
-                `</body></html>`,
-              { headers: { "Content-Type": "text/html" } },
-            ),
-          )) as typeof fetch,
-      });
-      const event = new Navigate();
-      navigation.dispatchEvent(event);
-      await event.handler?.();
-
-      const nextRoot = doc.getElementById("next-controller");
-      if (!nextRoot) throw new Error("expected new controller root");
-      notify([{
-        addedNodes: [nextRoot],
-        removedNodes: [oldRoot],
-      } as unknown as MutationRecord]);
-
-      await waitFor(() => nextRoot.getAttribute("data-mounted") === "yes", 1000);
-      await waitFor(() => doc.body.getAttribute("data-old-cleaned") === "yes", 1000);
-      expect(nextRoot.getAttribute("data-mounted")).toBe("yes");
-      expect(doc.body.getAttribute("data-old-cleaned")).toBe("yes");
-      stop();
     } finally {
       cleanup();
     }

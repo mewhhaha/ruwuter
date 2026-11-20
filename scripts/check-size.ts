@@ -2,7 +2,6 @@ const entries = [
   { name: "client.js", path: "src/runtime/client.ts", budget: 1_400 },
   { name: "resolve.js", path: "src/runtime/resolve.ts", budget: 500 },
   { name: "swap.js", path: "src/runtime/swap.ts", budget: 1_450 },
-  { name: "navigate.js", path: "src/runtime/navigate.ts", budget: 1_500 },
 ] as const;
 
 const gzipSize = async (bytes: Uint8Array): Promise<number> => {
