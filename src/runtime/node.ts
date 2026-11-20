@@ -253,7 +253,11 @@ export function observeInput(value: unknown, seen?: Set<unknown>): void {
     seen ??= new Set();
     if (seen.has(value)) return;
     seen.add(value);
-    for (const child of value) observeInput(child, seen);
+    // Arrays passed as component props may have lazy slots or a custom iterator.
+    // Observe only stored values. Actual iteration belongs to the consumer.
+    for (const key of Object.getOwnPropertyNames(value)) {
+      observeInput(Object.getOwnPropertyDescriptor(value, key)?.value, seen);
+    }
   }
 }
 

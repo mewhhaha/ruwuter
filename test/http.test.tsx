@@ -204,3 +204,28 @@ Deno.test("nested ordered renders isolate panels while keeping lexical applicati
   assert(!output.includes("inner pending"));
   assert(output.includes("<section"));
 });
+
+Deno.test("HEAD observes stored promises without iterating array props or reading their getters", async () => {
+  const accessor: string[] = [];
+  Object.defineProperty(accessor, "0", {
+    enumerable: true,
+    get() {
+      throw new Error("read array slot");
+    },
+  });
+  const iterable = ["value"];
+  Object.defineProperty(iterable, Symbol.iterator, {
+    value() {
+      throw new Error("called custom iterator");
+    },
+  });
+  function Widget(_props: { items: string[] }): never {
+    throw new Error("rendered on HEAD");
+  }
+  for (const items of [accessor, iterable]) {
+    const app = router().get("/", () => html(<Widget items={items} />));
+    const response = await app.fetch(request("/", "HEAD"));
+    assertEquals(response.status, 200);
+    assertEquals(response.body, null);
+  }
+});
