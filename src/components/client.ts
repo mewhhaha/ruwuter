@@ -1,7 +1,7 @@
 /**
  * @module
  *
- * Browser activation helpers for controllers and moved events.
+ * Browser activation helpers for controllers.
  */
 
 export type ControllerCleanup = void | (() => void | Promise<void>);
@@ -17,7 +17,6 @@ export type JsonValue =
 type ControllerRefs = Record<string, Element>;
 declare const definedControllerBrand: unique symbol;
 declare const controllerHrefBrand: unique symbol;
-declare const movedHandlerBrand: unique symbol;
 
 export type ControllerRefToken<
   Name extends string = string,
@@ -107,28 +106,10 @@ export type TargetedRuntimeEvent<
   readonly currentTarget: Target;
 };
 
-export type MovedHandler<
-  E extends Event = Event,
-  Target extends EventTarget = EventTarget,
-> = {
-  readonly [movedHandlerBrand]: {
-    event: E;
-    target: Target;
-  };
-};
-
-/** @internal */
-export type MovedHandlerToken = MovedHandler & {
-  readonly __ruwuterMovedHandler: true;
-  readonly moduleHref: string;
-  readonly valuesJson: string;
-};
-
 type ListenerOptions = AddEventListenerOptions;
 
 type GlobalDomEventMap = GlobalEventHandlersEventMap;
 const JSON_PROPS_MESSAGE = "controller() props must contain only JSON values.";
-const MOVED_VALUES_MESSAGE = "move() values must contain only JSON values.";
 
 type OnRegistry<Target extends EventTarget> =
   & {
@@ -239,44 +220,6 @@ function stringifyJsonValue(value: unknown, message: string): string {
 function serializeProps(props: JsonValue | undefined): string | undefined {
   if (props === undefined) return undefined;
   return escapeJsonForAttribute(stringifyJsonValue(props, JSON_PROPS_MESSAGE));
-}
-
-export function move<
-  Values extends JsonValue,
-  E extends Event = Event,
-  Target extends EventTarget = EventTarget,
->(
-  values: Values,
-  callback: (event: TargetedRuntimeEvent<E, Target>, values: Values) => unknown | Promise<unknown>,
-): MovedHandler<E, Target>;
-export function move(values: JsonValue, callback: unknown): MovedHandler {
-  if (typeof callback !== "string") {
-    throw new Error("move() requires the Ruwuter Vite plugin with clientMacro: true.");
-  }
-
-  return {
-    __ruwuterMovedHandler: true,
-    moduleHref: callback,
-    valuesJson: stringifyJsonValue(values, MOVED_VALUES_MESSAGE),
-  } as MovedHandlerToken;
-}
-
-/** @internal */
-export function isMovedHandler(value: unknown): value is MovedHandlerToken {
-  if (typeof value !== "object" || value === null) return false;
-  const token = value as Partial<MovedHandlerToken>;
-  return token.__ruwuterMovedHandler === true && typeof token.moduleHref === "string" &&
-    typeof token.valuesJson === "string";
-}
-
-/** @internal */
-export function serializeMovedEvents(
-  events: readonly (readonly [type: string, handler: MovedHandlerToken])[],
-): string {
-  const descriptors = events.map(([type, handler]) => {
-    return `[${JSON.stringify(type)},${JSON.stringify(handler.moduleHref)},${handler.valuesJson}]`;
-  });
-  return escapeJsonForAttribute(`[${descriptors.join(",")}]`);
 }
 
 function createRefTokens<Refs extends ControllerRefs>(): ControllerRefTokens<Refs> {

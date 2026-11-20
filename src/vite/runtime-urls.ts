@@ -6,7 +6,6 @@ const MODULE_PREFIX = "\0ruwuter-runtime:";
 const URL_PREFIX = "\0ruwuter-runtime-url:";
 const RUNTIME_ENTRIES = new Set([
   "@mewhhaha/ruwuter/client.js",
-  "@mewhhaha/ruwuter/navigate.js",
   "@mewhhaha/ruwuter/resolve.js",
   "@mewhhaha/ruwuter/swap.js",
 ]);

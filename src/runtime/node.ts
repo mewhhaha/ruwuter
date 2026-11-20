@@ -4,6 +4,8 @@
  */
 export const N: unique symbol = Symbol();
 
+type StreamOptions = { signal?: AbortSignal; onCancel?: (reason: unknown) => void };
+
 const encoder = new TextEncoder();
 
 /**
@@ -30,7 +32,7 @@ export type Html = {
   parts: Part[];
   readonly generator: AsyncGenerator<string>;
   toPromise: () => Promise<string>;
-  toReadableStream: (options?: { signal?: AbortSignal }) => ReadableStream<Uint8Array>;
+  toReadableStream: (options?: StreamOptions) => ReadableStream<Uint8Array>;
 };
 
 const ESCAPE_PATTERN = /[&<>"']/;
@@ -117,6 +119,8 @@ const render = (root: Html): AsyncGenerator<string> => {
 
     if (value instanceof Promise) {
       if (buffer) {
+        // Cancellation can close this generator at the yield before it reaches the await.
+        value.catch(() => {});
         yield buffer;
         buffer = "";
       }
@@ -179,41 +183,53 @@ const htmlPrototype = {
 
   toReadableStream(
     this: Html,
-    options: { signal?: AbortSignal } = {},
+    { signal, onCancel }: StreamOptions = {},
   ): ReadableStream<Uint8Array> {
     const generator = this.generator;
     let closed = false;
-
-    const closeGenerator = async () => {
-      if (closed) return;
+    let abort: (() => void) | undefined;
+    const finish = () => {
       closed = true;
-      await generator.return(undefined).catch(() => {});
+      if (abort) signal?.removeEventListener("abort", abort);
+    };
+    const stop = () => {
+      finish();
+      // A user promise may never settle. The reader must still be released immediately.
+      void generator.return(undefined).catch(() => {});
     };
 
     return new ReadableStream({
+      start(controller) {
+        if (!signal) return;
+        abort = () => {
+          stop();
+          controller.error(signal.reason);
+        };
+        if (signal.aborted) abort();
+        else signal.addEventListener("abort", abort, { once: true });
+      },
       async pull(controller) {
+        if (closed) return;
         try {
-          if (options.signal?.aborted) {
-            await closeGenerator();
-            options.signal.throwIfAborted?.();
-            throw new DOMException("The operation was aborted.", "AbortError");
-          }
-
-          const next = await generator.next();
-          if (next.done) {
-            closed = true;
+          const step = await generator.next();
+          if (closed) return;
+          if (step.done) {
+            finish();
             controller.close();
-            return;
+          } else {
+            controller.enqueue(encoder.encode(step.value));
           }
-
-          controller.enqueue(encoder.encode(next.value));
         } catch (error) {
-          await closeGenerator();
-          controller.error(error);
+          if (!closed) {
+            finish();
+            controller.error(error);
+            onCancel?.(error);
+          }
         }
       },
-      async cancel() {
-        await closeGenerator();
+      cancel(reason) {
+        stop();
+        onCancel?.(reason);
       },
     });
   },
@@ -229,19 +245,22 @@ export const fromParts = (parts: Part[]): Html => {
   return html;
 };
 
-/**
- * Normalizes arbitrary values into the internal `Html` streaming container.
- * Values passed through `into` are trusted: plain strings are NOT escaped.
- */
+/** Converts public render inputs to HTML, escaping ordinary text at any depth. */
 export const into = (value: unknown): Html => {
-  if (isHtml(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    return fromParts([value]);
-  }
-  return fromParts([{ v: value, esc: false }]);
+  if (isHtml(value)) return value;
+  if (typeof value === "string") return fromParts([escapeHtml(value)]);
+  return fromParts([{ v: value, esc: true }]);
 };
+
+/** Inserts an explicitly trusted string of application-generated markup. */
+export function unsafeHTML(markup: string): Html {
+  if (typeof markup !== "string") throw new TypeError("unsafeHTML expects a string.");
+  return fromParts([markup]);
+}
+
+/** Internal generators have already escaped their text chunks. */
+export const rendered = (chunks: AsyncGenerator<string>): Html =>
+  fromParts([{ v: chunks, esc: false }]);
 
 /**
  * Type guard to check if a value is an Html instance.

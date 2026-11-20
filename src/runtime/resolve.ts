@@ -1,60 +1,33 @@
 /**
  * @module
- *
- * Browser runtime for streamed Suspense templates.
- * Replaces fallback nodes when matching `<template data-rw-target>` chunks arrive.
+ * Classic script for completed out-of-order HTML panels. Its generated copy is
+ * served by the Fetch router, including in deployments without a filesystem.
  */
-
-const hasWindow = typeof window !== "undefined";
-
-function initializeResolveRuntime(): void {
-  if (!hasWindow) return;
-
-  const processed = new WeakSet<HTMLTemplateElement>();
-
-  const processTemplate = (template: HTMLTemplateElement | Element | Node): boolean => {
-    if (!(template instanceof HTMLTemplateElement) || processed.has(template)) return false;
-
-    const targetId = template.getAttribute("data-rw-target");
-    if (!targetId) return false;
-
-    const target = document.getElementById(targetId);
-    if (!target) return false;
-
-    // Move nodes out of the template directly rather than cloning.
-    // Cloning template content that includes <script> can trip TT script enforcement.
-    target.replaceWith(template.content);
-    processed.add(template);
-    template.remove();
-    return true;
-  };
-
-  // Resolves every template whose target is already in the document. Replacing one
-  // target can reveal another template's target (nested Suspense), so repeat until a
-  // pass makes no progress. Bounded: every extra pass consumes at least one template.
-  const resolveTemplates = (): void => {
-    let replaced = true;
-    while (replaced) {
+if (typeof document !== "undefined") {
+  const resolvePanels = (): void => {
+    let replaced: boolean;
+    do {
       replaced = false;
-      document.querySelectorAll("template[data-rw-target]").forEach((node) => {
-        replaced = processTemplate(node) || replaced;
-      });
-    }
+      for (
+        const template of document.querySelectorAll<HTMLTemplateElement>("template[data-rw-target]")
+      ) {
+        const end = template.nextSibling;
+        if (end?.nodeType !== 8 || end.nodeValue !== "rw-end") continue;
+        const target = document.getElementById(template.getAttribute("data-rw-target")!);
+        if (!target) continue;
+        target.replaceWith(template.content);
+        end.remove();
+        template.remove();
+        replaced = true;
+      }
+    } while (replaced);
   };
 
-  resolveTemplates();
-
-  // One pass per mutation batch, not per record: streamed renders deliver many records
-  // and each pass already covers the whole document.
-  const observer = new MutationObserver(() => {
-    resolveTemplates();
-  });
-
-  observer.observe(document, { childList: true, subtree: true });
+  // A document can receive several independently rendered fragments.
+  const installed = Symbol.for("ruwuter.resolve.v1");
+  if (!Reflect.has(document, installed)) {
+    Reflect.set(document, installed, true);
+    new MutationObserver(resolvePanels).observe(document, { childList: true, subtree: true });
+  }
+  resolvePanels();
 }
-
-if (hasWindow) {
-  initializeResolveRuntime();
-}
-
-export {};

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
-import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/router.ts";
+import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/legacy.ts";
 import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

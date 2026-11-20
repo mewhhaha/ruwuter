@@ -79,7 +79,7 @@ describe("Resolve runtime DOM behaviour", () => {
       <template data-rw-target="suspense-a">
         <div id="ready">ready</div>
         <script type="application/json" data-test-script="h_1">{"x":1}</script>
-      </template>
+      </template><!--rw-end-->
     `);
 
     const templateEl = doc.createElement("template") as unknown as HTMLTemplateElement;
@@ -107,10 +107,10 @@ describe("Resolve runtime DOM behaviour", () => {
       <div id="outer">outer loading</div>
       <template data-rw-target="inner">
         <span id="inner-ready">inner ready</span>
-      </template>
+      </template><!--rw-end-->
       <template data-rw-target="outer">
         <section id="inner">inner loading</section>
-      </template>
+      </template><!--rw-end-->
     `);
 
     try {
@@ -137,10 +137,10 @@ describe("Resolve runtime DOM behaviour", () => {
         <div id="outer">outer loading</div>
         <template data-rw-target="inner">
           <span id="inner-ready">inner ready</span>
-        </template>
+        </template><!--rw-end-->
         <template data-rw-target="outer">
           <section id="inner">inner loading</section>
-        </template>
+        </template><!--rw-end-->
       `;
 
       const originalQuerySelectorAll = doc.querySelectorAll.bind(doc);

@@ -9,9 +9,9 @@ import {
   renderToStream,
   renderToString,
   Router,
-} from "../src/router.ts";
-import type { fragment } from "../src/router.ts";
-import { into } from "../src/runtime/node.ts";
+} from "../src/legacy.ts";
+import type { fragment } from "../src/legacy.ts";
+import { unsafeHTML } from "../src/runtime/node.ts";
 import type { InferHeadersFunction } from "../src/types.ts";
 
 type LayoutProps = { children?: RuwuterJSX.HtmlNode };
@@ -21,7 +21,7 @@ describe("Router HTML responses", () => {
     const text = await renderToString(<main>Rendered</main>);
     expect(text).toBe("<main>Rendered</main>");
 
-    const stream = renderToStream(into("<p>Streamed</p>"));
+    const stream = renderToStream(unsafeHTML("<p>Streamed</p>"));
     const rendered = await new Response(stream).text();
     expect(rendered).toBe("<p>Streamed</p>");
   });
@@ -345,7 +345,7 @@ describe("Headers merging", () => {
       {
         id: "leaf",
         mod: {
-          default: () => into("<p>Leaf</p>"),
+          default: () => unsafeHTML("<p>Leaf</p>"),
           headers: () => new Headers({ "X-Leaf": "ok" }),
         },
       },

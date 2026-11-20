@@ -1,6 +1,6 @@
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { makeCtx } from "../test-support/ctx.ts";
-import { type Env, fragment, type fragment as RouteFragment, Router } from "../src/router.ts";
+import { type Env, fragment, type fragment as RouteFragment, Router } from "../src/legacy.ts";
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;

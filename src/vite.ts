@@ -1,6 +1,5 @@
 import path from "node:path";
 import { writeGeneratedFiles } from "./fs-routes/write.ts";
-import { ClientMacro } from "./vite/client-macro.ts";
 import { ControllerUrls } from "./vite/controller-urls.ts";
 import { RuntimeUrls } from "./vite/runtime-urls.ts";
 
@@ -32,8 +31,6 @@ export interface RuwuterPluginOptions {
    * @default "./app"
    */
   appFolder?: string;
-  /** Enables the experimental Vite-only `client()` and `move()` extraction macros. */
-  clientMacro?: boolean;
 }
 
 type RuwuterPlugin = {
@@ -69,9 +66,6 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
   let building = false;
   let base = "/";
   const buildId = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
-  const clientMacro = options.clientMacro
-    ? new ClientMacro(() => building, () => base, buildId)
-    : undefined;
   const controllerUrls = new ControllerUrls(
     () => building,
     resolvedAppFolder,
@@ -111,48 +105,20 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
       building = config.command === "build";
       base = config.base ?? "/";
     },
-    ...(clientMacro
-      ? {
-        enforce: "post" as const,
-        resolveId: {
-          order: "pre" as const,
-          handler(id: string, importer?: string) {
-            return runtimeUrls.resolveId(id) ?? controllerUrls.resolveId(id, importer) ??
-              clientMacro.resolveId(id);
-          },
-        },
-        load(this: unknown, id: string) {
-          return runtimeUrls.load(this as Parameters<RuntimeUrls["load"]>[0], id) ??
-            controllerUrls.load(this as Parameters<ControllerUrls["load"]>[0], id) ??
-            clientMacro.load(id);
-        },
-        async transform(this: unknown, source: string, id: string) {
-          const controller = transformControllerImports(source, id);
-          const macro = await clientMacro.transform(
-            this as Parameters<ClientMacro["transform"]>[0],
-            controller?.code ?? source,
-            id,
-          );
-          return macro ?? controller;
-        },
-      }
-      : {
-        resolveId: {
-          order: "pre" as const,
-          handler(id: string, importer?: string) {
-            return runtimeUrls.resolveId(id) ?? controllerUrls.resolveId(id, importer);
-          },
-        },
-        load(this: unknown, id: string) {
-          return runtimeUrls.load(this as Parameters<RuntimeUrls["load"]>[0], id) ??
-            controllerUrls.load(this as Parameters<ControllerUrls["load"]>[0], id);
-        },
-        transform(this: unknown, source: string, id: string) {
-          void this;
-          return transformControllerImports(source, id);
-        },
-      }),
-
+    resolveId: {
+      order: "pre" as const,
+      handler(id: string, importer?: string) {
+        return runtimeUrls.resolveId(id) ?? controllerUrls.resolveId(id, importer);
+      },
+    },
+    load(this: unknown, id: string) {
+      return runtimeUrls.load(this as Parameters<RuntimeUrls["load"]>[0], id) ??
+        controllerUrls.load(this as Parameters<ControllerUrls["load"]>[0], id);
+    },
+    transform(this: unknown, source: string, id: string) {
+      void this;
+      return transformControllerImports(source, id);
+    },
     async buildStart() {
       await scheduleRegenerate();
     },

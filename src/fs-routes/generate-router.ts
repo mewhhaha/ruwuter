@@ -1,7 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path/posix";
 import {
-  extractRouteParams,
   isRouteModuleName,
   patternSegments,
   type RouteSegment,
@@ -142,7 +141,6 @@ export const generateRouter = async (
     const segments = splitRouteSegments(routeId);
     const pattern = generatePatternString(routeId);
     const canonical = canonicalPattern(pattern);
-    const params = Array.from(extractRouteParams(routeId).paramNames);
     const pathless = isPathlessLayout(segments);
     if (!pathless) {
       const previousPattern = seenPatterns.get(canonical);
@@ -157,57 +155,16 @@ export const generateRouter = async (
       routeId,
       name,
       pattern,
-      params,
       pathless,
     };
   });
 
   const routes = [...routeData].sort((a, b) => bySpecificity(a.routeId, b.routeId));
 
-  const routable = routes
-    .filter(({ pathless }) => !pathless)
-    .map(({ routeId, name, pattern }) => {
-      return [routeId, name, pattern] as const;
-    });
-
-  const routeVars = routes
-    .map(({ routeId, name, params }) => {
-      if (params.length > 0) {
-        return `const $${name} = { id: ${JSON.stringify(routeId)}, mod: ${name}, params: [${
-          params
-            .map((param: string) => JSON.stringify(param))
-            .join(",")
-        }] };`;
-      }
-      return `const $${name} = { id: ${JSON.stringify(routeId)}, mod: ${name} };`;
-    })
-    .join("\n");
-
-  const routeItems = routable
-    .map(([file, name, pattern]) => {
-      const fragments = [
-        "$document",
-        ...routes
-          .filter(({ routeId }) => file.startsWith(`${routeId}.`))
-          .map(({ name: nestedName }) => `$${nestedName}`)
-          .reverse(),
-        `$${name}`,
-      ];
-
-      return `[new URLPattern({ pathname: ${JSON.stringify(pattern)} }), [${fragments.join(",")}]]`;
-    })
-    .join(",\n");
-
-  const file = `
-import * as document from "./document.tsx";
-import { type route } from "@mewhhaha/ruwuter";
-${routeImports}
-const $document = { id: "", mod: document };
-${routeVars}
-
-export const routes: route[] = [${routeItems}];
-`;
-
+  const items = routes.filter((route) => !route.pathless).map(({ pattern, name }) =>
+    `  [new URLPattern({ pathname: ${JSON.stringify(pattern)} }), ${name}]`
+  );
+  const file = `${routeImports}\n\nexport const routes = [\n${items.join(",\n")}\n] as const;\n`;
   const outputPath = path.join(appFolder, "routes.ts");
   return [{ path: outputPath, contents: file }];
 };
