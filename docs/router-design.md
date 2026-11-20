@@ -3,7 +3,8 @@
 Ruwuter 0.7 is built around a Fetch handler, streaming JSX, and one way to attach a browser module
 to an element. The [product example](../examples/product.tsx) is a page with a slow reviews section
 and a working review form. It exercises routing, status codes, streaming, and interactivity with a
-single example.
+single example. The [benchmark report](benchmarks/README.md) compares browser latency, request cost,
+and package and page sizes against 0.6.
 
 ## 1. Fix what the reader sees first
 
