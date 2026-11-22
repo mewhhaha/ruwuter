@@ -69,7 +69,10 @@ const findClientModules = async (folder: string): Promise<string[]> => {
   const entries = await readdir(folder, { withFileTypes: true });
   const files = await Promise.all(entries.map((entry) => {
     const entryPath = path.join(folder, entry.name);
-    if (entry.isDirectory()) return findClientModules(entryPath);
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) return [];
+      return findClientModules(entryPath);
+    }
     return entry.isFile() && CLIENT_MODULE.test(entry.name) ? [entryPath] : [];
   }));
   return files.flat();

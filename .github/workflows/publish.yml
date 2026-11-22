@@ -33,6 +33,15 @@ jobs:
       - name: Run DOM integration tests
         run: deno task test:dom
 
+      - name: Enforce browser size budgets
+        run: deno task size
+
+      - name: Install browsers
+        run: deno task browsers:install
+
+      - name: Test native forms and streamed panels in browsers
+        run: deno task test:browser
+
   publish:
     runs-on: ubuntu-latest
     needs: validate

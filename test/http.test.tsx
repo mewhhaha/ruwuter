@@ -229,3 +229,173 @@ Deno.test("HEAD observes stored promises without iterating array props or readin
     assertEquals(response.body, null);
   }
 });
+
+Deno.test("nested app.fetch isolates request context from outer AsyncLocalStorage values", async () => {
+  const theme = createContext("default");
+  const app = router();
+  app
+    .get("/inner", () => new Response(theme.use()))
+    .get("/outer", () => theme.withValue("outer-only", () => app.fetch(request("/inner"))));
+  assertEquals(await (await app.fetch(request("/outer"))).text(), "default");
+});
+
+Deno.test("resolver script defaults to root-relative path and supports resolverSrc and nonce", async () => {
+  const page = () => <Deferred fallback="wait">{<p>done</p>}</Deferred>;
+  const defaultApp = router().get("/proxy", () => html(page()));
+  const proxyHtml = await (await defaultApp.fetch(new Request("http://127.0.0.1:8000/proxy")))
+    .text();
+  assert(proxyHtml.includes('<script src="/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>'));
+  assert(!proxyHtml.includes("127.0.0.1:8000"));
+
+  const configuredApp = router([], {
+    resolverSrc: (req) => new URL("/prefix/_ruwuter/resolve-v1.js", req.url).href,
+  })
+    .get("/router-opt", () => html(page()))
+    .get("/html-opt", () => html(page(), { resolverSrc: "/custom/resolve.js", nonce: "abc123" }));
+
+  const fromRouter = await (await configuredApp.fetch(request("/router-opt"))).text();
+  assert(
+    fromRouter.includes(
+      '<script src="https://example.test/prefix/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>',
+    ),
+  );
+  const fromHtml = await (await configuredApp.fetch(request("/html-opt"))).text();
+  assert(
+    fromHtml.includes(
+      '<script src="/custom/resolve.js" data-rw-resolver="" nonce="abc123"></script>',
+    ),
+  );
+
+  // Reserved resolver endpoint still handles GET, HEAD, OPTIONS, 405
+  const asset = await defaultApp.fetch(request("/_ruwuter/resolve-v1.js"));
+  assertEquals(asset.status, 200);
+  assert(asset.headers.get("content-type")?.includes("text/javascript"));
+  const head = await defaultApp.fetch(request("/_ruwuter/resolve-v1.js", "HEAD"));
+  assertEquals(head.status, 200);
+  assertEquals(head.body, null);
+  const options = await defaultApp.fetch(request("/_ruwuter/resolve-v1.js", "OPTIONS"));
+  assertEquals(options.status, 204);
+  assertEquals(options.headers.get("allow"), "GET, HEAD, OPTIONS");
+  const bad = await defaultApp.fetch(request("/_ruwuter/resolve-v1.js", "POST"));
+  assertEquals(bad.status, 405);
+});
+
+Deno.test("standalone Deferred honors errorFallback and nested routed Deferred resolves both levels", async () => {
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const failing = () => (
+      <Deferred
+        fallback="wait"
+        errorFallback={(err) => <p>Fallback: {(err as Error).message}</p>}
+      >
+        {() => Promise.reject(new Error("boom"))}
+      </Deferred>
+    );
+    assertEquals(await renderToString(failing()), "<p>Fallback: boom</p>");
+    assertEquals(await html(failing()).text(), "<p>Fallback: boom</p>");
+    assertEquals(
+      await new Response(renderToStream(failing())).text(),
+      "<p>Fallback: boom</p>",
+    );
+  } finally {
+    console.error = originalError;
+  }
+
+  const app = router().get("/", () =>
+    html(
+      <html>
+        <body>
+          <Deferred fallback={<p>outer-wait</p>}>
+            {async () => {
+              await Promise.resolve();
+              return (
+                <section>
+                  <Deferred fallback={<p>inner-wait</p>}>
+                    {async () => {
+                      await Promise.resolve();
+                      return <p>inner-done</p>;
+                    }}
+                  </Deferred>
+                </section>
+              );
+            }}
+          </Deferred>
+        </body>
+      </html>,
+    ));
+  const output = await (await app.fetch(request("/"))).text();
+  assertEquals(output.match(/<template data-rw-target=/g)?.length, 2);
+  assertEquals(output.match(/<script /g)?.length, 1);
+  assert(output.includes("<p>inner-done</p>"));
+});
+
+Deno.test("Deferred cancellation stops pending async iterators immediately", async () => {
+  const { into } = await import("../src/runtime/node.ts");
+  const started = Promise.withResolvers<void>();
+  const cleanedUp = Promise.withResolvers<void>();
+  const never = new Promise<never>(() => {});
+  const streamPanel = () =>
+    into((async function* () {
+      try {
+        started.resolve();
+        yield "<p>partial</p>";
+        await never;
+      } finally {
+        cleanedUp.resolve();
+      }
+    })());
+  const app = router().get("/", () =>
+    html(
+      <main>
+        <h1>Shell</h1>
+        <Deferred fallback="loading">
+          {streamPanel}
+        </Deferred>
+      </main>,
+    ));
+  const res = await app.fetch(request("/"));
+  const reader = res.body!.getReader();
+  await reader.read();
+  await started.promise;
+  await reader.cancel();
+  await cleanedUp.promise;
+});
+
+Deno.test("generated fs-routes tables mount directly on router() with specificity order", async () => {
+  const { join } = await import("node:path");
+  const { pathToFileURL } = await import("node:url");
+  const { writeGeneratedFiles, generatedTypesRoot } = await import("../src/fs-routes/write.ts");
+  const appDir = await Deno.makeTempDir();
+  try {
+    const routesDir = join(appDir, "routes");
+    await Deno.mkdir(routesDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(routesDir, "_app.$slug.ts"),
+      `export const GET = ({ params }: { params: { slug: string } }) => new Response("slug:" + params.slug);`,
+    );
+    await Deno.writeTextFile(
+      join(routesDir, "about.ts"),
+      `export const GET = () => new Response("about");`,
+    );
+    await Deno.writeTextFile(
+      join(routesDir, "$.ts"),
+      `export const GET = () => new Response("root-catchall");`,
+    );
+    await Deno.writeTextFile(
+      join(routesDir, "products.$.ts"),
+      `export const GET = () => new Response("products-catchall");`,
+    );
+    await writeGeneratedFiles(appDir);
+    const { routes } = await import(pathToFileURL(join(appDir, "routes.ts")).href);
+    const app = router(routes);
+
+    assertEquals(await (await app.fetch(request("/about"))).text(), "about");
+    assertEquals(await (await app.fetch(request("/other"))).text(), "slug:other");
+    assertEquals(await (await app.fetch(request("/products/a/b"))).text(), "products-catchall");
+    assertEquals(await (await app.fetch(request("/x/y/z"))).text(), "root-catchall");
+  } finally {
+    await Deno.remove(appDir, { recursive: true }).catch(() => {});
+    await Deno.remove(generatedTypesRoot(appDir), { recursive: true }).catch(() => {});
+  }
+});

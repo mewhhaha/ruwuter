@@ -1,4 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
+import { DOMParser } from "linkedom";
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { swap, type SwapInput, type SwapMode } from "../src/runtime/swap.ts";
 
@@ -178,6 +179,66 @@ describe("swap runtime DOM behaviour", () => {
       expect(result.text).toBe("trusted:<p>ok</p>");
     } finally {
       cleanup();
+    }
+  });
+
+  it("only uses startViewTransition when viewTransition: true is explicitly requested", async () => {
+    const { cleanup } = setupDom();
+    let transitions = 0;
+    (globalThis as any).document.startViewTransition = (update: () => void) => {
+      transitions += 1;
+      update();
+      return {
+        updateCallbackDone: Promise.resolve(),
+        finished: Promise.resolve(),
+      };
+    };
+    try {
+      const target = new FakeElement();
+      await swap(null, { target: asElement(target), unsafeHTML: "<p>a</p>" });
+      expect(transitions).toBe(0);
+
+      await swap(null, { target: asElement(target), unsafeHTML: "<p>b</p>", viewTransition: true });
+      expect(transitions).toBe(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("strips inert resolver scripts introduced by swapped deferred fragments while preserving existing ones", async () => {
+    const saved = {
+      document: (globalThis as any).document,
+      Element: (globalThis as any).Element,
+      CSS: (globalThis as any).CSS,
+    };
+    const doc = new DOMParser().parseFromString(
+      `<!doctype html><html><body>
+        <script id="host-resolver" src="/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>
+        <section id="slot"></section>
+      </body></html>`,
+      "text/html",
+    )! as unknown as Document;
+    (globalThis as any).document = doc;
+    (globalThis as any).Element = (doc.createElement("div") as any).constructor;
+    (globalThis as any).CSS = { escape: (v: string) => v };
+    try {
+      const fragmentHtml = `<div id="rw-frag-0">loading</div>` +
+        `<script src="/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>` +
+        `<template data-rw-target="rw-frag-0"><p>Ready</p></template><!--rw-end-->`;
+      await swap(
+        new Response(fragmentHtml, { headers: { "Content-Type": "text/html" } }),
+        { target: "#slot", write: "outerHTML" },
+      );
+      expect(doc.body.textContent).toContain("Ready");
+      expect(doc.querySelectorAll("script[data-rw-resolver]").length).toBe(1);
+      expect(doc.getElementById("host-resolver") != null).toBe(true);
+    } finally {
+      if (typeof saved.document === "undefined") delete (globalThis as any).document;
+      else (globalThis as any).document = saved.document;
+      if (typeof saved.Element === "undefined") delete (globalThis as any).Element;
+      else (globalThis as any).Element = saved.Element;
+      if (typeof saved.CSS === "undefined") delete (globalThis as any).CSS;
+      else (globalThis as any).CSS = saved.CSS;
     }
   });
 });

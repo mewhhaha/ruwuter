@@ -36,6 +36,7 @@ export interface RuwuterPluginOptions {
 type RuwuterPlugin = {
   name: string;
   enforce?: "post";
+  config?: () => { ssr: { noExternal: string[] } };
   configResolved?: (config: { command: "serve" | "build"; base?: string }) => void;
   buildStart?: () => Promise<void>;
   configureServer?: (server: ViteDevServer) => void;
@@ -65,14 +66,12 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
   ]);
   let building = false;
   let base = "/";
-  const buildId = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
   const controllerUrls = new ControllerUrls(
     () => building,
     resolvedAppFolder,
     () => base,
-    buildId,
   );
-  const runtimeUrls = new RuntimeUrls(() => building, () => base, buildId);
+  const runtimeUrls = new RuntimeUrls(() => building, () => base);
 
   let queuedWrite = Promise.resolve();
 
@@ -86,13 +85,16 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
   };
 
   const transformControllerImports = (source: string, id: string) => {
-    if (path.basename(id) !== "controllers.ts" || !source.includes("?ruwuter-controller-url")) {
+    const cleanId = id.split("?", 1)[0];
+    if (
+      path.basename(cleanId) !== "controllers.ts" || !source.includes("?ruwuter-controller-url")
+    ) {
       return;
     }
     const code = source.replace(
       /(["'])([^"']+)\?ruwuter-controller-url\1/g,
       (_match, quote: string, specifier: string) => {
-        const virtualId = controllerUrls.register(id, specifier);
+        const virtualId = controllerUrls.register(cleanId, specifier);
         return `${quote}/@id/${virtualId.replace("\0", "__x00__")}${quote}`;
       },
     );
@@ -101,6 +103,15 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
 
   return {
     name: "vite-plugin-ruwuter",
+    config() {
+      // Bundle Ruwuter's own browser helpers into emitted controller/runtime chunks
+      // during SSR builds so browser modules never retain bare npm specifiers.
+      return {
+        ssr: {
+          noExternal: ["@mewhhaha/ruwuter"],
+        },
+      };
+    },
     configResolved(config: { command: "serve" | "build"; base?: string }) {
       building = config.command === "build";
       base = config.base ?? "/";

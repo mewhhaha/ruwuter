@@ -214,9 +214,9 @@ export namespace JSX {
   export interface HtmlAudioTag extends HtmlTag {
     src?: string | undefined;
     autobuffer?: string | undefined;
-    autoplay?: string | undefined;
-    loop?: string | undefined;
-    controls?: string | undefined;
+    autoplay?: boolean | string | undefined;
+    loop?: boolean | string | undefined;
+    controls?: boolean | string | undefined;
   }
   export interface BaseTag extends HtmlTag {
     href?: string | undefined;
@@ -272,7 +272,7 @@ export namespace JSX {
     [anything: string]: unknown;
   }
   export interface HtmlFieldSetTag extends HtmlTag {
-    disabled?: string | undefined;
+    disabled?: boolean | string | undefined;
     form?: string | undefined;
     name?: string | undefined;
   }
@@ -346,7 +346,7 @@ export namespace JSX {
     min?: string | undefined;
     multiple?: boolean | undefined;
     name?: string | undefined;
-    novalidate?: boolean | boolean | undefined;
+    novalidate?: boolean | undefined;
     pattern?: string | undefined;
     placeholder?: string | undefined;
     popovertarget?: string | undefined;
@@ -400,7 +400,7 @@ export namespace JSX {
   }
   export interface HtmlMetaTag extends HtmlTag {
     name?: string | undefined;
-    httpEquiv?: string | undefined;
+    "http-equiv"?: string | undefined;
     content?: string | undefined;
     charset?: string | undefined;
   }
@@ -422,17 +422,17 @@ export namespace JSX {
     height?: string | undefined;
   }
   export interface HtmlOListTag extends HtmlTag {
-    reversed?: string | undefined;
+    reversed?: boolean | string | undefined;
     start?: string | number | undefined;
   }
   export interface HtmlOptgroupTag extends HtmlTag {
-    disabled?: string | undefined;
+    disabled?: boolean | string | undefined;
     label?: string | undefined;
   }
   export interface HtmlOptionTag extends HtmlTag {
-    disabled?: string | undefined;
+    disabled?: boolean | string | undefined;
     label?: string | undefined;
-    selected?: string | undefined;
+    selected?: boolean | string | undefined;
     value?: string | undefined;
   }
   export interface HtmlOutputTag extends HtmlTag {
@@ -485,11 +485,11 @@ export namespace JSX {
   }
   export interface HtmlSelectTag extends HtmlTag {
     autofocus?: boolean | undefined;
-    disabled?: string | undefined;
+    disabled?: boolean | string | undefined;
     form?: string | undefined;
-    multiple?: string | undefined;
+    multiple?: boolean | string | undefined;
     name?: string | undefined;
-    required?: string | undefined;
+    required?: boolean | string | undefined;
     size?: string | undefined;
   }
   export interface HtmlSourceTag extends HtmlTag {
@@ -514,7 +514,7 @@ export namespace JSX {
     autofocus?: boolean | undefined;
     cols?: string | undefined;
     dirname?: string | undefined;
-    disabled?: string | undefined;
+    disabled?: boolean | string | undefined;
     form?: string | undefined;
     maxlength?: string | undefined;
     minlength?: string | undefined;
@@ -545,9 +545,9 @@ export namespace JSX {
     src?: string | undefined;
     poster?: string | undefined;
     autobuffer?: string | undefined;
-    autoplay?: string | undefined;
-    loop?: string | undefined;
-    controls?: string | undefined;
+    autoplay?: boolean | string | undefined;
+    loop?: boolean | string | undefined;
+    controls?: boolean | string | undefined;
     width?: string | undefined;
     height?: string | undefined;
   }
@@ -674,6 +674,7 @@ export namespace JSX {
     output: WithRef<"output", HtmlOutputTag>;
     p: WithRef<"p", HtmlTag>;
     param: WithRef<"param", HtmlParamTag>;
+    picture: WithRef<"picture", HtmlTag>;
     pre: WithRef<"pre", HtmlTag>;
     progress: WithRef<"progress", HtmlProgressTag>;
     q: WithRef<"q", HtmlQuoteTag>;
@@ -685,8 +686,10 @@ export namespace JSX {
     s: WithRef<"s", HtmlTag>;
     samp: WithRef<"samp", HtmlTag>;
     script: WithRef<"script", HtmlScriptTag>;
+    search: WithRef<"search", HtmlTag>;
     section: WithRef<"section", HtmlTag>;
     select: WithRef<"select", HtmlSelectTag>;
+    slot: WithRef<"slot", HtmlTag>;
     small: WithRef<"small", HtmlTag>;
     source: WithRef<"source", HtmlSourceTag>;
     span: WithRef<"span", HtmlTag>;

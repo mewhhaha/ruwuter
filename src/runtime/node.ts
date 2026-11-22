@@ -4,7 +4,11 @@
  */
 export const N: unique symbol = Symbol();
 
-type StreamOptions = { signal?: AbortSignal; onCancel?: (reason: unknown) => void };
+type StreamOptions = {
+  signal?: AbortSignal;
+  onCancel?: (reason: unknown) => void;
+  doctype?: boolean;
+};
 
 const encoder = new TextEncoder();
 
@@ -31,7 +35,7 @@ export type Html = {
   [N]: true;
   parts: Part[];
   readonly generator: AsyncGenerator<string>;
-  toPromise: () => Promise<string>;
+  toPromise: (options?: { signal?: AbortSignal }) => Promise<string>;
   toReadableStream: (options?: StreamOptions) => ReadableStream<Uint8Array>;
 };
 
@@ -173,20 +177,44 @@ const htmlPrototype = {
     return render(this as unknown as Html);
   },
 
-  async toPromise(this: Html): Promise<string> {
-    let result = "";
-    for await (const chunk of this.generator) {
-      result += chunk;
+  async toPromise(this: Html, { signal }: { signal?: AbortSignal } = {}): Promise<string> {
+    signal?.throwIfAborted();
+    const generator = this.generator;
+    if (!signal) {
+      let result = "";
+      for await (const chunk of generator) {
+        result += chunk;
+      }
+      return result;
     }
-    return result;
+
+    const aborted = Promise.withResolvers<never>();
+    const onAbort = () => {
+      void generator.return(undefined).catch(() => {});
+      aborted.reject(signal.reason);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    aborted.promise.catch(() => {});
+
+    let result = "";
+    try {
+      while (true) {
+        const step = await Promise.race([generator.next(), aborted.promise]);
+        if (step.done) return result;
+        result += step.value;
+      }
+    } finally {
+      signal.removeEventListener("abort", onAbort);
+    }
   },
 
   toReadableStream(
     this: Html,
-    { signal, onCancel }: StreamOptions = {},
+    { signal, onCancel, doctype }: StreamOptions = {},
   ): ReadableStream<Uint8Array> {
     const generator = this.generator;
     let closed = false;
+    let first = !!doctype;
     let abort: (() => void) | undefined;
     const finish = () => {
       closed = true;
@@ -217,7 +245,12 @@ const htmlPrototype = {
             finish();
             controller.close();
           } else {
-            controller.enqueue(encoder.encode(step.value));
+            let chunk = step.value;
+            if (first) {
+              first = false;
+              if (/^<html(?:[\s>])/i.test(chunk)) chunk = "<!doctype html>" + chunk;
+            }
+            controller.enqueue(encoder.encode(chunk));
           }
         } catch (error) {
           if (!closed) {

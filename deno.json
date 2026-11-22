@@ -1,6 +1,6 @@
 {
   "name": "@mewhhaha/ruwuter",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Server-first TypeScript router for Web API runtimes with file-system routing and streaming JSX",
   "publish": {
     "include": [
@@ -31,7 +31,7 @@
     "fmt:check": "deno fmt --check",
     "test": "deno test -A test/",
     "test:dom": "deno test -A test-dom/",
-    "typecheck": "deno check src/ test/ test-dom/ test-browser/ examples/product.tsx",
+    "typecheck": "deno check src/ test/ test-dom/ test-browser/ examples/",
     "size": "deno run --allow-read --allow-run=deno scripts/build-resolver.ts --check && deno run --allow-run=deno scripts/check-size.ts",
     "ci": "deno task fmt:check && deno lint && deno task typecheck && deno task test && deno task test:dom && deno task size",
     "cf-typegen": "wrangler typegen",

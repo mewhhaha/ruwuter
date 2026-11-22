@@ -1,17 +1,19 @@
 /**
  * @module
  *
- * TypeScript utility types for Ruwuter applications.
- * Provides type inference helpers for components, loaders, actions, and headers.
+ * Legacy TypeScript utility types for the `@mewhhaha/ruwuter/legacy` loader/action router.
+ *
+ * @deprecated Prefer `HandlerContext` from `@mewhhaha/ruwuter` and generated `.router/types`
+ * `Context<Bindings>` with the 0.7 method router.
  *
  * @example
  * ```typescript
  * import type { InferComponentProps, InferLoaderArgs } from "@mewhhaha/ruwuter/types";
  *
- * // Infer component props from a module
+ * // Infer component props from a legacy route module
  * type Props = InferComponentProps<typeof import("./route.tsx")>;
  *
- * // Type-safe loader arguments
+ * // Type-safe legacy loader arguments
  * export const loader = (args: InferLoaderArgs<{ id: string }>) => {
  *   const userId = args.params.id; // typed as string
  *   return { user: await getUser(userId) };

@@ -32,7 +32,7 @@ describe("generateRouter", () => {
     }
   });
 
-  it("does not create matchable routes for pathless layouts", async () => {
+  it("does not create matchable routes or unused imports for pathless layouts", async () => {
     const app = await Deno.makeTempDir();
     try {
       const routesDir = join(app, "routes");
@@ -48,6 +48,7 @@ describe("generateRouter", () => {
       expect(patternMatches.length).toBe(1);
       expect(contents).toContain('pathname: "/b"');
       expect(contents).not.toContain('pathname: "/"');
+      expect(contents).not.toContain("./routes/_app.tsx");
     } finally {
       await Deno.remove(app, { recursive: true });
     }
@@ -215,6 +216,43 @@ describe("generateRouter", () => {
       const [routerFile] = await generateRouter(app);
 
       expect(routerFile.contents).toContain(JSON.stringify('./routes/quote["].tsx'));
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
+  it("sorts specificity by compiled URL segments rather than raw pathless or wildcard filenames", () => {
+    expect(["_marketing.promo.$id", "promo.featured"].sort(bySpecificity)).toEqual([
+      "promo.featured",
+      "_marketing.promo.$id",
+    ]);
+    expect(["_app.$id", "about"].sort(bySpecificity)).toEqual(["about", "_app.$id"]);
+    expect(["$", "products.$"].sort(bySpecificity)).toEqual(["products.$", "$"]);
+    expect(["a.$.b", "a.b"].sort(bySpecificity)).toEqual(["a.b", "a.$.b"]);
+  });
+
+  it("discovers directory routes with route.tsx or route.ts and ignores helper folders", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      const routesDir = join(app, "routes");
+      await Deno.mkdir(join(routesDir, "products"), { recursive: true });
+      await Deno.mkdir(join(routesDir, "api"), { recursive: true });
+      await Deno.mkdir(join(routesDir, "palette"), { recursive: true });
+      await Deno.writeTextFile(join(routesDir, "products", "route.tsx"), "export const GET = 1;");
+      await Deno.writeTextFile(join(routesDir, "api", "route.ts"), "export const GET = 1;");
+      await Deno.writeTextFile(
+        join(routesDir, "palette", "open-palette.client.ts"),
+        "export default 1;",
+      );
+
+      const [routerFile] = await generateRouter(app);
+      if (!routerFile) throw new Error("Router file not generated");
+
+      expect(routerFile.contents).toContain(
+        'import * as $products from "./routes/products/route.tsx";',
+      );
+      expect(routerFile.contents).toContain('import * as $api from "./routes/api/route.ts";');
+      expect(routerFile.contents).not.toContain("palette");
     } finally {
       await Deno.remove(app, { recursive: true });
     }

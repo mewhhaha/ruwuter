@@ -58,4 +58,36 @@ describe("JSX attribute typing", () => {
 
     expect(node != null).toBe(true);
   });
+
+  it("formats Date attributes, http-equiv meta tags, and standard boolean HTML attributes", async () => {
+    const date = new Date("2026-01-02T03:04:05.000Z");
+    const html = await (
+      <div>
+        <meta http-equiv="refresh" content="5" />
+        <time datetime={date}>Jan 2</time>
+        <fieldset disabled>
+          <select disabled multiple required>
+            <optgroup disabled label="Group">
+              <option disabled selected value="a">A</option>
+            </optgroup>
+          </select>
+          <textarea disabled />
+        </fieldset>
+        <ol reversed />
+        <video autoplay controls loop />
+        <audio autoplay controls loop />
+        <picture />
+        <search />
+        <slot />
+      </div>
+    ).toPromise();
+
+    expect(html).toContain('<meta http-equiv="refresh" content="5">');
+    expect(html).toContain('<time datetime="2026-01-02T03:04:05.000Z">Jan 2</time>');
+    expect(html).toContain('<fieldset disabled="">');
+    expect(html).toContain('<select disabled="" multiple="" required="">');
+    expect(html).toContain('<option disabled="" selected="" value="a">');
+    expect(html).toContain('<ol reversed="">');
+    expect(html).toContain('<video autoplay="" controls="" loop="">');
+  });
 });
