@@ -1,11 +1,22 @@
 /** @module HTTP method routing and streaming HTML responses. */
+import { runWithContextStore } from "./components/context.ts";
 import { renderRequest } from "./response.ts";
 import { resolverPath } from "./components/suspense.ts";
 import { resolverSource } from "./runtime/resolve-source.ts";
 
-export { html, renderToStream, renderToString } from "./response.ts";
+export { html, type HtmlOptions, renderToStream, renderToString } from "./response.ts";
 export { type Html, unsafeHTML } from "./runtime/node.ts";
 export type { JSX } from "./runtime/jsx.ts";
+
+export interface RouterOptions {
+  /**
+   * URL emitted for the auto-injected panel resolver `<script>` tag.
+   * Defaults to `"/_ruwuter/resolve-v1.js"` (root-relative, safe behind TLS-terminating
+   * reverse proxies). Pass an explicit URL or per-request resolver function when documents
+   * set a cross-origin `<base href>` or are served behind a subpath prefix.
+   */
+  resolverSrc?: string | ((request: Request) => string);
+}
 
 type Params = Record<string, string | undefined>;
 export interface HandlerContext<Bindings = unknown, Parameters = Params> {
@@ -64,17 +75,16 @@ export interface HttpRouter<Bindings = unknown> {
   fetch(request: Request, ...platform: PlatformArgs<Bindings>): Promise<Response>;
 }
 const methods: readonly Method[] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
-const resolverResponse = () =>
-  new Response(resolverSource, {
-    headers: {
-      "Content-Type": "text/javascript; charset=utf-8",
-      "Cache-Control": "public, max-age=86400",
-    },
-  });
+const resolverHeaders = {
+  "Content-Type": "text/javascript; charset=utf-8",
+  "Cache-Control": "public, max-age=86400",
+};
+const resolverResponse = () => new Response(resolverSource, { headers: resolverHeaders });
 
 /** Build a Fetch handler. Paths match in registration order. */
 export function router<Bindings = unknown>(
   table: readonly (readonly [URLPattern, RouteHandlers<Bindings, never>])[] = [],
+  options: RouterOptions = {},
 ): HttpRouter<Bindings> {
   const routes = new Map<
     Pattern,
@@ -114,6 +124,14 @@ export function router<Bindings = unknown>(
       return app.route(path, { POST: handler });
     },
     async fetch(request, ...[env, executionContext]) {
+      if (request.url.includes(resolverPath) && new URL(request.url).pathname === resolverPath) {
+        if (request.method === "GET") return resolverResponse();
+        if (request.method === "HEAD") {
+          return new Response(null, { status: 200, headers: resolverHeaders });
+        }
+        const status = request.method === "OPTIONS" ? 204 : 405;
+        return new Response(null, { status, headers: { Allow: "GET, HEAD, OPTIONS" } });
+      }
       for (const { pattern, handlers, allow } of routes.values()) {
         const match = pattern.exec(request.url);
         if (!match) continue;
@@ -125,21 +143,43 @@ export function router<Bindings = unknown>(
           if (request.method === "OPTIONS") status = 204;
           return new Response(null, { status, headers: { Allow: allow } });
         }
-        const lifetime = new AbortController();
-        const signal = AbortSignal.any([request.signal, lifetime.signal]);
-        signal.throwIfAborted();
-        const cancel = (reason: unknown) => lifetime.abort(reason);
+        request.signal.throwIfAborted();
+        let lifetime: AbortController | undefined;
+        let combined: AbortSignal | undefined;
+        let cancelled = false;
+        let cancelReason: unknown;
+        const getSignal = (): AbortSignal => {
+          if (!combined) {
+            lifetime = new AbortController();
+            if (cancelled) lifetime.abort(cancelReason);
+            combined = AbortSignal.any([request.signal, lifetime.signal]);
+          }
+          return combined;
+        };
+        const streamSignal = (): AbortSignal => combined ?? request.signal;
+        const cancel = (reason: unknown) => {
+          cancelled = true;
+          cancelReason = reason;
+          lifetime?.abort(reason);
+        };
+        const resolverSrc = typeof options.resolverSrc === "function"
+          ? options.resolverSrc(request)
+          : (options.resolverSrc ?? resolverPath);
+        const context: HandlerContext<Bindings> = {
+          request,
+          params: match.pathname.groups,
+          env: env as Bindings,
+          executionContext,
+          get signal() {
+            return getSignal();
+          },
+        };
         try {
-          const result = await renderRequest.withValue(
-            { signal, cancel, head, requestURL: request.url },
-            () =>
-              handler({
-                request,
-                params: match.pathname.groups,
-                env: env as Bindings,
-                executionContext,
-                signal,
-              }),
+          const result = await runWithContextStore(() =>
+            renderRequest.withValue(
+              { getSignal, streamSignal, cancel, head, resolverSrc },
+              () => handler(context),
+            )
           );
           if (!(result instanceof Response)) {
             throw new TypeError("A route handler must return a Response.");
@@ -172,7 +212,6 @@ export function router<Bindings = unknown>(
       return new Response(null, { status: 404 });
     },
   };
-  app.route(resolverPath, { GET: resolverResponse });
   for (const [pattern, handlers] of table) app.route(pattern, handlers as RouteHandlers<Bindings>);
   return app;
 }

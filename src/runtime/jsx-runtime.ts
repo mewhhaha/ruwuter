@@ -163,6 +163,7 @@ const sanitize = (value: unknown): string | undefined => {
     case "number":
       return value.toString();
     default:
+      if (value instanceof Date) return value.toISOString();
       return undefined;
   }
 };
@@ -194,7 +195,7 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
   if (tag) assertTagName(tag);
 
   let attrs = "";
-  for (const key in props) {
+  for (const key of Object.keys(props)) {
     if (key === "children") continue;
     const value = props[key];
 
@@ -247,7 +248,7 @@ export function jsx<Props extends { children?: unknown } & Record<string, unknow
   pushChild(parts, props.children);
 
   if (tag.toLowerCase() === "body") parts.push({ v: bodyTail, esc: false });
-  if (tag && !voidElements.has(tag)) {
+  if (tag && !voidElements.has(tag.toLowerCase())) {
     append(parts, `</${tag}>`);
   }
 

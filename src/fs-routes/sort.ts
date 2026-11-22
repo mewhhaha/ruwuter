@@ -1,17 +1,12 @@
-import { parseSegment, splitRouteSegments } from "./route-name.ts";
+import { patternSegments, type RouteSegment } from "./route-name.ts";
 
-const segments = (a: string) => splitRouteSegments(a);
-
-type SegmentInfo = {
-  weight: number;
-  optional: boolean;
-};
+const isBareWildcard = (segment: RouteSegment | undefined): boolean =>
+  segment?.kind === "wildcard" && segment.suffix === "";
 
 /** Literals beat suffixed dynamic segments, which beat bare dynamic segments. */
-const segmentInfo = (raw: string): SegmentInfo => {
-  const segment = parseSegment(raw);
-  if (segment.kind === "static") return { weight: 3, optional: segment.optional };
-  return { weight: segment.suffix.length > 0 ? 2 : 1, optional: segment.optional };
+const segmentWeight = (segment: RouteSegment): number => {
+  if (segment.kind === "static") return 3;
+  return segment.suffix.length > 0 ? 2 : 1;
 };
 
 /**
@@ -24,31 +19,29 @@ const segmentInfo = (raw: string): SegmentInfo => {
  * @internal
  */
 export const bySpecificity = (a: string, b: string): number => {
-  const aCatchAll = a.endsWith(".$");
-  const bCatchAll = b.endsWith(".$");
+  const aSegments = patternSegments(a);
+  const bSegments = patternSegments(b);
+  const aCatchAll = isBareWildcard(aSegments.at(-1));
+  const bCatchAll = isBareWildcard(bSegments.at(-1));
   if (aCatchAll !== bCatchAll) {
     return aCatchAll ? 1 : -1;
   }
-  const aSegments = segments(a);
-  const bSegments = segments(b);
   if (aSegments.length === bSegments.length) {
     for (let i = 0; i < aSegments.length; i++) {
-      const aInfo = segmentInfo(aSegments[i]);
-      const bInfo = segmentInfo(bSegments[i]);
-      if (aInfo.weight === bInfo.weight && aInfo.optional === bInfo.optional) {
-        continue;
+      const aSeg = aSegments[i];
+      const bSeg = bSegments[i];
+      const aWeight = segmentWeight(aSeg);
+      const bWeight = segmentWeight(bSeg);
+      if (aWeight !== bWeight) {
+        return bWeight - aWeight;
       }
 
-      if (aInfo.weight !== bInfo.weight) {
-        return bInfo.weight - aInfo.weight;
-      }
-
-      if (aInfo.optional !== bInfo.optional) {
-        return aInfo.optional ? 1 : -1;
+      if (aSeg.optional !== bSeg.optional) {
+        return aSeg.optional ? 1 : -1;
       }
     }
 
-    return a.localeCompare(b);
+    return a < b ? -1 : a > b ? 1 : 0;
   }
 
   return bSegments.length - aSegments.length;

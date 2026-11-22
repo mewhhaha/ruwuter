@@ -1,7 +1,7 @@
 /**
  * @module
  *
- * Browser runtime for explicit Ruwuter controllers and moved events.
+ * Browser runtime for explicit Ruwuter controllers.
  */
 
 import type { Controller, ControllerCleanup, JsonValue } from "../components/client.ts";
@@ -75,6 +75,13 @@ function initializeActivationRuntime(): void {
     return JSON.parse(text) as JsonValue;
   };
 
+  const ownsRef = (root: Element, element: Element): boolean => {
+    for (let node: Element | null = element; node && node !== root; node = node.parentElement) {
+      if (node.hasAttribute(CONTROLLER_ATTR)) return false;
+    }
+    return true;
+  };
+
   const collectRefs = (root: Element): Record<string, Element> => {
     const refs: Record<string, Element> = Object.create(null);
     const add = (element: Element) => {
@@ -87,7 +94,9 @@ function initializeActivationRuntime(): void {
     };
 
     add(root);
-    root.querySelectorAll(`[${REF_ATTR}]`).forEach((element) => add(element));
+    root.querySelectorAll(`[${REF_ATTR}]`).forEach((element) => {
+      if (ownsRef(root, element)) add(element);
+    });
 
     return new Proxy(refs, {
       get(target, prop: PropertyKey) {
@@ -196,8 +205,13 @@ function initializeActivationRuntime(): void {
   observer.observe(document, { childList: true, subtree: true });
 }
 
-if (typeof window !== "undefined") {
-  initializeActivationRuntime();
+const INSTALLED = Symbol.for("ruwuter.client.v1");
+
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  if (!Reflect.has(document, INSTALLED)) {
+    Reflect.set(document, INSTALLED, true);
+    initializeActivationRuntime();
+  }
 }
 
 export {};

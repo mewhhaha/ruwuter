@@ -5,9 +5,9 @@
  */
 
 import { createContext } from "./context.ts";
-import { Fragment, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
+import { type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
 import { registerBodyTail } from "../runtime/body-tail.ts";
-import { fromParts, into, rendered } from "../runtime/node.ts";
+import { fromParts, type Html, into, rendered } from "../runtime/node.ts";
 
 type Settled = { id: string; html: string };
 type SuspenseErrorFallback = JSX.HtmlNode | ((error: unknown) => JSX.HtmlNode);
@@ -15,8 +15,9 @@ type SuspenseErrorFallback = JSX.HtmlNode | ((error: unknown) => JSX.HtmlNode);
 type SuspenseRegistry = {
   /** Unique prefix that keeps this registry's boundary ids document-scoped. */
   prefix?: string;
-  requestURL?: string;
-  signal?: AbortSignal;
+  resolverSrc?: string;
+  nonce?: string;
+  getSignal?: () => AbortSignal;
   bootstrapped?: boolean;
   /** Monotonic id source for boundaries within one render. */
   counter: number;
@@ -28,19 +29,25 @@ type SuspenseRegistry = {
   wake: (() => void) | undefined;
 };
 
-const context = createContext<SuspenseRegistry | undefined>(undefined);
-const shell = createContext<SuspenseRegistry | undefined>(undefined);
+type SuspenseScope = {
+  registry: SuspenseRegistry;
+  isShell: boolean;
+};
+
+const context = createContext<SuspenseScope | undefined>(undefined);
 
 type SuspenseProps<AS extends keyof JSX.IntrinsicElements = "div"> = {
+  /** Tag name for the temporary fallback wrapper element. Replaced when content settles. */
   as?: AS;
   fallback: JSX.HtmlNode;
-  /** Content to replace the fallback when the boundary's child rejects. */
+  /** Content to render when the boundary's child rejects. */
   errorFallback?: SuspenseErrorFallback;
   children?: JSX.HtmlNode | (() => JSX.HtmlNode);
-} & Omit<JSX.IntrinsicElements[AS], "children">;
+} & Omit<JSX.IntrinsicElements[AS], "children" | "id">;
 
 /**
  * Suspense boundary that streams fallback immediately and resolved content later.
+ * Wrapper props (`as` and attributes) apply only to the fallback element before replacement.
  */
 export function Suspense<AS extends keyof JSX.IntrinsicElements = "div">({
   fallback,
@@ -51,16 +58,30 @@ export function Suspense<AS extends keyof JSX.IntrinsicElements = "div">({
 }: SuspenseProps<AS>): JSX.Element {
   return rendered(
     (async function* () {
-      const registry = context.use();
+      const scope = context.use();
       // Function children are called lazily by the renderer; escaping applies
       // to any plain-string results.
       const content = fromParts([{ v: children, esc: true }]);
 
-      if (!registry) {
-        // No registry -> render children directly (no fallback streaming)
-        yield* content.generator;
+      if (!scope) {
+        // No registry -> render children in document order
+        if (errorFallback === undefined) {
+          yield* content.generator;
+          return;
+        }
+        try {
+          yield await content.toPromise();
+        } catch (error) {
+          console.error("Suspense boundary failed", error);
+          let fallbackNode: unknown = errorFallback;
+          if (typeof errorFallback === "function") fallbackNode = await errorFallback(error);
+          yield* into(fallbackNode).generator;
+        }
         return;
       }
+
+      const { registry } = scope;
+      const signal = registry.getSignal?.();
 
       // With registry -> register the resolving content and stream fallback now
       registry.prefix ??= crypto.randomUUID();
@@ -71,25 +92,25 @@ export function Suspense<AS extends keyof JSX.IntrinsicElements = "div">({
       const run = async () => {
         let html: string | undefined;
         try {
-          html = await content.toPromise();
+          html = await content.toPromise({ signal });
         } catch (error) {
-          if (registry.signal?.aborted) return;
+          if (signal?.aborted) return;
           console.error("Suspense boundary failed", error);
           if (errorFallback === undefined) return;
           try {
-            let fallback: unknown = errorFallback;
-            if (typeof errorFallback === "function") fallback = await errorFallback(error);
-            html = await into(fallback).toPromise();
+            let fallbackNode: unknown = errorFallback;
+            if (typeof errorFallback === "function") fallbackNode = await errorFallback(error);
+            html = await into(fallbackNode).toPromise({ signal });
           } catch (cause) {
-            if (!registry.signal?.aborted) console.error("Suspense error fallback failed", cause);
+            if (!signal?.aborted) console.error("Suspense error fallback failed", cause);
           }
         } finally {
           registry.pending--;
-          if (html !== undefined && !registry.signal?.aborted) registry.queue.push({ id, html });
+          if (html !== undefined && !signal?.aborted) registry.queue.push({ id, html });
           registry.wake?.();
         }
       };
-      void shell.withValue(undefined, run);
+      void context.withValue({ registry, isShell: false }, run);
 
       // Emit fallback wrapper immediately
       yield* jsx(as ?? "div", { ...props, id, children: fallback }).generator;
@@ -104,26 +125,33 @@ export function Suspense<AS extends keyof JSX.IntrinsicElements = "div">({
 export const Resolve = (): JSX.Element => {
   return rendered(
     (async function* () {
-      const registry = context.use();
-      if (!registry) return;
+      const scope = context.use();
+      if (!scope) return;
+      const { registry } = scope;
+      const signal = registry.getSignal?.();
 
       while (registry.pending > 0 || registry.queue.length > 0) {
-        registry.signal?.throwIfAborted();
+        signal?.throwIfAborted();
         if (registry.queue.length === 0) {
           const next = Promise.withResolvers<void>();
           const wake = () => next.resolve();
           registry.wake = wake;
-          registry.signal?.addEventListener("abort", wake, { once: true });
+          signal?.addEventListener("abort", wake, { once: true });
           await next.promise;
-          registry.signal?.removeEventListener("abort", wake);
+          signal?.removeEventListener("abort", wake);
           registry.wake = undefined;
           continue;
         }
 
         const { id, html } = registry.queue.shift()!;
-        if (registry.requestURL && !registry.bootstrapped) {
+        if (registry.resolverSrc && !registry.bootstrapped) {
           registry.bootstrapped = true;
-          yield* jsx("script", { src: new URL(resolverPath, registry.requestURL).href }).generator;
+          const attrs: Record<string, string> = {
+            src: registry.resolverSrc,
+            "data-rw-resolver": "",
+          };
+          if (registry.nonce !== undefined) attrs.nonce = registry.nonce;
+          yield* jsx("script", attrs).generator;
         }
         yield `<template data-rw-target="${id}">${html}</template><!--rw-end-->`;
       }
@@ -147,13 +175,9 @@ export const SuspenseProvider = ({
     queue: [],
     wake: undefined,
   };
-  const provided = jsx(Fragment, {
+  return context.Provider({
+    value: { registry, isShell: false },
     children: [children, jsx(Resolve, {})],
-  });
-
-  return jsx(context.Provider, {
-    value: registry,
-    children: provided,
   });
 };
 
@@ -162,23 +186,28 @@ export const resolverPath = "/_ruwuter/resolve-v1.js";
 
 registerBodyTail(() => {
   const scope = context.use();
-  if (scope && scope === shell.use() && (scope.pending || scope.queue.length)) return Resolve();
+  if (scope?.isShell && (scope.registry.pending || scope.registry.queue.length)) return Resolve();
 });
 
 /** @internal Each response owns its boundaries, including fragment-only responses. */
-export function withPanels(value: unknown, signal: AbortSignal, requestURL: string): JSX.Element {
+export function withPanels(
+  value: Html,
+  options: { getSignal: () => AbortSignal; resolverSrc: string; nonce?: string },
+): JSX.Element {
   const registry: SuspenseRegistry = {
-    signal,
-    requestURL,
+    getSignal: options.getSignal,
+    resolverSrc: options.resolverSrc,
+    nonce: options.nonce,
     counter: 0,
     pending: 0,
     queue: [],
     wake: undefined,
   };
-  return shell.withValue(
-    registry,
-    () => context.Provider({ value: registry, children: [into(value), jsx(Resolve, {})] }),
-  );
+  const tail = () => (registry.pending || registry.queue.length) ? Resolve() : undefined;
+  return context.Provider({
+    value: { registry, isShell: true },
+    children: fromParts([...value.parts, { v: tail, esc: false }]),
+  });
 }
 
 /** @internal Capture the caller's application context, isolating the inner render's panel queue. */

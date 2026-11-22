@@ -60,6 +60,7 @@ export type SwapOptions = {
   allowRedirects?: boolean;
   sanitizer?: SwapSanitizer;
   trustedTypesPolicy?: TrustedTypePolicyValue;
+  /** Wrap the DOM write in `document.startViewTransition` when supported. Defaults to `false`. */
   viewTransition?: boolean;
 };
 
@@ -93,13 +94,7 @@ const trustedHTMLCtor =
   (globalThis as { TrustedHTML?: { new (...args: never[]): TrustedHTMLValue } }).TrustedHTML;
 
 const DEFAULT_CONTENT_TYPE = /\b(?:text\/html|application\/xhtml\+xml)\b/i;
-
-const isTrustedHTML = (value: unknown): value is TrustedHTMLValue =>
-  !!trustedHTMLCtor && value instanceof trustedHTMLCtor;
-
-const normalizeExpectedContentType = (
-  expected: SwapOptions["expectedContentType"],
-): RegExp | string | false => expected === undefined ? DEFAULT_CONTENT_TYPE : expected;
+const RESOLVER_SCRIPT = "script[data-rw-resolver]";
 
 const assertResponseAllowed = (
   response: Response,
@@ -114,10 +109,10 @@ const assertResponseAllowed = (
     throw new Error("swap: redirected responses are disabled for this swap.");
   }
 
-  const contentType = response.headers.get("Content-Type") ?? "";
-  const expectedContentType = normalizeExpectedContentType(expected);
+  const expectedContentType = expected ?? DEFAULT_CONTENT_TYPE;
   if (expectedContentType === false) return;
 
+  const contentType = response.headers.get("Content-Type") ?? "";
   const matches = typeof expectedContentType === "string"
     ? contentType.toLowerCase().includes(expectedContentType.toLowerCase())
     : expectedContentType.test(contentType);
@@ -131,18 +126,15 @@ const assertResponseAllowed = (
   }
 };
 
-const throwIfAborted = (signal?: AbortSignal | null): void => {
-  signal?.throwIfAborted();
-};
-
 const readResponse = async (
   response: Response,
   options: Pick<SwapOptions, "allowRedirects" | "expectedContentType" | "init">,
 ): Promise<string> => {
-  throwIfAborted(options.init?.signal);
+  const signal = options.init?.signal;
+  signal?.throwIfAborted();
   assertResponseAllowed(response, options.expectedContentType, options.allowRedirects);
   const text = await response.text();
-  throwIfAborted(options.init?.signal);
+  signal?.throwIfAborted();
   return text;
 };
 
@@ -152,12 +144,13 @@ const toHtml = async (
 ): Promise<{ html: string | TrustedHTMLValue; response: Response | null }> => {
   if (options.html !== undefined) return { html: options.html, response: null };
   if (options.unsafeHTML !== undefined) return { html: options.unsafeHTML, response: null };
-  if (isTrustedHTML(input)) {
-    return { html: input, response: null };
+  if (trustedHTMLCtor && input instanceof trustedHTMLCtor) {
+    return { html: input as TrustedHTMLValue, response: null };
   }
 
+  const signal = options.init?.signal;
   let resolvedInput = await input;
-  throwIfAborted(options.init?.signal);
+  signal?.throwIfAborted();
 
   if (typeof resolvedInput === "string") {
     throw new TypeError(
@@ -173,7 +166,7 @@ const toHtml = async (
   }
   if (resolvedInput && typeof (resolvedInput as { text?: unknown }).text === "function") {
     const text = await (resolvedInput as { text: () => Promise<string> }).text();
-    throwIfAborted(options.init?.signal);
+    signal?.throwIfAborted();
     return { html: text, response: null };
   }
   return { html: "", response: null };
@@ -231,7 +224,7 @@ const runWithTransition = async (
   update: () => void,
   enabled?: boolean,
 ): Promise<void> => {
-  if (enabled === false || !document.startViewTransition) {
+  if (!enabled || !document.startViewTransition) {
     update();
     return;
   }
@@ -255,7 +248,7 @@ export const swap = async (
 
   const { html, response } = await toHtml(input, options);
   const domValue = await prepareDomValue(html, options, response);
-  const resolvedText = typeof domValue === "string" ? domValue : String(domValue);
+  const resolvedText = String(domValue);
 
   await runWithTransition(() => {
     if (writeMode === "remove" || !resolvedText.includes("<!--rw-end-->")) {
@@ -267,10 +260,15 @@ export const swap = async (
     if (writeMode !== "innerHTML") {
       scope = (target.parentNode ?? target) as typeof scope;
       // Only nodes introduced by this write participate in the protocol.
-      existing = new Set(scope.querySelectorAll("[id],template[data-rw-target]"));
+      existing = new Set(
+        scope.querySelectorAll(`[id],template[data-rw-target],${RESOLVER_SCRIPT}`),
+      );
     }
     applySwap(target, writeMode, domValue);
     resolvePanels(scope, existing);
+    for (const script of scope.querySelectorAll(RESOLVER_SCRIPT)) {
+      if (!existing?.has(script)) script.remove();
+    }
   }, options.viewTransition);
 
   return {

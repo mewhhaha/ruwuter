@@ -395,4 +395,66 @@ describe("Activation runtime DOM behaviour", () => {
       cleanup();
     }
   });
+
+  it("scopes refs to the nearest enclosing controller without colliding across nested controllers", async () => {
+    const outerHref = registerController(({ root, refs }: any) => {
+      root.setAttribute("data-outer-btn", refs.trigger.getAttribute("id"));
+      let leaked = false;
+      try {
+        void refs.innerOnly;
+        leaked = true;
+      } catch {
+        // Expected: child controller refs must not leak to outer controller.
+      }
+      root.setAttribute("data-leaked", String(leaked));
+    });
+    const innerHref = registerController(({ root, refs }: any) => {
+      root.setAttribute("data-inner-btn", refs.trigger.getAttribute("id"));
+      root.setAttribute("data-inner-only", refs.innerOnly.getAttribute("id"));
+    });
+
+    const html = `
+      <section id="outer" data-rw-controller="${outerHref}">
+        <button id="outer-trigger" data-rw-ref="trigger" type="button">Outer</button>
+        <div id="inner" data-rw-controller="${innerHref}">
+          <button id="inner-trigger" data-rw-ref="trigger" type="button">Inner</button>
+          <span id="inner-span" data-rw-ref="innerOnly">Only</span>
+        </div>
+      </section>
+    `;
+    const { doc, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+      const outer = doc.getElementById("outer");
+      const inner = doc.getElementById("inner");
+      await waitFor(() =>
+        outer?.getAttribute("data-outer-btn") === "outer-trigger" &&
+        inner?.getAttribute("data-inner-btn") === "inner-trigger"
+      );
+      expect(outer?.getAttribute("data-leaked")).toBe("false");
+      expect(inner?.getAttribute("data-inner-only")).toBe("inner-span");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("does not double-mount controllers when the runtime is loaded twice on the same document", async () => {
+    let mounts = 0;
+    const href = registerController(({ root }: any) => {
+      mounts += 1;
+      root.setAttribute("data-mounts", String(mounts));
+    });
+    const html = await render(href);
+    const { doc, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+      await import(nextRuntimeUrl());
+      const root = doc.getElementById("controller-root");
+      await waitFor(() => root?.getAttribute("data-mounts") === "1");
+      await new Promise((r) => setTimeout(r, 20));
+      expect(mounts).toBe(1);
+    } finally {
+      cleanup();
+    }
+  });
 });

@@ -29,7 +29,8 @@ Handlers return a standard Response. Use `html()` for documents and fragments, `
 data, and `Response.redirect()` for redirects. Make status and authorization decisions before
 returning. Once a body has started, a rendering failure ends the stream. An HTML root gets a
 doctype. Plain text, including strings produced asynchronously, is escaped. `unsafeHTML(string)`
-inserts trusted markup. Applications choose which URLs to put in HTML attributes.
+inserts trusted markup (including raw CSS/JS inside `<style>` or `<script>`). Applications choose
+which URLs to put in HTML attributes.
 
 Register other methods with `.route(path, { PUT, PATCH, DELETE, HEAD, OPTIONS })`. The first
 matching pattern owns the request. Repeated registrations of the same path string add methods. GET
@@ -64,11 +65,16 @@ const page = html(
 ```
 
 Inside a routed response, panels share a request-local queue. After the shell the renderer emits a
-single external classic script before the first replacement. Each template has a trailing completion
-marker so the browser can safely apply a panel delivered over multiple network reads. Serve the
-reserved `/_ruwuter/resolve-v1.js` path through the same router and allow same-origin scripts in
-your CSP. With scripting disabled, the reader keeps the fallback. Outside a routed response,
-`html()`, `renderToString()`, and `renderToStream()` render deferred children in order.
+single external classic script before the first replacement. Each template has a trailing
+`<!--rw-end-->` completion marker so the browser can safely apply a panel delivered over multiple
+network reads (keep HTML comments intact through proxies or sanitizers). By default the script uses
+the root-relative `/_ruwuter/resolve-v1.js` path served by the same router, which stays same-origin
+behind TLS-terminating reverse proxies; pass `resolverSrc` to `router(routes, { resolverSrc })` or
+`html(node, { resolverSrc, nonce })` when documents set a cross-origin `<base href>`, live behind a
+subpath prefix, or enforce a nonce-based CSP. Wrapper props (`as` and attributes) apply only to the
+temporary fallback element before replacement. With scripting disabled, the reader keeps the
+fallback. Outside a routed response, `html()`, `renderToString()`, and `renderToStream()` render
+deferred children in order while still honoring `errorFallback`.
 
 ## Add a little browser behavior
 
@@ -100,10 +106,11 @@ const activation = <script type="module" src={clientRuntime}></script>;
 
 Include the activation script once on pages with controllers. Vite emits the typed controller URL
 and compiled runtime. Without Vite, serve the compiled browser modules yourself and pass their
-same-origin URLs. Use static `ref={mounted.refs.name}` tokens for a multi-element widget. For a
-targeted refresh, fetch an ordinary HTML route and pass the response to `swap` from
-`@mewhhaha/ruwuter/browser`. A buffered swap applies completed panels even when the host page
-started without a resolver.
+same-origin URLs. Use static `ref={mounted.refs.name}` tokens for a multi-element widget (refs are
+scoped to their nearest enclosing controller). For a targeted refresh, fetch an ordinary HTML route
+and pass the response to `swap` from `@mewhhaha/ruwuter/browser`. A buffered swap applies completed
+panels even when the host page started without a resolver, strips inert resolver scripts from the
+swapped fragment, and opts into View Transitions only when `viewTransition: true` is passed.
 
 ## Optional file routes
 
@@ -131,8 +138,8 @@ nor Vite.
 - Move loader status decisions into named method handlers. Compose nested layouts explicitly and put
   slow reads in their own components. Give each fragment an ordinary GET or POST URL.
 - The previous `Router`, `fragment`, and loader types are available from `@mewhhaha/ruwuter/legacy`
-  for applications migrating existing route tables. Update imports in those tables before
-  regenerating for 0.7.
+  (and legacy inference helpers from `@mewhhaha/ruwuter/types`) for applications migrating existing
+  route tables. Update imports in those tables before regenerating for 0.7.
 - Replace `client()`, `move()` and JSX event directives with a controller. Remove `clientMacro` from
   Vite options and remove the `navigate.js` script. Links and forms now use native navigation.
 - Replace raw HTML strings and `dangerouslySetInnerHTML` with `unsafeHTML(trustedMarkup)`.

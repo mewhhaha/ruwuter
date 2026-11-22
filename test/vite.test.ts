@@ -318,6 +318,30 @@ export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
       expect(mod.direct.startsWith("data:")).toBe(false);
       const chunk = await Deno.readTextFile(join(dist, mod.open.slice("/docs/".length)));
       expect(chunk).toContain("defineController");
+      expect(mod.open).toBe(mod.direct);
+
+      // Rebuilding unchanged inputs yields deterministic content-hashed chunk names.
+      const dist2 = join(app, "dist2");
+      await build({
+        root: app,
+        base: "/docs/",
+        configFile: false,
+        logLevel: "silent",
+        plugins: [ruwuter({ appFolder: app })],
+        resolve: {
+          alias: [{ find: "@mewhhaha/ruwuter/browser", replacement: resolve("src/browser.ts") }],
+        },
+        build: {
+          outDir: dist2,
+          ssr: join(app, "entry.ts"),
+          minify: false,
+          rolldownOptions: { output: { entryFileNames: "entry.js" } },
+        },
+      });
+      const mod2 = await import(pathToFileURL(join(dist2, "entry.js")).href) as {
+        open: string;
+      };
+      expect(mod2.open).toBe(mod.open);
     } finally {
       await Deno.remove(app, { recursive: true }).catch(() => {});
       await Deno.remove(typesRoot, { recursive: true }).catch(() => {});

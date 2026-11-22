@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 type Context = { emitFile(file: { type: "chunk"; id: string; fileName?: string }): string };
@@ -8,29 +10,36 @@ const URL_PREFIX = "\0ruwuter-controller-url:";
 
 const publicId = (id: string): string => `/@id/${id.replace("\0", "__x00__")}`;
 
+const toFsUrl = (absolute: string): string => {
+  const posixPath = absolute.split(path.sep).join("/");
+  return posixPath.startsWith("/") ? `/@fs${posixPath}` : `/@fs/${posixPath}`;
+};
+
 /** Converts generated controller imports into executable Vite module URLs. */
 export class ControllerUrls {
   #modules = new Map<string, string>();
-  #nextFile = 0;
+  #sources = new Map<string, string>();
+  #emitted = new Map<string, string>();
 
   constructor(
     private readonly isBuild: () => boolean,
     private readonly appFolder: string,
     private readonly base: () => string,
-    private readonly buildId: string,
   ) {}
 
   register(importer: string, source: string): string {
-    const importerPath = importer.startsWith("/") && !importer.startsWith(this.appFolder)
-      ? path.join(this.appFolder, importer)
-      : importer;
+    const cleanImporter = importer.split("?", 1)[0];
+    const importerPath = cleanImporter.startsWith("/") && !cleanImporter.startsWith(this.appFolder)
+      ? path.join(this.appFolder, cleanImporter)
+      : cleanImporter;
     const absolute = path.resolve(
       path.dirname(importerPath),
       source.startsWith("/") ? `.${source}` : source,
     );
     const moduleId = `${MODULE_PREFIX}${encodeURIComponent(absolute)}`;
     const urlId = `${URL_PREFIX}${encodeURIComponent(absolute)}`;
-    this.#modules.set(moduleId, `export { default } from ${JSON.stringify(`/@fs/${absolute}`)};\n`);
+    this.#sources.set(moduleId, absolute);
+    this.#modules.set(moduleId, `export { default } from ${JSON.stringify(toFsUrl(absolute))};\n`);
     this.#modules.set(urlId, moduleId);
     return urlId;
   }
@@ -50,8 +59,23 @@ export class ControllerUrls {
     if (!module) return;
     if (id.startsWith(MODULE_PREFIX)) return module;
     if (!this.isBuild()) return `export default ${JSON.stringify(publicId(module))};\n`;
-    const fileName = `assets/ruwuter-controller-${this.buildId}-${this.#nextFile++}.js`;
-    context.emitFile({ type: "chunk", id: module, fileName });
+    let fileName = this.#emitted.get(id);
+    if (!fileName) {
+      const absolute = this.#sources.get(module) ?? module;
+      const hash = createHash("sha256");
+      hash.update(path.relative(this.appFolder, absolute).split(path.sep).join("/"));
+      hash.update("\0");
+      try {
+        hash.update(readFileSync(absolute));
+      } catch {
+        hash.update(absolute);
+      }
+      const slug = path.basename(absolute).replace(/\.client\.tsx?$/, "")
+        .replace(/[^A-Za-z0-9_-]+/g, "-") || "controller";
+      fileName = `assets/ruwuter-controller-${slug}-${hash.digest("hex").slice(0, 8)}.js`;
+      context.emitFile({ type: "chunk", id: module, fileName });
+      this.#emitted.set(id, fileName);
+    }
     const base = this.base();
     return `export default ${
       JSON.stringify(`${base.endsWith("/") ? base : `${base}/`}${fileName}`)

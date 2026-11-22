@@ -2,6 +2,7 @@ import { assert, assertEquals } from "@std/assert";
 import { chromium, firefox, webkit } from "playwright-core";
 import { productApp } from "../examples/product.tsx";
 import { html, unsafeHTML } from "../src/router.ts";
+import { controller } from "../src/browser.ts";
 import { Deferred } from "../src/components/index.ts";
 
 for (const engine of [chromium, firefox, webkit]) {
@@ -25,7 +26,6 @@ for (const engine of [chromium, firefox, webkit]) {
       html(
         <html>
           <head>
-            <base href="https://example.invalid/" />
             <title>Panels</title>
           </head>
           <body>
@@ -45,16 +45,83 @@ for (const engine of [chromium, firefox, webkit]) {
             </Deferred>
           </body>
         </html>,
-      ));
+      ))
+      .get("/base-panels", ({ request }) =>
+        html(
+          <html>
+            <head>
+              <base href="https://example.invalid/" />
+              <title>Base Panels</title>
+            </head>
+            <body>
+              <Deferred fallback={<p id="base-wait">Loading</p>}>
+                <p id="base-ready">Ready with base and nonce</p>
+              </Deferred>
+            </body>
+          </html>,
+          {
+            resolverSrc: new URL("/_ruwuter/resolve-v1.js", request.url).href,
+            nonce: "test-nonce",
+            headers: {
+              "Content-Security-Policy": "script-src 'nonce-test-nonce'",
+            },
+          },
+        ));
     const bundle = await new Deno.Command(Deno.execPath(), {
       args: ["bundle", "--platform=browser", "--quiet", "src/runtime/swap.ts"],
       stdout: "piped",
     }).output();
     assert(bundle.success);
+    const clientBundle = await new Deno.Command(Deno.execPath(), {
+      args: ["bundle", "--platform=browser", "--quiet", "src/runtime/client.ts"],
+      stdout: "piped",
+    }).output();
+    assert(clientBundle.success);
     app.get(
       "/swap.js",
       () => new Response(bundle.stdout, { headers: { "content-type": "text/javascript" } }),
     )
+      .get(
+        "/client.js",
+        () => new Response(clientBundle.stdout, { headers: { "content-type": "text/javascript" } }),
+      )
+      .get(
+        "/outer.client.js",
+        () =>
+          new Response(
+            `export default ({ root, refs, props }) => {
+              root.dataset.mounted = props.role + ":" + refs.trigger.id;
+            };`,
+            { headers: { "content-type": "text/javascript" } },
+          ),
+      )
+      .get(
+        "/inner.client.js",
+        () =>
+          new Response(
+            `export default ({ root, refs, props }) => {
+              root.dataset.mounted = props.role + ":" + refs.trigger.id;
+            };`,
+            { headers: { "content-type": "text/javascript" } },
+          ),
+      )
+      .get("/controllers", () => {
+        const outer = controller("/outer.client.js", { role: "outer" });
+        const inner = controller("/inner.client.js", { role: "inner" });
+        return html(
+          <html>
+            <body>
+              <section id="outer" {...outer.root()}>
+                <button id="outer-btn" type="button" ref={outer.refs.trigger}>Outer</button>
+                <div id="inner" {...inner.root()}>
+                  <button id="inner-btn" type="button" ref={inner.refs.trigger}>Inner</button>
+                </div>
+              </section>
+              <script type="module" src="/client.js"></script>
+            </body>
+          </html>,
+        );
+      })
       .get("/host", () =>
         html(
           <main>
@@ -130,17 +197,36 @@ for (const engine of [chromium, firefox, webkit]) {
         slow.resolve();
         await page.locator("#slow").waitFor();
         assertEquals(await page.locator("script[src]").count(), 1);
+
+        await page.goto(url + "/base-panels");
+        await page.locator("#base-ready").waitFor();
+        assertEquals(
+          await page.evaluate(
+            () =>
+              (document.querySelector("script[data-rw-resolver]") as HTMLScriptElement | null)
+                ?.nonce,
+          ),
+          "test-nonce",
+        );
+
         for (const mode of ["innerHTML", "outerHTML", "beforebegin", "afterend"] as const) {
           await page.goto(url + "/host");
           assertEquals(await page.locator("script").count(), 0);
           await page.evaluate(async ({ moduleUrl, mode }) => {
             const { swap } = await import(moduleUrl);
-            await swap(fetch("/part"), { target: "#slot", write: mode, viewTransition: false });
+            await swap(fetch("/part"), { target: "#slot", write: mode });
           }, { moduleUrl: url + "/swap.js", mode });
           await page.getByText("Finished fragment", { exact: true }).waitFor();
           assertEquals(await page.locator("#outside").textContent(), "Keep");
           assertEquals(await page.locator("template[data-rw-target]").count(), 1);
+          assertEquals(await page.locator("script").count(), 0);
         }
+
+        await page.goto(url + "/controllers");
+        await page.waitForFunction(() =>
+          document.getElementById("outer")?.dataset.mounted === "outer:outer-btn" &&
+          document.getElementById("inner")?.dataset.mounted === "inner:inner-btn"
+        );
       } finally {
         await browser.close();
       }

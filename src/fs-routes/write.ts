@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { generate } from "./js.ts";
 import { generateControllers, GENERATED_CONTROLLERS_MARKER } from "./generate-controllers.ts";
@@ -6,6 +6,38 @@ import { assertInsideGeneratedTypesRoot, generatedTypesRoot } from "./paths.ts";
 import type { GeneratedFile, GenerateResult } from "./types.ts";
 
 export { generatedTypesRoot } from "./paths.ts";
+
+const writeIfChanged = async (outputPath: string, contents: string): Promise<void> => {
+  const absolutePath = path.resolve(outputPath);
+  const existing = await readFile(absolutePath, "utf8").catch(() => undefined);
+  if (existing === contents) return;
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, contents);
+};
+
+const pruneStaleTypes = async (dir: string, keep: ReadonlySet<string>): Promise<boolean> => {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") return true;
+    throw error;
+  }
+  let empty = true;
+  for (const entry of entries) {
+    const entryPath = path.resolve(dir, entry.name);
+    if (entry.isDirectory()) {
+      const childEmpty = await pruneStaleTypes(entryPath, keep);
+      if (childEmpty) await rm(entryPath, { recursive: true, force: true });
+      else empty = false;
+    } else if (!keep.has(entryPath)) {
+      await rm(entryPath, { force: true });
+    } else {
+      empty = false;
+    }
+  }
+  return empty;
+};
 
 /**
  * Generates the controller barrel and reconciles it with whatever
@@ -35,14 +67,15 @@ export const writeGeneratedFiles = async (
   const typesRoot = generatedTypesRoot(appFolder);
 
   assertInsideGeneratedTypesRoot(typesRoot);
-  await rm(typesRoot, { recursive: true, force: true });
+  const keepTypes = new Set(types.map(({ path: outputPath }) => path.resolve(outputPath)));
+  if (keepTypes.size === 0) {
+    await rm(typesRoot, { recursive: true, force: true });
+  } else {
+    await pruneStaleTypes(typesRoot, keepTypes);
+  }
 
   await Promise.all(
-    files.map(async ({ path: outputPath, contents }) => {
-      const absolutePath = path.resolve(outputPath);
-      await mkdir(path.dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, contents);
-    }),
+    files.map(({ path: outputPath, contents }) => writeIfChanged(outputPath, contents)),
   );
 
   return generated;

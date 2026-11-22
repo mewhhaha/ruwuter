@@ -1,5 +1,3 @@
-"use client";
-
 import { defineController, on } from "@mewhhaha/ruwuter/browser";
 
 export type OpenPaletteController = {
