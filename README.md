@@ -1,13 +1,33 @@
 # Ruwuter
 
-A tiny Fetch router for streaming HTML. A route can send the page heading, links, and form while an
+A tiny Fetch router for streaming HTML. A route can send the page heading, links, and forms while an
 async JSX component is still fetching data. Native navigation and ordered streaming use zero browser
 JavaScript.
 
-## Start with a route
+- [Design notes](https://github.com/mewhhaha/ruwuter/blob/main/docs/router-design.md)
+- [0.6 → 0.7 benchmarks](https://github.com/mewhhaha/ruwuter/blob/main/docs/benchmarks/README.md)
+- [Full product example](https://github.com/mewhhaha/ruwuter/blob/main/examples/product.tsx)
 
-Install with `deno add jsr:@mewhhaha/ruwuter` or `pnpm add jsr:@mewhhaha/ruwuter`. Set
-`compilerOptions.jsx` to `"react-jsx"` and `jsxImportSource` to `"@mewhhaha/ruwuter"`.
+## Install & Quick Start
+
+```sh
+deno add jsr:@mewhhaha/ruwuter
+# or
+pnpm add jsr:@mewhhaha/ruwuter
+```
+
+Configure JSX in `deno.json` or `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@mewhhaha/ruwuter"
+  }
+}
+```
+
+Create a router and export its Fetch handler:
 
 ```tsx
 import { html, router } from "@mewhhaha/ruwuter";
@@ -16,107 +36,185 @@ const app = router()
   .get("/hello/:name", ({ params }) => html(<h1>Hello {params.name}</h1>))
   .post("/messages", async ({ request }) => {
     const data = await request.formData();
-    return html(<p>Received {String(data.get("message"))}</p>, { status: 201 });
+    return html(<p>Received {String(data.get("message") ?? "")}</p>, { status: 201 });
   });
 
 export default { fetch: app.fetch };
 ```
 
-Use `Deno.serve(app.fetch)` on Deno or export the Fetch handler on Workers. The server needs Fetch,
-Web Streams, URLPattern, and AsyncLocalStorage. On Workers enable `nodejs_als` or `nodejs_compat`.
+Run `Deno.serve(app.fetch)` on Deno or export `{ fetch: app.fetch }` on Cloudflare Workers. The
+server runtime needs Fetch, Web Streams, `URLPattern`, and `AsyncLocalStorage` (on Workers, enable
+`nodejs_als` or `nodejs_compat`).
 
-Handlers return a standard Response. Use `html()` for documents and fragments, `Response.json()` for
-data, and `Response.redirect()` for redirects. Make status and authorization decisions before
-returning. Once a body has started, a rendering failure ends the stream. An HTML root gets a
-doctype. Plain text, including strings produced asynchronously, is escaped. `unsafeHTML(string)`
-inserts trusted markup (including raw CSS/JS inside `<style>` or `<script>`). Applications choose
-which URLs to put in HTML attributes.
+### Responses & escaping
 
-Register other methods with `.route(path, { PUT, PATCH, DELETE, HEAD, OPTIONS })`. The first
-matching pattern owns the request. Repeated registrations of the same path string add methods. GET
-supplies a bodyless HEAD by default. OPTIONS and 405 include Allow. A miss returns 404.
-`router<Bindings>()` types the platform bindings at `ctx.env`. Pass `ctx.signal` into fetches and
-other interruptible work. Explicit OPTIONS handlers can supply their own Allow value. Cancelling a
-routed HTML body also signals its handler's work.
+- Handlers return a standard `Response`: use `html()` for documents and fragments, `Response.json()`
+  for data, and `Response.redirect()` for redirects.
+- Make auth, redirect, and status decisions before returning `html()`. Once streaming starts, a
+  rendering error ends the stream.
+- An `<html>` root automatically gets `<!doctype html>`.
+- Plain text—including strings produced asynchronously—is HTML-escaped everywhere. Use
+  `unsafeHTML(markup)` for explicitly trusted markup (including raw CSS/JS inside `<style>` or
+  `<script>`). Applications validate any user-controlled URL attributes.
 
-## Stream slow content
+### Methods, bindings & cancellation
 
-Put essential content in an ordinary async component. The browser displays earlier siblings while it
-waits, including when JavaScript is disabled. The [product example](./examples/product.tsx) renders
-the heading and a native review form before reviews arrive. Its POST handler saves once and responds
-with a 303 redirect.
+- Register additional methods with `.route(path, { PUT, PATCH, DELETE, HEAD, OPTIONS })`.
+- The first matching pattern owns the request; repeated registrations of the same path string add
+  methods to that route.
+- `GET` provides a bodyless `HEAD` automatically. `OPTIONS` (204) and `405` include `Allow`;
+  explicit `OPTIONS` handlers can set their own `Allow` header. Unmatched requests return `404`.
+- Type platform bindings with `router<Bindings>()` (`ctx.env`) and pass `ctx.signal` into fetches or
+  other interruptible work. Cancelling a routed HTML response aborts its handler's signal.
 
-For independent sections that can appear in completion order, use a deferred panel.
+## Streaming HTML
+
+### Ordered streaming (zero JS)
+
+Put essential content in an ordinary async component. The browser renders earlier siblings while it
+waits—even with JavaScript disabled:
 
 ```tsx
-import { Deferred } from "@mewhhaha/ruwuter/components";
+async function Reviews({ id, signal }: { id: string; signal: AbortSignal }) {
+  const items = await loadReviews(id, signal);
+  return <ul>{items.map((text) => <li>{text}</li>)}</ul>;
+}
 
-const page = html(
-  <main>
-    <h1>Activity</h1>
-    <Deferred
-      fallback={<a href="/activity">View activity</a>}
-      errorFallback={<p>Activity is unavailable.</p>}
-    >
-      {async () => <ul>{await activityItems()}</ul>}
-    </Deferred>
-  </main>,
-);
+app.get("/products/:id", async ({ params, signal }) => {
+  const product = await loadProduct(params.id, signal);
+  if (!product) return new Response(null, { status: 404 });
+
+  return html(
+    <main>
+      <h1>{product.name}</h1>
+      <form method="post" action={`/products/${params.id}/reviews`}>
+        <input name="review" required />
+        <button type="submit">Save review</button>
+      </form>
+      <Reviews id={params.id} signal={signal} />
+    </main>,
+  );
+});
 ```
 
-Inside a routed response, panels share a request-local queue. After the shell the renderer emits a
-single external classic script before the first replacement. Each template has a trailing
-`<!--rw-end-->` completion marker so the browser can safely apply a panel delivered over multiple
-network reads (keep HTML comments intact through proxies or sanitizers). By default the script uses
-the root-relative `/_ruwuter/resolve-v1.js` path served by the same router, which stays same-origin
-behind TLS-terminating reverse proxies; pass `resolverSrc` to `router(routes, { resolverSrc })` or
-`html(node, { resolverSrc, nonce })` when documents set a cross-origin `<base href>`, live behind a
-subpath prefix, or enforce a nonce-based CSP. Wrapper props (`as` and attributes) apply only to the
-temporary fallback element before replacement. With scripting disabled, the reader keeps the
-fallback. Outside a routed response, `html()`, `renderToString()`, and `renderToStream()` render
-deferred children in order while still honoring `errorFallback`.
+See the complete
+[product example](https://github.com/mewhhaha/ruwuter/blob/main/examples/product.tsx) for the
+matching `POST` handler with a `303` redirect.
 
-## Add a little browser behavior
+### Out-of-order panels (`Deferred`)
 
-Use native links, form submissions, and dialog commands first. For a widget, put a controller on the
-element that owns it. The module receives its root, JSON props, typed refs, and a signal. Removal
-aborts the signal and runs cleanup. Moving the root within the document preserves the controller.
+For independent sections that can settle in completion order, wrap them in `Deferred`:
+
+```tsx
+import { html, router } from "@mewhhaha/ruwuter";
+import { Deferred } from "@mewhhaha/ruwuter/components";
+
+const app = router().get("/activity", () =>
+  html(
+    <main>
+      <h1>Activity</h1>
+      <Deferred
+        fallback={<a href="/activity/full">View activity</a>}
+        errorFallback={<p>Activity is unavailable.</p>}
+      >
+        {async () => <ul>{await activityItems()}</ul>}
+      </Deferred>
+    </main>,
+  ));
+```
+
+- **Protocol**: Inside a routed response, panels share a request-local queue. After the shell,
+  Ruwuter emits a single external classic `<script>` before the first replacement and a trailing
+  `<!--rw-end-->` marker after each `<template>` so split network chunks apply safely. Keep HTML
+  comments intact through proxies or sanitizers.
+- **Reverse proxies, `<base href>`, & CSP**: By default the script uses the root-relative
+  `/_ruwuter/resolve-v1.js` path served by the same router, staying same-origin behind
+  TLS-terminating proxies. Pass `resolverSrc` to `router(routes, { resolverSrc })` or
+  `html(node, { resolverSrc, nonce })` when documents set a cross-origin `<base href>`, live under a
+  subpath prefix, or enforce a nonce-based CSP.
+- **Fallbacks & standalone rendering**: Wrapper props (`as` and HTML attributes) apply only to the
+  temporary fallback element before replacement. With scripting disabled, readers keep the fallback.
+  Outside a routed response, `html()`, `renderToString()`, and `renderToStream()` render deferred
+  children in order while still honoring `errorFallback`.
+- **Server context**: Use `createContext()` from `@mewhhaha/ruwuter/components` to pass request or
+  layout values into async components and deferred panels.
+
+## Optional Browser Behavior
+
+Start with native links, forms, and `<dialog>` commands. Add JavaScript only where a widget needs
+local state or a partial DOM update.
+
+### Controllers
+
+Attach a same-origin browser module to the element that owns a widget. The controller receives its
+`root`, JSON `props`, typed `refs`, and an `AbortSignal`. Removing the root aborts the signal and
+runs any returned cleanup; moving the root within the document preserves the instance.
 
 ```ts
 // app/counter.client.ts
 import { defineController, on } from "@mewhhaha/ruwuter/browser";
 
-export default defineController<{ props: { initial: number } }>(({ root, props, signal }) => {
-  let count = props.initial;
-  on(root).click(() => {
-    root.textContent = String(++count);
-  }, { signal });
-});
+export default defineController<{ props: { initial: number }; refs: { count: HTMLSpanElement } }>(
+  ({ root, props, refs, signal }) => {
+    let count = props.initial;
+    on(root).click(() => {
+      refs.count.textContent = String(++count);
+    }, { signal });
+  },
+);
 ```
 
 ```tsx
+// server route
 import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
+import { html } from "@mewhhaha/ruwuter";
 import { controller } from "@mewhhaha/ruwuter/browser";
 import { counter } from "./app/controllers.ts";
 
-const mounted = controller(counter, { initial: 0 });
-const button = <button type="button" {...mounted.root()}>0</button>;
-const activation = <script type="module" src={clientRuntime}></script>;
+app.get("/counter", () => {
+  const mounted = controller(counter, { initial: 0 });
+  return html(
+    <html>
+      <body>
+        <button type="button" {...mounted.root()}>
+          Count: <span ref={mounted.refs.count}>0</span>
+        </button>
+        <script type="module" src={clientRuntime}></script>
+      </body>
+    </html>,
+  );
+});
 ```
 
-Include the activation script once on pages with controllers. Vite emits the typed controller URL
-and compiled runtime. Without Vite, serve the compiled browser modules yourself and pass their
-same-origin URLs. Use static `ref={mounted.refs.name}` tokens for a multi-element widget (refs are
-scoped to their nearest enclosing controller). For a targeted refresh, fetch an ordinary HTML route
-and pass the response to `swap` from `@mewhhaha/ruwuter/browser`. A buffered swap applies completed
-panels even when the host page started without a resolver, strips inert resolver scripts from the
-swapped fragment, and opts into View Transitions only when `viewTransition: true` is passed.
+- Load the activation script (`client.js`) once on pages with controllers.
+- Static `ref={mounted.refs.name}` tokens stay scoped to their nearest enclosing controller, so
+  nested widgets do not collide.
+- With the Vite plugin, `app/controllers.ts` exports typed controller URLs and compiles the runtime.
+  Without Vite, serve compiled browser modules yourself and pass their same-origin URLs directly to
+  `controller("/assets/counter.js", props)`.
 
-## Optional file routes
+### Targeted swaps (`swap`)
 
-Export named HTTP handlers from `app/routes/`. For example, `products.$id.tsx` matches
-`/products/:id`. Dots introduce nested paths, `_index` matches the parent, and pathless segments
-group files. Compose layouts as ordinary components in the handler.
+For a partial page refresh, fetch an ordinary HTML route and apply it with `swap`:
+
+```ts
+import { swap } from "@mewhhaha/ruwuter/browser";
+
+const response = await fetch("/products/1/reviews");
+await swap(response, { target: "#reviews" });
+```
+
+`swap` validates HTML responses, applies completed `Deferred` panels even when the host page started
+without a resolver, strips inert resolver `<script>` tags from swapped fragments, supports custom
+`sanitizer` and `trustedTypesPolicy` hooks, and opts into View Transitions only when
+`viewTransition: true` is passed.
+
+## Optional File Routes & Vite
+
+Export uppercase HTTP method handlers from `app/routes/`. Dots create nested paths
+(`products.$id.tsx` → `/products/:id`), `_index` matches the parent path, pathless segments
+(`_auth.login.tsx`) group files, and route directories (`products/route.tsx` or `route.ts`) colocate
+helpers. Compose layouts as ordinary components inside handlers.
 
 ```tsx
 // app/routes/products.$id.tsx
@@ -127,30 +225,74 @@ export function GET({ params }: HandlerContext<unknown, { id: string }>) {
 }
 ```
 
-Run `deno run -A jsr:@mewhhaha/ruwuter/fs-routes/cli ./app` and pass the generated table to
-`router(routes)`. The generator also writes per-route `Context<Bindings>` types under
-`.router/types`. The Vite plugin `ruwuter({ appFolder: "./app" })` generates the same table, watches
-route changes, and builds typed controller modules. A hand-written router needs neither generation
-nor Vite.
+Generate `app/routes.ts` and per-route `.router/types` `Context<Bindings>` definitions with the CLI:
+
+```sh
+deno run -A jsr:@mewhhaha/ruwuter/fs-routes/cli ./app
+```
+
+Then pass the generated table to `router(routes)`:
+
+```ts
+import { router } from "@mewhhaha/ruwuter";
+import { routes } from "./app/routes.ts";
+
+export default { fetch: router(routes).fetch };
+```
+
+For Vite apps, add the plugin to generate routes, watch changes, and emit typed `app/controllers.ts`
+and browser runtime chunks:
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import { ruwuter } from "@mewhhaha/ruwuter/vite";
+
+export default defineConfig({
+  plugins: [ruwuter({ appFolder: "./app" })],
+});
+```
+
+A hand-written router needs neither code generation nor Vite.
+
+## Package Entry Points
+
+| Entry point                       | Exports / Purpose                                                  |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `@mewhhaha/ruwuter`               | `router`, `html`, `renderToString`, `renderToStream`, `unsafeHTML` |
+| `@mewhhaha/ruwuter/components`    | `Deferred`, `createContext`, `use`                                 |
+| `@mewhhaha/ruwuter/browser`       | `defineController`, `controller`, `on`, `swap`                     |
+| `@mewhhaha/ruwuter/client.js`     | Self-starting browser controller runtime                           |
+| `@mewhhaha/ruwuter/swap.js`       | Standalone browser `swap` module                                   |
+| `@mewhhaha/ruwuter/fs-routes`     | Programmatic `generate()` for file routes                          |
+| `@mewhhaha/ruwuter/fs-routes/cli` | CLI generator for `routes.ts` and `.router/types`                  |
+| `@mewhhaha/ruwuter/vite`          | `ruwuter()` Vite plugin for routes and compiled browser modules    |
+| `@mewhhaha/ruwuter/legacy`        | 0.6 `Router`, `fragment`, and loader/action compatibility layer    |
 
 ## Moving from 0.6
 
 - Move loader status decisions into named method handlers. Compose nested layouts explicitly and put
-  slow reads in their own components. Give each fragment an ordinary GET or POST URL.
-- The previous `Router`, `fragment`, and loader types are available from `@mewhhaha/ruwuter/legacy`
-  (and legacy inference helpers from `@mewhhaha/ruwuter/types`) for applications migrating existing
-  route tables. Update imports in those tables before regenerating for 0.7.
-- Replace `client()`, `move()` and JSX event directives with a controller. Remove `clientMacro` from
-  Vite options and remove the `navigate.js` script. Links and forms now use native navigation.
+  slow reads in their own components. Give each fragment an ordinary `GET` or `POST` URL.
+- The previous `Router`, `fragment`, and loader types remain available from
+  `@mewhhaha/ruwuter/legacy` (and legacy inference helpers from `@mewhhaha/ruwuter/types`) while
+  migrating existing route tables. Update imports in those tables before regenerating for 0.7.
+- Replace `client()`, `move()`, and JSX event directives with a controller. Remove `clientMacro`
+  from Vite options and remove the `navigate.js` script. Links and forms now use native navigation.
 - Replace raw HTML strings and `dangerouslySetInnerHTML` with `unsafeHTML(trustedMarkup)`.
-- On the method router, replace a manual Suspense provider and resolver script with `Deferred`.
+- On the method router, replace a manual `SuspenseProvider` and resolver script with `Deferred`.
   Update server and browser assets together for the completion-marker protocol.
 
 ## Development
 
-Run `deno task ci` for unit, DOM, type, and size checks. Run `deno task browsers:install` followed
-by `deno task test:browser` for Chromium, Firefox and WebKit. CI runs both suites. After editing the
-resolver, run `deno task resolver:build` using the Deno version in CI to update its embedded
-external asset.
+- Run `deno task ci` for formatting, lint, typecheck, unit tests, DOM tests, and browser size
+  budgets.
+- Run `deno task browsers:install` followed by `deno task test:browser` for Chromium, Firefox, and
+  WebKit. CI runs both suites.
+- After editing the panel resolver (`src/runtime/resolve.ts` or `src/runtime/panels.ts`), run
+  `deno task resolver:build` with the Deno version pinned in
+  [`.github/workflows/ci.yml`](https://github.com/mewhhaha/ruwuter/blob/main/.github/workflows/ci.yml)
+  to update `src/runtime/resolve-source.ts`.
+
+## License
 
 MIT
