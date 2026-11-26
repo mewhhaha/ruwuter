@@ -5,7 +5,7 @@
  */
 
 import { createContext } from "./context.ts";
-import { type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
+import { type JSX, jsx } from "../runtime/jsx-runtime.ts";
 import { registerBodyTail } from "../runtime/body-tail.ts";
 import { fromParts, type Html, into, rendered } from "../runtime/node.ts";
 

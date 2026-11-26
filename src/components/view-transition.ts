@@ -4,7 +4,7 @@
  * React-inspired declarative View Transition helpers for MPA and partial HTML updates.
  */
 
-import { Fragment, type JSX, jsx } from "@mewhhaha/ruwuter/jsx-runtime";
+import { Fragment, type JSX, jsx } from "../runtime/jsx-runtime.ts";
 import { unsafeHTML } from "../runtime/node.ts";
 
 const CSS_IDENT = /^[A-Za-z_-][A-Za-z0-9_-]*$/;

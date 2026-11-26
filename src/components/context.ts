@@ -7,7 +7,7 @@
 
 import { rendered } from "../runtime/node.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { Fragment, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
+import { Fragment, type JSX } from "../runtime/jsx-runtime.ts";
 
 /**
  * Immutable snapshot of the context values visible on one render branch.
