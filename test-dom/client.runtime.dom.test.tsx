@@ -457,4 +457,35 @@ describe("Activation runtime DOM behaviour", () => {
       cleanup();
     }
   });
+
+  it("resolves refs dynamically after outerHTML replacement and deferred insertion", async () => {
+    let readRef!: () => string | null;
+    const href = registerController(({ root, refs }: any) => {
+      root.setAttribute("data-mounted", "yes");
+      readRef = () => refs.panel.getAttribute("data-version");
+    });
+
+    const html = `
+      <section id="controller-root" data-rw-controller="${href}">
+        <div id="slot" data-rw-ref="panel" data-version="v1">Old</div>
+      </section>
+    `;
+    const { doc, cleanup } = setupDomEnvironment(html);
+    try {
+      await import(nextRuntimeUrl());
+      const root = doc.getElementById("controller-root");
+      await waitFor(() => root?.getAttribute("data-mounted") === "yes", 1000);
+      expect(readRef()).toBe("v1");
+
+      // Simulate an outerHTML swap replacing the ref node inside the controller root.
+      const replacement = doc.createElement("div");
+      replacement.setAttribute("data-rw-ref", "panel");
+      replacement.setAttribute("data-version", "v2");
+      doc.getElementById("slot")?.replaceWith(replacement);
+
+      expect(readRef()).toBe("v2");
+    } finally {
+      cleanup();
+    }
+  });
 });

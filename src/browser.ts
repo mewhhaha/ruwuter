@@ -36,4 +36,13 @@ export type IsControllerModule<Module> = Module extends {
 } ? true
   : false;
 
-export { swap, type SwapOptions, type SwapResult } from "./runtime/swap.ts";
+export {
+  swap,
+  type SwapInput,
+  type SwapMode,
+  type SwapOptions,
+  type SwapResult,
+  type SwapSanitizer,
+  type SwapTarget,
+  type SwapWriteFn,
+} from "./runtime/swap.ts";

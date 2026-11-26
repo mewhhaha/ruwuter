@@ -38,6 +38,25 @@ describe("generateControllers", () => {
     }
   });
 
+  it("disambiguates same-basename controllers in different subdirectories", async () => {
+    const app = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(app, "products"), { recursive: true });
+      await Deno.mkdir(join(app, "users"), { recursive: true });
+      await Deno.writeTextFile(join(app, "products", "form.client.ts"), "export default 1;");
+      await Deno.writeTextFile(join(app, "users", "form.client.ts"), "export default 1;");
+      await Deno.writeTextFile(join(app, "unique.client.ts"), "export default 1;");
+
+      const [output] = await generateControllers(app);
+      if (!output) throw new Error("Expected controller output");
+      expect(output.contents).toContain("export const productsForm =");
+      expect(output.contents).toContain("export const usersForm =");
+      expect(output.contents).toContain("export const unique =");
+    } finally {
+      await Deno.remove(app, { recursive: true });
+    }
+  });
+
   it("rejects ambiguous generated controller names", async () => {
     const app = await Deno.makeTempDir();
     try {

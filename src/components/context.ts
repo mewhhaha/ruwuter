@@ -17,6 +17,7 @@ import { Fragment, type JSX } from "@mewhhaha/ruwuter/jsx-runtime";
 type Store = ReadonlyMap<symbol, unknown>;
 
 const storage = new AsyncLocalStorage<Store>();
+const contextKeys = new WeakMap<object, symbol>();
 
 const getStore = (): Store | undefined => storage.getStore();
 
@@ -57,6 +58,18 @@ const bindGenerator = (
  */
 export function runWithContextStore<T>(fn: () => T): T {
   return storage.run(new Map(), fn);
+}
+
+/** @internal Runs `fn` with a fresh isolated context store seeded with a single value. */
+export function runWithIsolatedContext<T, R>(
+  context: CreatedContext<T>,
+  value: T,
+  fn: () => R,
+): R {
+  const key = contextKeys.get(context);
+  const store = new Map<symbol, unknown>();
+  if (key) store.set(key, value);
+  return storage.run(store, fn);
 }
 
 /**
@@ -122,6 +135,7 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
   }
 
   const api: CreatedContext<T> = { Provider, use, withValue };
+  contextKeys.set(api, key);
   return api;
 }
 

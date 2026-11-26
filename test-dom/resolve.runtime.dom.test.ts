@@ -12,13 +12,16 @@ function setupDomEnvironment(html: string) {
   )! as unknown as Document;
 
   const observers: Array<(mutations: MutationRecord[]) => void> = [];
+  let disconnectCount = 0;
 
   class TestMutationObserver {
     constructor(cb: (mutations: MutationRecord[]) => void) {
       observers.push(cb);
     }
     observe() {}
-    disconnect() {}
+    disconnect() {
+      disconnectCount += 1;
+    }
   }
 
   const window: any = {
@@ -54,6 +57,9 @@ function setupDomEnvironment(html: string) {
   return {
     doc,
     observers,
+    get disconnects() {
+      return disconnectCount;
+    },
     cleanup() {
       (globalThis as any).window = saved.window;
       if (typeof saved.document === "undefined") delete (globalThis as any).document;
@@ -172,6 +178,42 @@ describe("Resolve runtime DOM behaviour", () => {
       expect(scans).toBeLessThanOrEqual(4);
     } finally {
       cleanup();
+    }
+  });
+
+  it("disconnects its MutationObserver on DOMContentLoaded and skips observing complete documents", async () => {
+    const loadingEnv = setupDomEnvironment(`<div id="p">loading</div>`);
+    let dclListener: (() => void) | undefined;
+    Object.defineProperty(loadingEnv.doc, "readyState", { value: "loading", configurable: true });
+    (loadingEnv.doc as any).addEventListener = (type: string, cb: () => void) => {
+      if (type === "DOMContentLoaded") dclListener = cb;
+    };
+    try {
+      await import(nextResolveRuntimeUrl());
+      expect(loadingEnv.observers.length).toBe(1);
+      expect(loadingEnv.disconnects).toBe(0);
+
+      loadingEnv.doc.body.innerHTML +=
+        `<template data-rw-target="p"><span id="done">done</span></template><!--rw-end-->`;
+      dclListener?.();
+
+      expect(loadingEnv.doc.getElementById("done")?.textContent).toBe("done");
+      expect(loadingEnv.disconnects).toBe(1);
+    } finally {
+      loadingEnv.cleanup();
+    }
+
+    const completeEnv = setupDomEnvironment(`
+      <div id="p2">loading</div>
+      <template data-rw-target="p2"><span id="done2">done2</span></template><!--rw-end-->
+    `);
+    Object.defineProperty(completeEnv.doc, "readyState", { value: "complete", configurable: true });
+    try {
+      await import(nextResolveRuntimeUrl());
+      expect(completeEnv.doc.getElementById("done2")?.textContent).toBe("done2");
+      expect(completeEnv.observers.length).toBe(0);
+    } finally {
+      completeEnv.cleanup();
     }
   });
 });
