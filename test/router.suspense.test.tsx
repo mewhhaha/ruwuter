@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/legacy.ts";
 import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";
@@ -50,11 +50,7 @@ describe("Suspense streaming", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/s"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/s"), {} as Env, ctx);
 
     expect(res.headers.get("Content-Type")).toMatch(/text\/html/);
     const reader = res.body!.getReader();
@@ -111,11 +107,7 @@ describe("Suspense streaming", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/multi"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/multi"), {} as Env, ctx);
 
     const reader = res.body!.getReader();
     const first = await readUntil(
@@ -171,11 +163,7 @@ describe("Suspense streaming", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/nested"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/nested"), {} as Env, ctx);
 
     const reader = res.body!.getReader();
     const first = await readUntil(reader, (t) => t.includes("OUTER-FALLBACK"));
@@ -258,9 +246,7 @@ describe("Suspense streaming", () => {
               <html>
                 <body>
                   <h1>Layout</h1>
-                  <Suspense fallback={<div>LAYOUT-LOADING</div>}>
-                    {children}
-                  </Suspense>
+                  <Suspense fallback={<div>LAYOUT-LOADING</div>}>{children}</Suspense>
                 </body>
               </html>
             </SuspenseProvider>
@@ -287,11 +273,7 @@ describe("Suspense streaming", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/xfrag"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/xfrag"), {} as Env, ctx);
 
     const reader = res.body!.getReader();
     const first = await readUntil(reader, (t) => t.includes("LAYOUT-LOADING"));

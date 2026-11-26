@@ -75,8 +75,8 @@ export class RuntimeUrls {
       this.#emitted.set(id, fileName);
     }
     const base = this.base();
-    return `export default ${
-      JSON.stringify(`${base.endsWith("/") ? base : `${base}/`}${fileName}`)
-    };\n`;
+    return `export default ${JSON.stringify(
+      `${base.endsWith("/") ? base : `${base}/`}${fileName}`,
+    )};\n`;
   }
 }

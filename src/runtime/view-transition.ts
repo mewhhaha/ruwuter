@@ -22,9 +22,7 @@ export interface BrowserViewTransitionOptions {
 export type ViewTransitionOption = boolean | BrowserViewTransitionOptions;
 
 type StartViewTransitionFn = (
-  arg:
-    | (() => void | Promise<void>)
-    | { update: () => void | Promise<void>; types?: string[] },
+  arg: (() => void | Promise<void>) | { update: () => void | Promise<void>; types?: string[] },
 ) => ViewTransitionHandle;
 
 /**
@@ -36,9 +34,10 @@ export async function viewTransition(
   update: () => void | Promise<void>,
   options?: BrowserViewTransitionOptions,
 ): Promise<ViewTransitionHandle | null> {
-  const doc = typeof document < "u"
-    ? (document as Document & { startViewTransition?: StartViewTransitionFn })
-    : undefined;
+  const doc =
+    typeof document < "u"
+      ? (document as Document & { startViewTransition?: StartViewTransitionFn })
+      : undefined;
   const start = doc?.startViewTransition;
   if (
     !start ||

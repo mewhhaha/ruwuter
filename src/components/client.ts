@@ -18,10 +18,7 @@ type ControllerRefs = Record<string, Element>;
 declare const definedControllerBrand: unique symbol;
 declare const controllerHrefBrand: unique symbol;
 
-export type ControllerRefToken<
-  Name extends string = string,
-  Target extends Element = Element,
-> = {
+export type ControllerRefToken<Name extends string = string, Target extends Element = Element> = {
   readonly __ruwuterControllerRef: Name;
   readonly __ruwuterControllerRefTarget: (element: Target) => Target;
 };
@@ -43,9 +40,7 @@ export type ControllerContext<
 export type Controller<
   Props extends JsonValue | undefined = JsonValue | undefined,
   Refs extends ControllerRefs = ControllerRefs,
-> = (
-  context: ControllerContext<Props, Refs>,
-) => ControllerCleanup | Promise<ControllerCleanup>;
+> = (context: ControllerContext<Props, Refs>) => ControllerCleanup | Promise<ControllerCleanup>;
 
 export type ControllerDefinition = {
   props?: JsonValue;
@@ -54,34 +49,32 @@ export type ControllerDefinition = {
 
 type DefinitionProps<Definition extends ControllerDefinition> = Definition extends {
   props: infer Props extends JsonValue;
-} ? Props
+}
+  ? Props
   : undefined;
 
 type DefinitionRefs<Definition extends ControllerDefinition> = Definition extends {
   refs: infer Refs extends ControllerRefs;
-} ? Refs
+}
+  ? Refs
   : ControllerRefs;
 
 type ControllerPropsArgs<Props> = Props extends undefined ? [props?: undefined] : [props: Props];
 
 export type DefinedController<Definition extends ControllerDefinition = ControllerDefinition> =
-  & Controller<DefinitionProps<Definition>, DefinitionRefs<Definition>>
-  & {
+  Controller<DefinitionProps<Definition>, DefinitionRefs<Definition>> & {
     readonly [definedControllerBrand]: Definition;
   };
 
 export type ControllerHref<Definition extends ControllerDefinition = ControllerDefinition> =
-  & string
-  & {
+  string & {
     readonly [controllerHrefBrand]: DefinedController<Definition>;
   };
 
 type TypedControllerReference<Definition extends ControllerDefinition = ControllerDefinition> =
   ControllerHref<Definition>;
 
-type UntypedControllerReference =
-  | (string & { readonly [controllerHrefBrand]?: never })
-  | URL;
+type UntypedControllerReference = (string & { readonly [controllerHrefBrand]?: never }) | URL;
 
 type ControllerReference<Definition extends ControllerDefinition = ControllerDefinition> =
   | TypedControllerReference<Definition>
@@ -99,10 +92,10 @@ export type ControllerMount<Refs extends ControllerRefs = ControllerRefs> = {
 
 type EventTargetLike<Target extends EventTarget> = Target | null | undefined;
 
-export type TargetedRuntimeEvent<
-  E extends Event,
-  Target extends EventTarget,
-> = Omit<E, "currentTarget"> & {
+export type TargetedRuntimeEvent<E extends Event, Target extends EventTarget> = Omit<
+  E,
+  "currentTarget"
+> & {
   readonly currentTarget: Target;
 };
 
@@ -111,20 +104,18 @@ type ListenerOptions = AddEventListenerOptions;
 type GlobalDomEventMap = GlobalEventHandlersEventMap;
 const JSON_PROPS_MESSAGE = "controller() props must contain only JSON values.";
 
-type OnRegistry<Target extends EventTarget> =
-  & {
-    [Type in keyof GlobalDomEventMap]: (
-      listener: (ev: TargetedRuntimeEvent<GlobalDomEventMap[Type], Target>) => unknown,
-      options?: ListenerOptions,
-    ) => () => void;
-  }
-  & Record<
-    string,
-    (
-      listener: (ev: TargetedRuntimeEvent<Event, Target>) => unknown,
-      options?: ListenerOptions,
-    ) => () => void
-  >;
+type OnRegistry<Target extends EventTarget> = {
+  [Type in keyof GlobalDomEventMap]: (
+    listener: (ev: TargetedRuntimeEvent<GlobalDomEventMap[Type], Target>) => unknown,
+    options?: ListenerOptions,
+  ) => () => void;
+} & Record<
+  string,
+  (
+    listener: (ev: TargetedRuntimeEvent<Event, Target>) => unknown,
+    options?: ListenerOptions,
+  ) => () => void
+>;
 
 export function isControllerRefToken(value: unknown): value is ControllerRefToken {
   return (
@@ -160,11 +151,7 @@ function assertJsonValue(
   message: string,
   seen = new WeakSet<object>(),
 ): asserts value is JsonValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return;
   }
 
@@ -272,9 +259,7 @@ export function controller<Definition extends ControllerDefinition>(
   };
 }
 
-function resolveRuntimeTarget<Target extends EventTarget>(
-  target: EventTargetLike<Target>,
-): Target {
+function resolveRuntimeTarget<Target extends EventTarget>(target: EventTargetLike<Target>): Target {
   if (!target) throw new TypeError("on(target): target is required.");
   return target;
 }

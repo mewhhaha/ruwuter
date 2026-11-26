@@ -1,3 +1,6 @@
+import { gzipSync } from "node:zlib";
+import { rolldown } from "rolldown";
+
 const entries = [
   { name: "client.js", path: "src/runtime/client.ts", budget: 1_400 },
   { name: "resolve.js", path: "src/runtime/resolve.ts", budget: 500 },
@@ -5,30 +8,20 @@ const entries = [
   { name: "vt.js", path: "src/runtime/vt.ts", budget: 750 },
 ] as const;
 
-const gzipSize = async (bytes: Uint8Array): Promise<number> => {
-  const buffer = bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
-  ) as ArrayBuffer;
-  const writer = new Blob([buffer]).stream().pipeThrough(new CompressionStream("gzip"));
-  return (await new Response(writer).arrayBuffer()).byteLength;
-};
-
 let overBudget = false;
 
 for (const entry of entries) {
-  const command = new Deno.Command("deno", {
-    args: ["bundle", "--platform=browser", "--minify", "--quiet", entry.path],
-    stdout: "piped",
-    stderr: "piped",
+  const bundle = await rolldown({
+    input: entry.path,
+    platform: "browser",
   });
-  const output = await command.output();
-  if (!output.success) {
-    await Deno.stderr.write(output.stderr);
-    throw new Error(`Could not bundle ${entry.name}.`);
-  }
+  const { output } = await bundle.generate({
+    format: "es",
+    minify: true,
+  });
+  await bundle.close();
 
-  const size = await gzipSize(output.stdout);
+  const size = gzipSync(Buffer.from(output[0].code)).byteLength;
   const status = size <= entry.budget ? "ok" : "OVER";
   console.log(
     `${entry.name.padEnd(12)} ${String(size).padStart(5)} B gzip / ${entry.budget} B (${status})`,
@@ -38,5 +31,5 @@ for (const entry of entries) {
 
 if (overBudget) {
   console.error("Browser runtime size budget exceeded.");
-  Deno.exit(1);
+  process.exit(1);
 }

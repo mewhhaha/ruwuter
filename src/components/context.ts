@@ -34,10 +34,7 @@ const derive = (key: symbol, value: unknown): Store => {
  * one this branch was created with. `next`, `return`, `throw` and disposal all
  * resume the generator body, so all four are bound.
  */
-const bindGenerator = (
-  store: Store,
-  generator: AsyncGenerator<string>,
-): AsyncGenerator<string> => {
+const bindGenerator = (store: Store, generator: AsyncGenerator<string>): AsyncGenerator<string> => {
   const bound: AsyncGenerator<string> = {
     next: () => storage.run(store, () => generator.next()),
     return: (value) => storage.run(store, () => generator.return(value)),
@@ -61,11 +58,7 @@ export function runWithContextStore<T>(fn: () => T): T {
 }
 
 /** @internal Runs `fn` with a fresh isolated context store seeded with a single value. */
-export function runWithIsolatedContext<T, R>(
-  context: CreatedContext<T>,
-  value: T,
-  fn: () => R,
-): R {
+export function runWithIsolatedContext<T, R>(context: CreatedContext<T>, value: T, fn: () => R): R {
   const key = contextKeys.get(context);
   const store = new Map<symbol, unknown>();
   if (key) store.set(key, value);
@@ -103,13 +96,7 @@ export function createContext<T>(defaultValue: T): CreatedContext<T> {
    * Context Provider component. Renders its children under a store that has
    * `value` set for this context.
    */
-  const Provider = ({
-    value,
-    children,
-  }: {
-    value: T;
-    children?: JSX.HtmlNode;
-  }): JSX.Element => {
+  const Provider = ({ value, children }: { value: T; children?: JSX.HtmlNode }): JSX.Element => {
     const content = Fragment({ children });
     return rendered(bindGenerator(derive(key, value), content.generator));
   };

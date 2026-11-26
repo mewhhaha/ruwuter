@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 
 describe("JSX attribute typing", () => {
   it("accepts recently added global attributes", () => {
@@ -68,7 +68,9 @@ describe("JSX attribute typing", () => {
         <fieldset disabled>
           <select disabled multiple required>
             <optgroup disabled label="Group">
-              <option disabled selected value="a">A</option>
+              <option disabled selected value="a">
+                A
+              </option>
             </optgroup>
           </select>
           <textarea disabled />
@@ -115,7 +117,9 @@ describe("JSX attribute typing", () => {
             <rect x={2} y={2} width={20} height={20} rx={4} />
             <circle cx={12} cy={12} r={5} />
             <line x1={0} y1={0} x2={24} y2={24} />
-            <text x={12} y={12} text-anchor="middle">ok</text>
+            <text x={12} y={12} text-anchor="middle">
+              ok
+            </text>
           </g>
         </svg>
       </div>

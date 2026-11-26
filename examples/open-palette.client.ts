@@ -8,7 +8,10 @@ export type OpenPaletteController = {
 };
 
 export default defineController<OpenPaletteController>(({ refs, signal }) => {
-  on(refs.open).click(() => {
-    refs.dialog.showModal();
-  }, { signal });
+  on(refs.open).click(
+    () => {
+      refs.dialog.showModal();
+    },
+    { signal },
+  );
 });

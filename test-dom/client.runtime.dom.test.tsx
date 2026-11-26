@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { makeCtx } from "../test-support/ctx.ts";
 import "./setup.ts";
 import { DOMParser } from "linkedom";
@@ -96,7 +96,7 @@ function setupDomEnvironment(html: string) {
   (globalThis as any).Comment = (doc.createComment as any)
     ? (doc.createComment("x") as any).constructor
     : saved.Comment || (class {} as any);
-  (globalThis as any).Node = saved.Node || ({ ELEMENT_NODE: 1, COMMENT_NODE: 8 } as any);
+  (globalThis as any).Node = saved.Node || (doc.createElement("div") as any).constructor;
   (globalThis as any).Element = (doc.createElement("div") as any).constructor;
   (globalThis as any).HTMLElement = (doc.createElement("div") as any).constructor;
   (globalThis as any).__ruwuterControllerModuleLoader = async (url: URL) => {
@@ -159,22 +159,26 @@ function setupDomEnvironment(html: string) {
 
 async function render(htmlHref: string, props: JsonValue = {}) {
   const mounted = controller(htmlHref, props);
-  const fragments: fragment[] = [{
-    id: "root",
-    mod: {
-      default: () => (
-        <html>
-          <body>
-            <main id="mount-target">
-              <section id="controller-root" {...mounted.root()}>
-                <button ref={mounted.refs.button} type="button">Run</button>
-              </section>
-            </main>
-          </body>
-        </html>
-      ),
+  const fragments: fragment[] = [
+    {
+      id: "root",
+      mod: {
+        default: () => (
+          <html>
+            <body>
+              <main id="mount-target">
+                <section id="controller-root" {...mounted.root()}>
+                  <button ref={mounted.refs.button} type="button">
+                    Run
+                  </button>
+                </section>
+              </main>
+            </body>
+          </html>
+        ),
+      },
     },
-  }];
+  ];
   const router = Router([[new URLPattern({ pathname: "/" }), fragments]]);
   const { ctx } = makeCtx();
   const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
@@ -296,11 +300,9 @@ describe("Activation runtime DOM behaviour", () => {
   it("aborts the controller signal and runs returned cleanup on removal", async () => {
     const href = registerController(({ root, signal }: any) => {
       root.setAttribute("data-ready", "yes");
-      signal.addEventListener(
-        "abort",
-        () => document.body.setAttribute("data-aborted", "yes"),
-        { once: true },
-      );
+      signal.addEventListener("abort", () => document.body.setAttribute("data-aborted", "yes"), {
+        once: true,
+      });
       return () => document.body.setAttribute("data-cleaned", "yes");
     });
 
@@ -324,13 +326,18 @@ describe("Activation runtime DOM behaviour", () => {
   });
 
   it("does not mount after a root is removed before the module resolves", async () => {
-    const href = registerController(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 25));
+    const href = registerController(() => {
       document.body.setAttribute("data-stale-mounted", "yes");
     });
 
     const html = await render(href);
     const { doc, patchRemove, cleanup } = setupDomEnvironment(html);
+    const gate = Promise.withResolvers<void>();
+    const baseLoader = (globalThis as any).__ruwuterControllerModuleLoader;
+    (globalThis as any).__ruwuterControllerModuleLoader = async (url: URL) => {
+      await gate.promise;
+      return await baseLoader(url);
+    };
     try {
       await import(nextRuntimeUrl());
 
@@ -338,10 +345,12 @@ describe("Activation runtime DOM behaviour", () => {
       if (!root) throw new Error("expected controller root");
       patchRemove(root as any);
       root.remove();
+      gate.resolve();
 
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      await new Promise((resolve) => setTimeout(resolve, 30));
       expect(doc.body.getAttribute("data-stale-mounted") ?? "").toBe("");
     } finally {
+      gate.resolve();
       cleanup();
     }
   });
@@ -427,9 +436,10 @@ describe("Activation runtime DOM behaviour", () => {
       await import(nextRuntimeUrl());
       const outer = doc.getElementById("outer");
       const inner = doc.getElementById("inner");
-      await waitFor(() =>
-        outer?.getAttribute("data-outer-btn") === "outer-trigger" &&
-        inner?.getAttribute("data-inner-btn") === "inner-trigger"
+      await waitFor(
+        () =>
+          outer?.getAttribute("data-outer-btn") === "outer-trigger" &&
+          inner?.getAttribute("data-inner-btn") === "inner-trigger",
       );
       expect(outer?.getAttribute("data-leaked")).toBe("false");
       expect(inner?.getAttribute("data-inner-only")).toBe("inner-span");

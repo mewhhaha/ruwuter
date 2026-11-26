@@ -107,7 +107,10 @@ const buildRequestBody = (
 const parseTransition = (element: Element): ViewTransitionOption => {
   const attr = element.getAttribute("fx-transition");
   if (attr === null || attr === "false") return false;
-  const types = attr.trim().split(/\s+/).filter((t) => t && t !== "true");
+  const types = attr
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t && t !== "true");
   return types.length ? { types } : true;
 };
 
@@ -224,7 +227,8 @@ export default defineController(({ root, signal }) => {
     const element = findSource(event);
     if (!element) return;
     if (
-      event.type === "submit" || (event.type === "click" && element instanceof HTMLAnchorElement)
+      event.type === "submit" ||
+      (event.type === "click" && element instanceof HTMLAnchorElement)
     ) {
       event.preventDefault();
     }

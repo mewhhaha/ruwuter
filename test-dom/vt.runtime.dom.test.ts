@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { DOMParser } from "linkedom";
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { nextVtRuntimeUrl } from "../test-support/client-runtime.inline.ts";
 
 function setupVtEnv(html: string) {

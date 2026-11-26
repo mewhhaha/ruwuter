@@ -436,10 +436,14 @@ const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
     if (signal.aborted) return reject(signal.reason);
     const timer = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => {
-      clearTimeout(timer);
-      reject(signal.reason);
-    }, { once: true });
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
   });
 
 const isFxRequest = (request: Request): boolean => request.headers.get("FX-Request") === "true";
@@ -468,10 +472,11 @@ export function viewTransitionsApp(options: ShowcaseOptions) {
   const filterItems = (query: string) => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((item) =>
-      item.name.toLowerCase().includes(q) ||
-      item.tagline.toLowerCase().includes(q) ||
-      item.category.toLowerCase().includes(q)
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        item.tagline.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q),
     );
   };
 
@@ -497,7 +502,9 @@ export function viewTransitionsApp(options: ShowcaseOptions) {
         <body>
           <div class="shell" {...fx.root()}>
             <header class="topbar">
-              <a class="brand" href="/">Ruwuter Desk Gear</a>
+              <a class="brand" href="/">
+                Ruwuter Desk Gear
+              </a>
               <span class="pill">MPA View Transitions + Streaming HTML</span>
             </header>
             {children}
@@ -518,9 +525,8 @@ export function viewTransitionsApp(options: ShowcaseOptions) {
             <h1>Streaming HTML with native MPA View Transitions</h1>
             <p>
               Click any item for a cross-document shared-element hero morph powered by{" "}
-              <code>&lt;ViewTransition&gt;</code> and{" "}
-              <code>vt.js</code>, while stock and reviews stream independently via{" "}
-              <code>&lt;Deferred&gt;</code>.
+              <code>&lt;ViewTransition&gt;</code> and <code>vt.js</code>, while stock and reviews
+              stream independently via <code>&lt;Deferred&gt;</code>.
             </p>
           </section>
 
@@ -538,7 +544,9 @@ export function viewTransitionsApp(options: ShowcaseOptions) {
               fx-swap="innerHTML"
               fx-transition="filter"
             />
-            <button type="submit" class="btn">Filter</button>
+            <button type="submit" class="btn">
+              Filter
+            </button>
           </form>
 
           <section id="catalog" class="grid">
@@ -557,7 +565,9 @@ export function viewTransitionsApp(options: ShowcaseOptions) {
 
       return html(
         <Document title={`${item.name} — Ruwuter Desk Gear`} expect="#item-hero">
-          <a class="back-link" href="/">← All gear</a>
+          <a class="back-link" href="/">
+            ← All gear
+          </a>
 
           <article id="item-hero" class="detail-hero">
             <ViewTransition
@@ -584,7 +594,9 @@ export function viewTransitionsApp(options: ShowcaseOptions) {
               <ul class="specs">
                 {
                   // deno-lint-ignore jsx-key -- static specs list
-                  item.specs.map((spec) => <li>{spec}</li>)
+                  item.specs.map((spec) => (
+                    <li>{spec}</li>
+                  ))
                 }
               </ul>
             </div>
@@ -621,7 +633,9 @@ export function viewTransitionsApp(options: ShowcaseOptions) {
                 fx-transition="review-add"
               >
                 <input name="review" placeholder="Add a quick note..." aria-label="Review" />
-                <button type="submit" class="btn btn-primary">Post</button>
+                <button type="submit" class="btn btn-primary">
+                  Post
+                </button>
               </form>
               <div id="review-error" class="error" role="alert"></div>
 
@@ -633,7 +647,9 @@ export function viewTransitionsApp(options: ShowcaseOptions) {
                     <ul id="reviews" class="reviews reveal">
                       {
                         // deno-lint-ignore jsx-key -- server-rendered list
-                        list.map((review) => <ReviewRow slug={item.slug} review={review} />)
+                        list.map((review) => (
+                          <ReviewRow slug={item.slug} review={review} />
+                        ))
                       }
                     </ul>
                   );

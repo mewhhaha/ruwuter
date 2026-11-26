@@ -1,0 +1,58 @@
+{
+  "name": "@mewhhaha/ruwuter",
+  "version": "0.7.1",
+  "description": "Server-first TypeScript router for Web API runtimes with file-system routing and streaming JSX",
+  "license": "MIT",
+  "bin": {
+    "fs-routes": "./src/fs-routes/routes.ts"
+  },
+  "files": [
+    "README.md",
+    "jsr.json",
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/router.ts",
+    "./browser": "./src/browser.ts",
+    "./components": "./src/components/index.ts",
+    "./fs-routes": "./src/fs-routes/js.ts",
+    "./fs-routes/cli": "./src/fs-routes/routes.ts",
+    "./vite": "./src/vite.ts",
+    "./types": "./src/types.ts",
+    "./jsx-runtime": "./src/runtime/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.ts",
+    "./client.js": "./src/runtime/client.ts",
+    "./resolve.js": "./src/runtime/resolve.ts",
+    "./swap.js": "./src/runtime/swap.ts",
+    "./vt.js": "./src/runtime/vt.ts",
+    "./legacy": "./src/legacy.ts"
+  },
+  "scripts": {
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "lint": "oxlint src test test-dom test-browser examples scripts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --project unit",
+    "test:dom": "vitest run --project dom",
+    "test:browser": "vitest run --project browser",
+    "resolver:build": "node scripts/build-resolver.ts",
+    "size": "node scripts/build-resolver.ts --check && node scripts/check-size.ts",
+    "ci": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:dom && pnpm run size",
+    "browsers:install": "pnpm exec playwright-core install --with-deps chromium firefox webkit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261125.1",
+    "@types/node": "^26.6.11",
+    "linkedom": "^0.18.15",
+    "oxfmt": "^0.80.0",
+    "oxlint": "^1.95.0",
+    "playwright-core": "^1.65.1",
+    "rolldown": "^1.3.3",
+    "typescript": "^7.0.2",
+    "urlpattern-polyfill": "^10.1.0",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.2"
+  },
+  "packageManager": "pnpm@12.23.0"
+}

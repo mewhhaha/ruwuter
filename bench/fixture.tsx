@@ -22,7 +22,12 @@ function panels() {
       }}
     </Suspense>
   );
-  let children = <>{panel("fast", 100)}{panel("slow", 600)}</>;
+  let children = (
+    <>
+      {panel("fast", 100)}
+      {panel("slow", 600)}
+    </>
+  );
   if (oldRouter) children = <SuspenseProvider>{children}</SuspenseProvider>;
   return (
     <html>
@@ -40,17 +45,24 @@ function buildApp(): (req: Request) => Promise<Response> {
   if (oldRouter) {
     const old = oldRouter([
       [new URLPattern({ pathname: "/panels" }), [{ id: "page", mod: { default: panels } }]],
-      [new URLPattern({ pathname: "/hello/:name" }), [{
-        id: "greeting",
-        mod: {
-          loader: ({ params }) => params.name,
-          default: ({ loaderData }) => hello(loaderData),
-        },
-      }]],
+      [
+        new URLPattern({ pathname: "/hello/:name" }),
+        [
+          {
+            id: "greeting",
+            mod: {
+              loader: ({ params }) => params.name,
+              default: ({ loaderData }) => hello(loaderData),
+            },
+          },
+        ],
+      ],
     ]);
     return (req) => old.handle(req, {}, { waitUntil() {}, passThroughOnException() {} });
   }
-  return rw.router().get("/panels", () => rw.html(panels()))
+  return rw
+    .router()
+    .get("/panels", () => rw.html(panels()))
     .get("/hello/:name", ({ params }) => rw.html(hello(params.name))).fetch;
 }
 const app = buildApp();
@@ -61,7 +73,7 @@ async function measureBatch() {
   const start = performance.now();
   for (let i = 0; i < 1000; i++) {
     const response = await app(new Request("http://localhost/hello/Robin"));
-    if (response.status !== 200 || await response.text() !== greeting) {
+    if (response.status !== 200 || (await response.text()) !== greeting) {
       throw new Error("The routers must return the same complete HTML document");
     }
   }

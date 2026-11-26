@@ -23,15 +23,17 @@ for (const engine of [chromium, firefox, webkit]) {
               if (
                 performance.getEntriesByName("slow").length &&
                 performance.getEntriesByName("fast").length
-              ) observer.disconnect();
+              )
+                observer.disconnect();
             });
             observer.observe(document, { childList: true, subtree: true });
           });
           const response = await page.goto(origin + "/panels");
           if (response?.status() !== 200) throw new Error("Panel route failed");
-          await page.waitForFunction(() =>
-            performance.getEntriesByName("slow").length &&
-            performance.getEntriesByName("fast").length
+          await page.waitForFunction(
+            () =>
+              performance.getEntriesByName("slow").length &&
+              performance.getEntriesByName("fast").length,
           );
           const sample = await page.evaluate(() => {
             const mark = (id: string) => performance.getEntriesByName(id)[0].startTime;

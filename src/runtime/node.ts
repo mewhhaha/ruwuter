@@ -319,10 +319,5 @@ export const rendered = (chunks: AsyncGenerator<string>): Html =>
  * @returns True if the value is Html
  */
 export const isHtml = (child: unknown): child is Html => {
-  return (
-    typeof child === "object" &&
-    child !== null &&
-    N in child &&
-    child[N] === true
-  );
+  return typeof child === "object" && child !== null && N in child && child[N] === true;
 };

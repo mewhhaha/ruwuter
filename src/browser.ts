@@ -25,15 +25,17 @@ export type ControllerHrefOf<Module> = Module extends {
   default: import("./components/client.ts").DefinedController<
     infer Definition extends ControllerDefinition
   >;
-} ? ControllerHref<Definition>
+}
+  ? ControllerHref<Definition>
   : never;
 
 /** Reports whether a module's default export was created with `defineController()`. */
 export type IsControllerModule<Module> = Module extends {
   default: import("./components/client.ts").DefinedController<
-    infer Definition extends ControllerDefinition
+    infer _Definition extends ControllerDefinition
   >;
-} ? true
+}
+  ? true
   : false;
 
 export {

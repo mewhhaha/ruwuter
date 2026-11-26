@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { jsx } from "../src/runtime/jsx-runtime.ts";
 import type { JSX } from "../src/legacy.ts";
 

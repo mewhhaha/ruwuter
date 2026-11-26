@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { makeCtx } from "../test-support/ctx.ts";
 import { createContext } from "../src/components/context.ts";
 import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/legacy.ts";
@@ -38,11 +38,7 @@ describe("context providers", () => {
 
     const router = Router([[new URLPattern({ pathname: "/" }), fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
     const html = await res.text();
 
     expect(html).toContain("moon:en-US");
@@ -75,11 +71,7 @@ describe("context providers", () => {
 
     const router = Router([[new URLPattern({ pathname: "/layout" }), fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/layout"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/layout"), {} as Env, ctx);
     const html = await res.text();
 
     expect(html).toContain('<div id="theme">spicy</div>');

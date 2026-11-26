@@ -87,9 +87,10 @@ export class ControllerUrls {
 
   register(importer: string, source: string): string {
     const cleanImporter = importer.split("?", 1)[0];
-    const importerPath = cleanImporter.startsWith("/") && !cleanImporter.startsWith(this.appFolder)
-      ? path.join(this.appFolder, cleanImporter)
-      : cleanImporter;
+    const importerPath =
+      cleanImporter.startsWith("/") && !cleanImporter.startsWith(this.appFolder)
+        ? path.join(this.appFolder, cleanImporter)
+        : cleanImporter;
     const absolute = path.resolve(
       path.dirname(importerPath),
       source.startsWith("/") ? `.${source}` : source,
@@ -122,15 +123,18 @@ export class ControllerUrls {
       const absolute = this.#sources.get(module) ?? module;
       const hash = createHash("sha256");
       hashModuleGraph(absolute, this.appFolder, hash);
-      const slug = path.basename(absolute).replace(/\.client\.tsx?$/, "")
-        .replace(/[^A-Za-z0-9_-]+/g, "-") || "controller";
+      const slug =
+        path
+          .basename(absolute)
+          .replace(/\.client\.tsx?$/, "")
+          .replace(/[^A-Za-z0-9_-]+/g, "-") || "controller";
       fileName = `assets/ruwuter-controller-${slug}-${hash.digest("hex").slice(0, 8)}.js`;
       context.emitFile({ type: "chunk", id: module, fileName });
       this.#emitted.set(id, fileName);
     }
     const base = this.base();
-    return `export default ${
-      JSON.stringify(`${base.endsWith("/") ? base : `${base}/`}${fileName}`)
-    };\n`;
+    return `export default ${JSON.stringify(
+      `${base.endsWith("/") ? base : `${base}/`}${fileName}`,
+    )};\n`;
   }
 }

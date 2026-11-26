@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { makeCtx } from "../test-support/ctx.ts";
 import { createContext } from "../src/components/context.ts";
 import { type Env, type fragment, Router } from "../src/legacy.ts";
@@ -261,8 +261,12 @@ describe("SuspenseProvider boundary ids", () => {
     // so nothing but the registry's own randomness keeps their ids apart.
     // Fresh module instances stand in for the two isolates.
     const [pageIsolate, fragmentIsolate] = await Promise.all([
-      import("../src/components/suspense.ts?isolate=page") as Promise<typeof suspenseModule>,
-      import("../src/components/suspense.ts?isolate=fragment") as Promise<typeof suspenseModule>,
+      import(
+        new URL("../src/components/suspense.ts?isolate=page", import.meta.url).href
+      ) as Promise<typeof suspenseModule>,
+      import(
+        new URL("../src/components/suspense.ts?isolate=fragment", import.meta.url).href
+      ) as Promise<typeof suspenseModule>,
     ]);
 
     const renderPage = (mod: typeof suspenseModule): Promise<string> => {

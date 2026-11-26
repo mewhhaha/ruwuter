@@ -80,7 +80,13 @@ waits—even with JavaScript disabled:
 ```tsx
 async function Reviews({ id, signal }: { id: string; signal: AbortSignal }) {
   const items = await loadReviews(id, signal);
-  return <ul>{items.map((text) => <li>{text}</li>)}</ul>;
+  return (
+    <ul>
+      {items.map((text) => (
+        <li>{text}</li>
+      ))}
+    </ul>
+  );
 }
 
 app.get("/products/:id", async ({ params, signal }) => {
@@ -123,7 +129,8 @@ const app = router().get("/activity", () =>
         {async () => <ul>{await activityItems()}</ul>}
       </Deferred>
     </main>,
-  ));
+  ),
+);
 ```
 
 - **Protocol**: Inside a routed response, panels share a request-local queue. After the shell,
@@ -160,9 +167,12 @@ import { defineController, on } from "@mewhhaha/ruwuter/browser";
 export default defineController<{ props: { initial: number }; refs: { count: HTMLSpanElement } }>(
   ({ root, props, refs, signal }) => {
     let count = props.initial;
-    on(root).click(() => {
-      refs.count.textContent = String(++count);
-    }, { signal });
+    on(root).click(
+      () => {
+        refs.count.textContent = String(++count);
+      },
+      { signal },
+    );
   },
 );
 ```
@@ -341,14 +351,12 @@ A hand-written router needs neither code generation nor Vite.
 
 ## Development
 
-- Run `deno task ci` for formatting, lint, typecheck, unit tests, DOM tests, and browser size
-  budgets.
-- Run `deno task browsers:install` followed by `deno task test:browser` for Chromium, Firefox, and
+- Run `pnpm run ci` for formatting (`oxfmt`), lint (`oxlint`), typecheck (`tsc`), unit tests, DOM
+  tests, and browser size budgets.
+- Run `pnpm run browsers:install` followed by `pnpm run test:browser` for Chromium, Firefox, and
   WebKit. CI runs both suites.
 - After editing the panel resolver (`src/runtime/resolve.ts` or `src/runtime/panels.ts`), run
-  `deno task resolver:build` with the Deno version pinned in
-  [`.github/workflows/ci.yml`](https://github.com/mewhhaha/ruwuter/blob/main/.github/workflows/ci.yml)
-  to update `src/runtime/resolve-source.ts`.
+  `pnpm run resolver:build` to update `src/runtime/resolve-source.ts`.
 
 ## License
 

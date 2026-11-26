@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/legacy.ts";
 import { Suspense, SuspenseProvider } from "../src/components/suspense.ts";

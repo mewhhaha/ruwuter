@@ -71,7 +71,10 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
     resolvedAppFolder,
     () => base,
   );
-  const runtimeUrls = new RuntimeUrls(() => building, () => base);
+  const runtimeUrls = new RuntimeUrls(
+    () => building,
+    () => base,
+  );
 
   let queuedWrite = Promise.resolve();
 
@@ -87,7 +90,8 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
   const transformControllerImports = (source: string, id: string) => {
     const cleanId = id.split("?", 1)[0];
     if (
-      path.basename(cleanId) !== "controllers.ts" || !source.includes("?ruwuter-controller-url")
+      path.basename(cleanId) !== "controllers.ts" ||
+      !source.includes("?ruwuter-controller-url")
     ) {
       return;
     }
@@ -123,8 +127,10 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
       },
     },
     load(this: unknown, id: string) {
-      return runtimeUrls.load(this as Parameters<RuntimeUrls["load"]>[0], id) ??
-        controllerUrls.load(this as Parameters<ControllerUrls["load"]>[0], id);
+      return (
+        runtimeUrls.load(this as Parameters<RuntimeUrls["load"]>[0], id) ??
+        controllerUrls.load(this as Parameters<ControllerUrls["load"]>[0], id)
+      );
     },
     transform(this: unknown, source: string, id: string) {
       void this;
@@ -141,7 +147,8 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
         const resolvedFile = path.resolve(file);
         if (generatedOutputs.has(resolvedFile)) return;
         const isRouteInput = isWithinFolder(routesFolder, resolvedFile);
-        const isControllerInput = !isRouteInput &&
+        const isControllerInput =
+          !isRouteInput &&
           isWithinFolder(resolvedAppFolder, resolvedFile) &&
           /\.client\.tsx?$/.test(resolvedFile);
         if (!isRouteInput && !isControllerInput) return;

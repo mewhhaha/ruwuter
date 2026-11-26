@@ -1,6 +1,8 @@
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { generatedTypesRoot } from "../src/fs-routes/write.ts";
 import { ruwuter } from "../src/vite.ts";
 
@@ -27,12 +29,9 @@ class FakeWebSocket {
   }
 }
 
-const waitFor = async (
-  predicate: () => boolean | Promise<boolean>,
-  timeoutMs = 1_000,
-) => {
+const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 1_000) => {
   const start = Date.now();
-  while ((Date.now() - start) < timeoutMs) {
+  while (Date.now() - start < timeoutMs) {
     if (await predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
@@ -41,7 +40,7 @@ const waitFor = async (
 
 describe("ruwuter vite plugin", () => {
   it("keeps generated type output roots inside .router/types", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
     try {
       const typesRoot = generatedTypesRoot(app);
       const resolvedTypesRoot = resolve(typesRoot);
@@ -50,50 +49,50 @@ describe("ruwuter vite plugin", () => {
       expect(resolvedTypesRoot.startsWith(`${allowedRoot}/`)).toBe(true);
       expect(typesRoot).not.toContain("..");
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true, maxRetries: 5 });
     }
   });
 
   it("generates routes and clears stale type outputs during buildStart", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
     const typesRoot = generatedTypesRoot(app);
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "index.tsx"), "export default 1;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(app, "document.tsx"), "export default 1;");
+      await writeFile(join(routesDir, "index.tsx"), "export default 1;");
 
       const staleFile = join(typesRoot, "routes", "stale.ts");
-      await Deno.mkdir(dirname(staleFile), { recursive: true });
-      await Deno.writeTextFile(staleFile, "stale");
+      await mkdir(dirname(staleFile), { recursive: true });
+      await writeFile(staleFile, "stale");
 
       const plugin = ruwuter({ appFolder: app });
       await plugin.buildStart?.();
 
-      const routerFile = await Deno.readTextFile(join(app, "routes.ts"));
+      const routerFile = await readFile(join(app, "routes.ts"), "utf8");
       expect(routerFile).toContain('import * as $index from "./routes/index.tsx";');
 
       let staleExists = true;
       try {
-        await Deno.stat(staleFile);
+        await stat(staleFile);
       } catch {
         staleExists = false;
       }
       expect(staleExists).toBe(false);
     } finally {
-      await Deno.remove(app, { recursive: true });
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+      await rm(app, { recursive: true, force: true, maxRetries: 5 });
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
     }
   });
 
   it("regenerates and triggers a full reload when a watched route file changes", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
     const typesRoot = generatedTypesRoot(app);
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "index.tsx"), "export default 1;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(app, "document.tsx"), "export default 1;");
+      await writeFile(join(routesDir, "index.tsx"), "export default 1;");
 
       const watcher = new FakeWatcher();
       const ws = new FakeWebSocket();
@@ -112,30 +111,30 @@ describe("ruwuter vite plugin", () => {
       });
 
       await plugin.buildStart?.();
-      await Deno.writeTextFile(join(routesDir, "about.tsx"), "export default 2;");
+      await writeFile(join(routesDir, "about.tsx"), "export default 2;");
       watcher.emit("change", join(routesDir, "about.tsx"));
 
       await waitFor(async () => {
-        const contents = await Deno.readTextFile(join(app, "routes.ts"));
+        const contents = await readFile(join(app, "routes.ts"), "utf8");
         return contents.includes('import * as $about from "./routes/about.tsx";');
       });
 
       await waitFor(() => ws.sent.some((payload) => payload.type === "full-reload"));
     } finally {
-      await Deno.remove(app, { recursive: true });
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+      await rm(app, { recursive: true, force: true, maxRetries: 5 });
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
     }
   });
 
   it("ignores events for generated outputs while watching controller inputs", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
     const typesRoot = generatedTypesRoot(app);
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "index.ts"), "export default 1;");
-      await Deno.writeTextFile(join(app, "palette.client.ts"), "export default 1;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(app, "document.tsx"), "export default 1;");
+      await writeFile(join(routesDir, "index.ts"), "export default 1;");
+      await writeFile(join(app, "palette.client.ts"), "export default 1;");
       const watcher = new FakeWatcher();
       const ws = new FakeWebSocket();
       const plugin = ruwuter({ appFolder: app });
@@ -150,8 +149,8 @@ describe("ruwuter vite plugin", () => {
       watcher.emit("change", join(app, "palette.client.ts"));
       await waitFor(() => ws.sent.some((payload) => payload.type === "full-reload"));
     } finally {
-      await Deno.remove(app, { recursive: true });
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+      await rm(app, { recursive: true, force: true, maxRetries: 5 });
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
     }
   });
 
@@ -163,15 +162,15 @@ describe("ruwuter vite plugin", () => {
 
   it("builds a production SSR entry without rewriting application import.meta.url", async () => {
     const { build } = await import("vite");
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
     const typesRoot = generatedTypesRoot(app);
 
     try {
       const routesDir = join(app, "routes");
       const distDir = join(app, "dist");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(app, "asset.txt"), "asset");
-      await Deno.writeTextFile(
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(app, "asset.txt"), "asset");
+      await writeFile(
         join(app, "document.tsx"),
         `
 export default function Document({ children }: { children?: unknown }) {
@@ -179,13 +178,13 @@ export default function Document({ children }: { children?: unknown }) {
 }
 `,
       );
-      await Deno.writeTextFile(
+      await writeFile(
         join(routesDir, "index.ts"),
         `
 export const GET = () => new Response("ok");
 `,
       );
-      await Deno.writeTextFile(
+      await writeFile(
         join(app, "entry.ts"),
         `
 import { router } from "@mewhhaha/ruwuter";
@@ -228,34 +227,34 @@ export const app = router(routes);
         },
       });
 
-      const generatedRoutes = await Deno.readTextFile(join(app, "routes.ts"));
+      const generatedRoutes = await readFile(join(app, "routes.ts"), "utf8");
       expect(generatedRoutes).not.toContain("import.meta.url");
 
-      const bundledEntry = await Deno.readTextFile(join(distDir, "entry.js"));
+      const bundledEntry = await readFile(join(distDir, "entry.js"), "utf8");
       expect(bundledEntry).toContain("import.meta.url");
       const { app: built } = await import(pathToFileURL(join(distDir, "entry.js")).href);
       expect(await (await built.fetch(new Request("https://example.org/index"))).text()).toBe("ok");
       expect(bundledEntry).not.toContain('"file://"');
     } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+      await rm(app, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
     }
   });
 
   it("serves and emits executable generated controller modules", async () => {
     const { build, createServer } = await import("vite");
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
     const typesRoot = generatedTypesRoot(app);
     try {
-      await Deno.mkdir(join(app, "routes"), { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
-      await Deno.writeTextFile(
+      await mkdir(join(app, "routes"), { recursive: true });
+      await writeFile(join(app, "document.tsx"), "export default 1;");
+      await writeFile(join(app, "routes", "index.ts"), "export default 1;");
+      await writeFile(
         join(app, "open.client.ts"),
         `import { defineController } from "@mewhhaha/ruwuter/browser";
 export default defineController((context: { root: Element }) => console.log(context.root));`,
       );
-      await Deno.writeTextFile(
+      await writeFile(
         join(app, "entry.ts"),
         `export { open } from "./controllers.ts";
 export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
@@ -276,8 +275,9 @@ export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
         const proxy = generated?.code.match(/(\/@id\/__x00__ruwuter-controller-url:[^\s"']+)/)?.[1];
         if (!proxy) throw new Error(`Expected generated controller URL proxy: ${generated?.code}`);
         const urlModule = await server.transformRequest(proxy);
-        const controllerUrl = urlModule?.code.match(/(\/@id\/__x00__ruwuter-controller:[^\s"']+)/)
-          ?.[1];
+        const controllerUrl = urlModule?.code.match(
+          /(\/@id\/__x00__ruwuter-controller:[^\s"']+)/,
+        )?.[1];
         if (!controllerUrl) throw new Error("Expected executable controller module URL");
         const controller = await server.transformRequest(controllerUrl);
         expect(controller?.code).not.toContain("context:");
@@ -305,7 +305,7 @@ export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
           rolldownOptions: { output: { entryFileNames: "entry.js" } },
         },
       });
-      const mod = await import(pathToFileURL(join(dist, "entry.js")).href) as {
+      const mod = (await import(pathToFileURL(join(dist, "entry.js")).href)) as {
         direct: string;
         open: string;
       };
@@ -316,7 +316,7 @@ export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
       expect(mod.open.startsWith("file:")).toBe(false);
       expect(mod.direct.startsWith("/docs/assets/")).toBe(true);
       expect(mod.direct.startsWith("data:")).toBe(false);
-      const chunk = await Deno.readTextFile(join(dist, mod.open.slice("/docs/".length)));
+      const chunk = await readFile(join(dist, mod.open.slice("/docs/".length)), "utf8");
       expect(chunk).toContain("defineController");
       expect(mod.open).toBe(mod.direct);
 
@@ -338,32 +338,32 @@ export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
           rolldownOptions: { output: { entryFileNames: "entry.js" } },
         },
       });
-      const mod2 = await import(pathToFileURL(join(dist2, "entry.js")).href) as {
+      const mod2 = (await import(pathToFileURL(join(dist2, "entry.js")).href)) as {
         open: string;
       };
       expect(mod2.open).toBe(mod.open);
     } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+      await rm(app, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
     }
   });
 
   it("busts controller chunk hashes when a local imported helper changes", async () => {
     const { build } = await import("vite");
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
     const typesRoot = generatedTypesRoot(app);
     try {
-      await Deno.mkdir(join(app, "routes"), { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
-      await Deno.writeTextFile(join(app, "helper.ts"), `export const label = "v1";`);
-      await Deno.writeTextFile(
+      await mkdir(join(app, "routes"), { recursive: true });
+      await writeFile(join(app, "document.tsx"), "export default 1;");
+      await writeFile(join(app, "routes", "index.ts"), "export default 1;");
+      await writeFile(join(app, "helper.ts"), `export const label = "v1";`);
+      await writeFile(
         join(app, "widget.client.ts"),
         `import { defineController } from "@mewhhaha/ruwuter/browser";
 import { label } from "./helper.ts";
 export default defineController(({ root }) => { root.setAttribute("data-v", label); });`,
       );
-      await Deno.writeTextFile(join(app, "entry.ts"), `export { widget } from "./controllers.ts";`);
+      await writeFile(join(app, "entry.ts"), `export { widget } from "./controllers.ts";`);
 
       const runBuild = async (outDir: string) => {
         await build({
@@ -382,30 +382,30 @@ export default defineController(({ root }) => { root.setAttribute("data-v", labe
             rolldownOptions: { output: { entryFileNames: "entry.js" } },
           },
         });
-        return await import(`${pathToFileURL(join(outDir, "entry.js")).href}?t=${outDir}`) as {
+        return (await import(`${pathToFileURL(join(outDir, "entry.js")).href}?t=${outDir}`)) as {
           widget: string;
         };
       };
 
       const first = await runBuild(join(app, "dist1"));
-      await Deno.writeTextFile(join(app, "helper.ts"), `export const label = "v2";`);
+      await writeFile(join(app, "helper.ts"), `export const label = "v2";`);
       const second = await runBuild(join(app, "dist2"));
       expect(second.widget === first.widget).toBe(false);
     } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+      await rm(app, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
     }
   });
 
   it("emits documented browser runtime URLs as executable chunks", async () => {
     const { build } = await import("vite");
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
     const typesRoot = generatedTypesRoot(app);
     try {
-      await Deno.mkdir(join(app, "routes"), { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
-      await Deno.writeTextFile(
+      await mkdir(join(app, "routes"), { recursive: true });
+      await writeFile(join(app, "document.tsx"), "export default 1;");
+      await writeFile(join(app, "routes", "index.ts"), "export default 1;");
+      await writeFile(
         join(app, "entry.ts"),
         `import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
 import vtRuntime from "@mewhhaha/ruwuter/vt.js?url&no-inline";
@@ -438,24 +438,24 @@ export { clientRuntime, vtRuntime };`,
         },
       });
 
-      const serverModule = await import(pathToFileURL(join(dist, "entry.js")).href) as {
+      const serverModule = (await import(pathToFileURL(join(dist, "entry.js")).href)) as {
         clientRuntime: string;
         vtRuntime: string;
       };
       expect(serverModule.clientRuntime.startsWith("/docs/assets/ruwuter-client-")).toBe(true);
       expect(serverModule.vtRuntime.startsWith("/docs/assets/ruwuter-vt-")).toBe(true);
       const runtimePath = join(dist, serverModule.clientRuntime.slice("/docs/".length));
-      const runtimeCode = await Deno.readTextFile(runtimePath);
+      const runtimeCode = await readFile(runtimePath, "utf8");
       expect(runtimeCode).toContain("data-rw-controller");
       expect(runtimeCode).not.toContain("type MountedActivation");
       const vtPath = join(dist, serverModule.vtRuntime.slice("/docs/".length));
-      const vtCode = await Deno.readTextFile(vtPath);
+      const vtCode = await readFile(vtPath, "utf8");
       expect(vtCode).toContain("pageswap");
       await import(pathToFileURL(runtimePath).href);
       await import(pathToFileURL(vtPath).href);
     } finally {
-      await Deno.remove(app, { recursive: true }).catch(() => {});
-      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+      await rm(app, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
     }
   });
 });

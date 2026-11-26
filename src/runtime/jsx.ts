@@ -4,8 +4,9 @@ import type { ControllerRefToken } from "../components/client.ts";
 
 type ElementForTag<Name extends string> = Name extends keyof HTMLElementTagNameMap
   ? HTMLElementTagNameMap[Name]
-  : Name extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[Name]
-  : Element;
+  : Name extends keyof SVGElementTagNameMap
+    ? SVGElementTagNameMap[Name]
+    : Element;
 
 type WithRef<Name extends string, Props> = Props & {
   ref?:
@@ -15,13 +16,7 @@ type WithRef<Name extends string, Props> = Props & {
 };
 
 type CustomCommand = `--${string}`;
-type AutoCapitalize =
-  | "characters"
-  | "none"
-  | "off"
-  | "on"
-  | "sentences"
-  | "words";
+type AutoCapitalize = "characters" | "none" | "off" | "on" | "sentences" | "words";
 type ContentEditable = boolean | "false" | "plaintext-only" | "true";
 type Dir = "auto" | "ltr" | "rtl";
 type Draggable = boolean | "false" | "true";
@@ -72,14 +67,7 @@ export namespace JSX {
     "aria-describedby"?: string | undefined;
     "aria-details"?: string | undefined;
     "aria-disabled"?: boolean | "false" | "true" | undefined;
-    "aria-dropeffect"?:
-      | "none"
-      | "copy"
-      | "execute"
-      | "link"
-      | "move"
-      | "popup"
-      | undefined; // deprecated
+    "aria-dropeffect"?: "none" | "copy" | "execute" | "link" | "move" | "popup" | undefined; // deprecated
     "aria-errormessage"?: string | undefined;
     "aria-expanded"?: boolean | "false" | "true" | undefined;
     "aria-flowto"?: string | undefined;
@@ -95,13 +83,7 @@ export namespace JSX {
       | "dialog"
       | undefined;
     "aria-hidden"?: boolean | "false" | "true" | undefined;
-    "aria-invalid"?:
-      | boolean
-      | "false"
-      | "true"
-      | "grammar"
-      | "spelling"
-      | undefined;
+    "aria-invalid"?: boolean | "false" | "true" | "grammar" | "spelling" | undefined;
     "aria-keyshortcuts"?: string | undefined;
     "aria-label"?: string | undefined;
     "aria-labelledby"?: string | undefined;
@@ -116,13 +98,7 @@ export namespace JSX {
     "aria-posinset"?: number | undefined;
     "aria-pressed"?: boolean | "false" | "mixed" | "true" | undefined;
     "aria-readonly"?: boolean | "false" | "true" | undefined;
-    "aria-relevant"?:
-      | "additions"
-      | "additions text"
-      | "all"
-      | "removals"
-      | "text"
-      | undefined;
+    "aria-relevant"?: "additions" | "additions text" | "all" | "removals" | "text" | undefined;
     "aria-required"?: boolean | "false" | "true" | undefined;
     "aria-roledescription"?: string | undefined;
     "aria-rowcount"?: number | undefined;
@@ -664,14 +640,7 @@ export namespace JSX {
 
   export type ElementType = keyof IntrinsicElements | ((props: never) => HtmlNode);
   export type HtmlNode = HtmlValue | Promise<HtmlValue>;
-  export type HtmlValue =
-    | Element
-    | string
-    | number
-    | null
-    | undefined
-    | boolean
-    | HtmlNode[];
+  export type HtmlValue = Element | string | number | null | undefined | boolean | HtmlNode[];
 
   export interface ElementChildrenAttribute {
     children?: HtmlNode;

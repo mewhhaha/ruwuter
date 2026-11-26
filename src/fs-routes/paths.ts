@@ -15,14 +15,14 @@ const safeTypesSegment = (value: string): string => {
 export const generatedTypesRoot = (appFolder: string): string => {
   const resolvedAppFolder = path.resolve(appFolder);
   const relativeAppFolder = path.relative(process.cwd(), resolvedAppFolder);
-  const isWithinCwd = relativeAppFolder &&
-    !relativeAppFolder.startsWith("..") &&
-    !path.isAbsolute(relativeAppFolder);
-  const folderId = relativeAppFolder === ""
-    ? safeTypesSegment(path.basename(resolvedAppFolder))
-    : isWithinCwd
-    ? relativeAppFolder.split(path.sep).map(safeTypesSegment).join(path.sep)
-    : safeTypesSegment(resolvedAppFolder);
+  const isWithinCwd =
+    relativeAppFolder && !relativeAppFolder.startsWith("..") && !path.isAbsolute(relativeAppFolder);
+  const folderId =
+    relativeAppFolder === ""
+      ? safeTypesSegment(path.basename(resolvedAppFolder))
+      : isWithinCwd
+        ? relativeAppFolder.split(path.sep).map(safeTypesSegment).join(path.sep)
+        : safeTypesSegment(resolvedAppFolder);
 
   return path.join(GENERATED_TYPES_ROOT, folderId);
 };

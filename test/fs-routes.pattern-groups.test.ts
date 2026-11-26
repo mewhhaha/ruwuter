@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { extractRouteParams } from "../src/fs-routes/route-name.ts";
 import { generatePatternString } from "../src/fs-routes/generate-router.ts";
 

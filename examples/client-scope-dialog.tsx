@@ -19,7 +19,9 @@ export default function CommandPaletteExample({ clientRuntime }: { clientRuntime
           <dialog id="palette" ref={palette.refs.dialog}>
             <form method="dialog">
               <input autofocus placeholder="Type a command" />
-              <button type="submit" value="cancel">Close</button>
+              <button type="submit" value="cancel">
+                Close
+              </button>
             </form>
           </dialog>
         </section>

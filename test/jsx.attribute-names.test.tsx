@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { jsx } from "../src/runtime/jsx-runtime.ts";
 import { into } from "../src/runtime/node.ts";
 import { makeCtx } from "../test-support/ctx.ts";
@@ -142,25 +142,23 @@ describe("JSX tag names", () => {
   });
 
   it("rejects tag names containing whitespace, quotes, slashes, equals, or angle brackets", () => {
-    for (
-      const tag of [
-        "div ",
-        " div",
-        "div onclick=x",
-        'div a="b"',
-        "div/",
-        "/div",
-        "div<span",
-        "div>",
-        "di v",
-        "div\nid=x",
-        "div\tid=x",
-        "d'iv",
-        "1div",
-        "-div",
-        "div!",
-      ]
-    ) {
+    for (const tag of [
+      "div ",
+      " div",
+      "div onclick=x",
+      'div a="b"',
+      "div/",
+      "/div",
+      "div<span",
+      "div>",
+      "di v",
+      "div\nid=x",
+      "div\tid=x",
+      "d'iv",
+      "1div",
+      "-div",
+      "div!",
+    ]) {
       let error: unknown;
       try {
         jsx(tag, { children: "x" } as never);
@@ -209,7 +207,9 @@ describe("JSX tag names", () => {
     const Evil = () => jsx('div id="a"><script>alert(1)</script', { children: "hi" } as never);
 
     const { body, failed } = await streamRoute(() =>
-      jsx("html", { children: jsx("body", { children: [jsx("p", { children: "before" }), Evil] }) })
+      jsx("html", {
+        children: jsx("body", { children: [jsx("p", { children: "before" }), Evil] }),
+      }),
     );
 
     expect(failed).toBe(true);
@@ -225,7 +225,9 @@ describe("JSX attribute names over a streamed response", () => {
     const Evil = () => jsx("div", { ...hostile, children: "hi" } as never);
 
     const { body, failed } = await streamRoute(() =>
-      jsx("html", { children: jsx("body", { children: [jsx("p", { children: "before" }), Evil] }) })
+      jsx("html", {
+        children: jsx("body", { children: [jsx("p", { children: "before" }), Evil] }),
+      }),
     );
 
     expect(failed).toBe(true);
@@ -245,7 +247,7 @@ describe("JSX attribute names over a streamed response", () => {
             }),
           }),
         }),
-      })
+      }),
     );
 
     // The boundary swallows the error, so the response completes normally and

@@ -44,7 +44,9 @@ function ReviewList({ productId, reviews }: { productId: string; reviews: Review
     <>
       {
         // deno-lint-ignore jsx-key -- server-rendered list without DOM reconciliation
-        reviews.map((review) => <ReviewItem productId={productId} review={review} />)
+        reviews.map((review) => (
+          <ReviewItem productId={productId} review={review} />
+        ))
       }
     </>
   );
@@ -79,11 +81,7 @@ export function fixiReviewsApp(store: ReviewStore, assets: FixiAssets) {
             <main {...fx.root()}>
               <h1>{name}</h1>
 
-              <form
-                id="search-form"
-                method="get"
-                action={`/products/${params.id}`}
-              >
+              <form id="search-form" method="get" action={`/products/${params.id}`}>
                 <label>
                   Filter reviews{" "}
                   <input
@@ -138,7 +136,7 @@ export function fixiReviewsApp(store: ReviewStore, assets: FixiAssets) {
     })
     .route("/products/:id/reviews", {
       GET: async ({ params, request, signal }) => {
-        if (!await store.productName(params.id, signal)) {
+        if (!(await store.productName(params.id, signal))) {
           return new Response(null, { status: 404 });
         }
         const query = new URL(request.url).searchParams.get("q") ?? "";
@@ -146,7 +144,7 @@ export function fixiReviewsApp(store: ReviewStore, assets: FixiAssets) {
         return html(<ReviewList productId={params.id} reviews={reviews} />);
       },
       POST: async ({ params, request, signal }) => {
-        if (!await store.productName(params.id, signal)) {
+        if (!(await store.productName(params.id, signal))) {
           return new Response(null, { status: 404 });
         }
         const text = String((await request.formData()).get("review") ?? "").trim();
@@ -171,7 +169,7 @@ export function fixiReviewsApp(store: ReviewStore, assets: FixiAssets) {
       },
     })
     .get("/products/:id/summary", async ({ params, signal }) => {
-      if (!await store.productName(params.id, signal)) {
+      if (!(await store.productName(params.id, signal))) {
         return new Response(null, { status: 404 });
       }
       return html(

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { controller, type ControllerHref } from "../src/components/client.ts";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, Router } from "../src/legacy.ts";
@@ -9,25 +9,29 @@ describe("controller activation attributes", () => {
     const href = "/controllers/palette.js";
     const palette = controller(href, { initiallyOpen: false });
 
-    const router = Router([[
-      new URLPattern({ pathname: "/" }),
+    const router = Router([
       [
-        {
-          id: "root",
-          mod: {
-            default: () => (
-              <html>
-                <body>
-                  <section {...palette.root()}>
-                    <button type="button" ref={palette.refs.open}>Open</button>
-                  </section>
-                </body>
-              </html>
-            ),
-          },
-        } satisfies fragment,
+        new URLPattern({ pathname: "/" }),
+        [
+          {
+            id: "root",
+            mod: {
+              default: () => (
+                <html>
+                  <body>
+                    <section {...palette.root()}>
+                      <button type="button" ref={palette.refs.open}>
+                        Open
+                      </button>
+                    </section>
+                  </body>
+                </html>
+              ),
+            },
+          } satisfies fragment,
+        ],
       ],
-    ]]);
+    ]);
 
     const { ctx } = makeCtx();
     const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);

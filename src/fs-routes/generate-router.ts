@@ -105,7 +105,7 @@ export const discoverRouteEntries = async (
   );
   return discovered
     .filter((entry): entry is DiscoveredRouteEntry => entry !== undefined)
-    .sort((a, b) => a.routeId < b.routeId ? -1 : a.routeId > b.routeId ? 1 : 0);
+    .sort((a, b) => (a.routeId < b.routeId ? -1 : a.routeId > b.routeId ? 1 : 0));
 };
 
 const isPathlessLayout = (segments: string[]): boolean => {
@@ -115,9 +115,7 @@ const isPathlessLayout = (segments: string[]): boolean => {
   return last.startsWith("_");
 };
 
-export const generateRouter = async (
-  appFolder: string,
-): Promise<GeneratedFile[]> => {
+export const generateRouter = async (appFolder: string): Promise<GeneratedFile[]> => {
   const routesFolder = path.join(appFolder, "routes");
   const routeEntries = (await discoverRouteEntries(routesFolder)).filter(
     (entry) => !isPathlessLayout(splitRouteSegments(entry.routeId)),
@@ -148,9 +146,9 @@ export const generateRouter = async (
       seenSymbols.set(name, entry.routeId);
 
       if (entry.isDirectory) {
-        return `import * as ${name} from ${
-          JSON.stringify(`./routes/${entry.sourceName}/${entry.entryFile}`)
-        };`;
+        return `import * as ${name} from ${JSON.stringify(
+          `./routes/${entry.sourceName}/${entry.entryFile}`,
+        )};`;
       }
       return `import * as ${name} from ${JSON.stringify(`./routes/${entry.sourceName}`)};`;
     })
@@ -177,8 +175,8 @@ export const generateRouter = async (
 
   const routes = [...routeData].sort((a, b) => bySpecificity(a.routeId, b.routeId));
 
-  const items = routes.map(({ pattern, name }) =>
-    `  [new URLPattern({ pathname: ${JSON.stringify(pattern)} }), ${name}]`
+  const items = routes.map(
+    ({ pattern, name }) => `  [new URLPattern({ pathname: ${JSON.stringify(pattern)} }), ${name}]`,
   );
   const importsBlock = routeImports ? `${routeImports}\n\n` : "";
   const file = `${importsBlock}export const routes = [\n${items.join(",\n")}\n] as const;\n`;

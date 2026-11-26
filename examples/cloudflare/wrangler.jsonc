@@ -4,5 +4,5 @@
   "compatibility_date": "2026-11-26",
   "compatibility_flags": ["nodejs_compat"],
   "no_bundle": true,
-  "assets": { "directory": "./dist/assets" }
+  "assets": { "directory": "./dist/assets" },
 }

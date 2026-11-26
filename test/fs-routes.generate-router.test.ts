@@ -1,5 +1,7 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 import { generateRouter } from "../src/fs-routes/generate-router.ts";
 import { bySpecificity } from "../src/fs-routes/sort.ts";
 
@@ -12,12 +14,12 @@ describe("generateRouter", () => {
   });
 
   it("includes entries for prefixed routes so layouts stay navigable", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(routesDir, "a.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "a.b.tsx"), "export default 2;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(routesDir, "a.tsx"), "export default 1;");
+      await writeFile(join(routesDir, "a.b.tsx"), "export default 2;");
 
       const [routerFile] = await generateRouter(app);
       if (!routerFile) throw new Error("Router file not generated");
@@ -28,17 +30,17 @@ describe("generateRouter", () => {
       expect(contents).toContain('pathname: "/a/b"');
       expect(contents).toContain('pathname: "/a"');
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("does not create matchable routes or unused imports for pathless layouts", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(routesDir, "_app.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "_app.b.tsx"), "export default 2;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(routesDir, "_app.tsx"), "export default 1;");
+      await writeFile(join(routesDir, "_app.b.tsx"), "export default 2;");
 
       const [routerFile] = await generateRouter(app);
       if (!routerFile) throw new Error("Router file not generated");
@@ -50,17 +52,17 @@ describe("generateRouter", () => {
       expect(contents).not.toContain('pathname: "/"');
       expect(contents).not.toContain("./routes/_app.tsx");
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("allows pathless segments in the middle but not at the tail", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(routesDir, "_a.b.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "_a.b._c.tsx"), "export default 2;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(routesDir, "_a.b.tsx"), "export default 1;");
+      await writeFile(join(routesDir, "_a.b._c.tsx"), "export default 2;");
 
       const [routerFile] = await generateRouter(app);
       if (!routerFile) throw new Error("Router file not generated");
@@ -71,15 +73,15 @@ describe("generateRouter", () => {
       expect(contents).toContain('pathname: "/b"');
       expect(contents).not.toContain('pathname: "/c"');
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("supports escaped route conventions", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
+      await mkdir(routesDir, { recursive: true });
       const files = [
         "sitemap[.]xml.tsx",
         "weird-url.[_index].tsx",
@@ -87,9 +89,7 @@ describe("generateRouter", () => {
         "[[so-weird]].tsx",
         "reports.$id[.pdf].tsx",
       ];
-      await Promise.all(
-        files.map((file) => Deno.writeTextFile(join(routesDir, file), "export default 1;")),
-      );
+      await Promise.all(files.map((file) => writeFile(join(routesDir, file), "export default 1;")));
 
       const [routerFile] = await generateRouter(app);
       if (!routerFile) throw new Error("Router file not generated");
@@ -101,16 +101,16 @@ describe("generateRouter", () => {
       expect(contents).toContain('pathname: "/[so-weird]"');
       expect(contents).toContain('pathname: "/reports/:id.pdf"');
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("treats .ts routes as files, not route directories", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(routesDir, "api.users.ts"), "export default 1;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(routesDir, "api.users.ts"), "export default 1;");
 
       const [routerFile] = await generateRouter(app);
       if (!routerFile) throw new Error("Router file not generated");
@@ -120,31 +120,22 @@ describe("generateRouter", () => {
       expect(contents).not.toContain("./routes/api.users.ts/route.tsx");
       expect(contents).toContain('pathname: "/api/users"');
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("orders more specific routes before generic params", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      const files = [
-        "reports.$id.tsx",
-        "reports.$id[.pdf].tsx",
-        "reports.(foo).tsx",
-      ];
-      await Promise.all(
-        files.map((file) => Deno.writeTextFile(join(routesDir, file), "export default 1;")),
-      );
+      await mkdir(routesDir, { recursive: true });
+      const files = ["reports.$id.tsx", "reports.$id[.pdf].tsx", "reports.(foo).tsx"];
+      await Promise.all(files.map((file) => writeFile(join(routesDir, file), "export default 1;")));
 
       const [routerFile] = await generateRouter(app);
       if (!routerFile) throw new Error("Router file not generated");
       const { contents } = routerFile;
-      const order = Array.from(
-        contents.matchAll(/pathname: "([^"]+)"/g),
-        (m) => m[1],
-      );
+      const order = Array.from(contents.matchAll(/pathname: "([^"]+)"/g), (m) => m[1]);
 
       const pdfIndex = order.findIndex((value) => value.includes("/reports/:id.pdf"));
       const paramIndex = order.findIndex((value) => value === "/reports/:id");
@@ -156,17 +147,17 @@ describe("generateRouter", () => {
       expect(pdfIndex).toBeLessThan(paramIndex);
       expect(optionalLiteralIndex).toBeLessThan(paramIndex);
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("rejects equivalent route patterns", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(routesDir, "sitemap[.]xml.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "[sitemap.xml].tsx"), "export default 2;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(routesDir, "sitemap[.]xml.tsx"), "export default 1;");
+      await writeFile(join(routesDir, "[sitemap.xml].tsx"), "export default 2;");
 
       let error: unknown;
       try {
@@ -178,17 +169,17 @@ describe("generateRouter", () => {
       expect(error instanceof Error).toBe(true);
       expect((error as Error).message).toContain('Route pattern "/sitemap.xml"');
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("rejects route patterns that differ only by param name", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(routesDir, "users.$id.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(routesDir, "users.$slug.tsx"), "export default 2;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(routesDir, "users.$id.tsx"), "export default 1;");
+      await writeFile(join(routesDir, "users.$slug.tsx"), "export default 2;");
 
       let error: unknown;
       try {
@@ -202,22 +193,22 @@ describe("generateRouter", () => {
       expect((error as Error).message).toContain("users.$id");
       expect((error as Error).message).toContain("users.$slug");
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("quotes route file names as JSON string literals", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(routesDir, { recursive: true });
-      await Deno.writeTextFile(join(routesDir, 'quote["].tsx'), "export default 1;");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(join(routesDir, 'quote["].tsx'), "export default 1;");
 
       const [routerFile] = await generateRouter(app);
 
       expect(routerFile.contents).toContain(JSON.stringify('./routes/quote["].tsx'));
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
@@ -232,18 +223,15 @@ describe("generateRouter", () => {
   });
 
   it("discovers directory routes with route.tsx or route.ts and ignores helper folders", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-router-"));
     try {
       const routesDir = join(app, "routes");
-      await Deno.mkdir(join(routesDir, "products"), { recursive: true });
-      await Deno.mkdir(join(routesDir, "api"), { recursive: true });
-      await Deno.mkdir(join(routesDir, "palette"), { recursive: true });
-      await Deno.writeTextFile(join(routesDir, "products", "route.tsx"), "export const GET = 1;");
-      await Deno.writeTextFile(join(routesDir, "api", "route.ts"), "export const GET = 1;");
-      await Deno.writeTextFile(
-        join(routesDir, "palette", "open-palette.client.ts"),
-        "export default 1;",
-      );
+      await mkdir(join(routesDir, "products"), { recursive: true });
+      await mkdir(join(routesDir, "api"), { recursive: true });
+      await mkdir(join(routesDir, "palette"), { recursive: true });
+      await writeFile(join(routesDir, "products", "route.tsx"), "export const GET = 1;");
+      await writeFile(join(routesDir, "api", "route.ts"), "export const GET = 1;");
+      await writeFile(join(routesDir, "palette", "open-palette.client.ts"), "export default 1;");
 
       const [routerFile] = await generateRouter(app);
       if (!routerFile) throw new Error("Router file not generated");
@@ -254,7 +242,7 @@ describe("generateRouter", () => {
       expect(routerFile.contents).toContain('import * as $api from "./routes/api/route.ts";');
       expect(routerFile.contents).not.toContain("palette");
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 });

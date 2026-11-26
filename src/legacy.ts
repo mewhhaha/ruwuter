@@ -103,10 +103,7 @@ export type fragment<Bindings = Env> = {
   params?: string[];
 };
 
-export type route<Bindings = Env> = [
-  pattern: URLPattern,
-  fragments: fragment<Bindings>[],
-];
+export type route<Bindings = Env> = [pattern: URLPattern, fragments: fragment<Bindings>[]];
 
 export type router<Bindings = Env> = {
   handle: (
@@ -155,9 +152,7 @@ export function fragment<Bindings = Env>(
   return render;
 }
 
-const toParams = (
-  groups: Record<string, string | undefined>,
-): Record<string, string> => {
+const toParams = (groups: Record<string, string | undefined>): Record<string, string> => {
   const result: Record<string, string> = {};
   for (const key in groups) {
     const value = groups[key];
@@ -234,8 +229,8 @@ export const bindGenerator = (generator: AsyncGenerator<string>): AsyncGenerator
   const bound: AsyncGenerator<string> = {
     next: bindContext(() => generator.next()) as AsyncGenerator<string>["next"],
     return: bindContext(() => generator.return(undefined)) as AsyncGenerator<string>["return"],
-    throw: bindContext(
-      (error: unknown) => generator.throw(error),
+    throw: bindContext((error: unknown) =>
+      generator.throw(error),
     ) as AsyncGenerator<string>["throw"],
     [Symbol.asyncIterator]() {
       return bound;
@@ -344,8 +339,8 @@ const routeResponse = async <Bindings>(
     } catch (error) {
       throw error instanceof Response
         ? new TypeError(
-          "Route components cannot throw Response after HTML streaming has started. Return responses from loaders or actions instead.",
-        )
+            "Route components cannot throw Response after HTML streaming has started. Return responses from loaders or actions instead.",
+          )
         : error;
     }
   })();
@@ -447,9 +442,7 @@ const matchFragment = <Bindings>(
   return { context };
 };
 
-export const Router = <Bindings = Env>(
-  routes: route<Bindings>[],
-): router<Bindings> => {
+export const Router = <Bindings = Env>(routes: route<Bindings>[]): router<Bindings> => {
   const compiled: CompiledRoute<Bindings>[] = routes.map(([pattern, fragments]) => {
     const leaf = fragments[fragments.length - 1]?.mod;
     const allowed = methodSetForLeaf(leaf);

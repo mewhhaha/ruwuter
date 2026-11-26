@@ -55,9 +55,11 @@ const browserApp = router()
           <section id="widget" {...widget.root()}>
             <button type="button">Add to cart</button>
           </section>
-          {asyncClient
-            ? <script type="module" async src="/client.js"></script>
-            : <script type="module" src="/client.js"></script>}
+          {asyncClient ? (
+            <script type="module" async src="/client.js"></script>
+          ) : (
+            <script type="module" src="/client.js"></script>
+          )}
           <p>{"Product description. ".repeat(256)}</p>
           <Deferred fallback={<p id="slow-wait">Loading reviews</p>}>
             {async () => {
@@ -67,7 +69,8 @@ const browserApp = router()
           </Deferred>
         </body>
       </html>,
-    ))
+    ),
+  )
   .get("/mutations", () =>
     html(
       <html>
@@ -97,13 +100,14 @@ const browserApp = router()
           <script type="module" src="/client.js"></script>
         </body>
       </html>,
-    ));
+    ),
+  );
 
 async function measureHelloBatch(): Promise<number> {
   const start = performance.now();
   for (let i = 0; i < 1000; i++) {
     const response = await helloApp.fetch(new Request("http://localhost/hello/Robin"));
-    if (response.status !== 200 || await response.text() !== greeting) {
+    if (response.status !== 200 || (await response.text()) !== greeting) {
       throw new Error("Unexpected /hello response");
     }
   }
@@ -114,7 +118,7 @@ async function measureStaticBatch(): Promise<number> {
   const start = performance.now();
   for (let i = 0; i < 1000; i++) {
     const response = await staticApp.fetch(new Request("http://localhost/page-99"));
-    if (response.status !== 200 || await response.text() !== "<p>Route 99</p>") {
+    if (response.status !== 200 || (await response.text()) !== "<p>Route 99</p>") {
       throw new Error("Unexpected /page-99 response");
     }
   }

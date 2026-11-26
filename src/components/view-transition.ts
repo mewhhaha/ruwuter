@@ -79,10 +79,7 @@ export type ViewTransitionAttributes = {
  * Produces HTML attributes for attaching a View Transition directly to an intrinsic element
  * (such as `<img>`, `<h1>`, or `<li>`) without adding a wrapper element.
  */
-export function vt(
-  name: string,
-  options: ViewTransitionOptions = {},
-): ViewTransitionAttributes {
+export function vt(name: string, options: ViewTransitionOptions = {}): ViewTransitionAttributes {
   const validName = assertIdent(name, "name");
   const share = normalizeClasses(options.share);
 
@@ -155,11 +152,7 @@ export interface ViewTransitionsProps {
  * Opts a document `<head>` into zero-JS cross-document MPA View Transitions (`@view-transition`)
  * and optional render-blocking `<link rel="expect">` targets for streamed pages.
  */
-export function ViewTransitions({
-  nonce,
-  expect,
-  types,
-}: ViewTransitionsProps = {}): JSX.Element {
+export function ViewTransitions({ nonce, expect, types }: ViewTransitionsProps = {}): JSX.Element {
   const validTypes = types?.length
     ? types.map((type) => assertIdent(type, "type")).join(" ")
     : undefined;
@@ -167,7 +160,7 @@ export function ViewTransitions({
     ? `@view-transition{navigation:auto;types:${validTypes}}`
     : "@view-transition{navigation:auto}";
 
-  const expectList = expect === undefined ? [] : (typeof expect === "string" ? [expect] : expect);
+  const expectList = expect === undefined ? [] : typeof expect === "string" ? [expect] : expect;
   const links = expectList.map((raw) => {
     const trimmed = raw.trim();
     const id = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;

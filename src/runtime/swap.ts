@@ -16,12 +16,14 @@ declare const trustedHTMLBrand: unique symbol;
 
 type TrustedHTMLValue = typeof globalThis extends {
   TrustedHTML: { prototype: infer T };
-} ? T
+}
+  ? T
   : string & { readonly [trustedHTMLBrand]: true };
 
 type TrustedTypePolicyValue = typeof globalThis extends {
   TrustedTypePolicy: { prototype: infer P };
-} ? P
+}
+  ? P
   : { createHTML(value: string): TrustedHTMLValue };
 
 /** Element reference accepted by `swap` (`Element`, selector, or React-style ref object). */
@@ -32,12 +34,7 @@ export type SwapWriteFn = (
   html: string | TrustedHTMLValue,
 ) => void | Promise<void>;
 /** Write mode used by `swap` when applying HTML to the target element. */
-export type SwapMode =
-  | "innerHTML"
-  | "outerHTML"
-  | InsertPosition
-  | "remove"
-  | SwapWriteFn;
+export type SwapMode = "innerHTML" | "outerHTML" | InsertPosition | "remove" | SwapWriteFn;
 
 /** Input sources accepted by `swap`. */
 export type SwapInput =
@@ -108,8 +105,9 @@ const resolveElement = (ref: SwapTarget): Element => {
   throw new TypeError("swap: unsupported element reference provided.");
 };
 
-const trustedHTMLCtor =
-  (globalThis as { TrustedHTML?: { new (...args: never[]): TrustedHTMLValue } }).TrustedHTML;
+const trustedHTMLCtor = (
+  globalThis as { TrustedHTML?: { new (...args: never[]): TrustedHTMLValue } }
+).TrustedHTML;
 
 const DEFAULT_CONTENT_TYPE = /\b(?:text\/html|application\/xhtml\+xml)\b/i;
 const RESOLVER_SCRIPT = "script[data-rw-resolver]";
@@ -131,9 +129,10 @@ const assertResponseAllowed = (
   if (expected === false) return;
 
   const contentType = response.headers.get("Content-Type") ?? "";
-  const matches = typeof expected === "string"
-    ? contentType.toLowerCase().includes(expected.toLowerCase())
-    : expected.test(contentType);
+  const matches =
+    typeof expected === "string"
+      ? contentType.toLowerCase().includes(expected.toLowerCase())
+      : expected.test(contentType);
 
   if (!matches) {
     throw new Error(
@@ -201,12 +200,7 @@ const prepareDomValue = async (
   return options.trustedTypesPolicy ? options.trustedTypesPolicy.createHTML(sanitized) : sanitized;
 };
 
-const INSERT_POSITIONS: readonly string[] = [
-  "beforebegin",
-  "afterbegin",
-  "beforeend",
-  "afterend",
-];
+const INSERT_POSITIONS: readonly string[] = ["beforebegin", "afterbegin", "beforeend", "afterend"];
 
 const applySwap = async (
   target: Element,
@@ -257,10 +251,7 @@ const runWithTransition = async (
  * @param input - Content source (URL/Request/Response/string/etc).
  * @param options - Swap target and write mode configuration.
  */
-export const swap = async (
-  input: SwapInput,
-  options: SwapOptions,
-): Promise<SwapResult> => {
+export const swap = async (input: SwapInput, options: SwapOptions): Promise<SwapResult> => {
   const target = resolveElement(options.target);
   const writeMode = options.write ?? "innerHTML";
 

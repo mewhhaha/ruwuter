@@ -1,25 +1,27 @@
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { expect, it } from "../test-support/deno_vitest_shim.ts";
+import { promisify } from "node:util";
+import { expect, it } from "vitest";
 import { generatedTypesRoot } from "../src/fs-routes/write.ts";
 
-it("runs the file-route CLI with Deno", async () => {
-  const app = await Deno.makeTempDir();
+const execFileAsync = promisify(execFile);
+
+it("runs the file-route CLI with Node", async () => {
+  const app = await mkdtemp(join(tmpdir(), "ruwuter-cli-"));
   try {
-    await Deno.mkdir(join(app, "routes"));
-    await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-    await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
+    await mkdir(join(app, "routes"));
+    await writeFile(join(app, "document.tsx"), "export default 1;");
+    await writeFile(join(app, "routes", "index.ts"), "export default 1;");
 
-    const result = await new Deno.Command(Deno.execPath(), {
-      args: ["run", "-A", resolve("src/fs-routes/routes.ts"), app],
-      stderr: "piped",
-    }).output();
+    await execFileAsync(process.execPath, [resolve("src/fs-routes/routes.ts"), app]);
 
-    expect(result.success).toBe(true);
-    expect(await Deno.readTextFile(join(app, "routes.ts"))).toContain(
+    expect(await readFile(join(app, "routes.ts"), "utf8")).toContain(
       'import * as $index from "./routes/index.ts";',
     );
   } finally {
-    await Deno.remove(app, { recursive: true });
-    await Deno.remove(generatedTypesRoot(app), { recursive: true }).catch(() => {});
+    await rm(app, { recursive: true, force: true });
+    await rm(generatedTypesRoot(app), { recursive: true, force: true }).catch(() => {});
   }
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, fragment, type fragment as RouteFragment, Router } from "../src/legacy.ts";
 
@@ -69,10 +69,7 @@ describe("Router updates", () => {
         new URLPattern({ pathname: "/:slug" }),
         [{ id: "dynamic", mod: { loader: ({ params }) => `dynamic:${params.slug}` } }],
       ],
-      [
-        new URLPattern({ pathname: "/about" }),
-        [{ id: "static", mod: { loader: () => "static" } }],
-      ],
+      [new URLPattern({ pathname: "/about" }), [{ id: "static", mod: { loader: () => "static" } }]],
     ]);
     const { ctx } = makeCtx();
     const response = await router.handle(new Request("https://example.com/about"), {} as Env, ctx);
@@ -102,17 +99,15 @@ describe("Router updates", () => {
   });
 
   it("matches case-insensitive literal URLPatterns", async () => {
-    const router = Router([[
-      new URLPattern({ pathname: "/About" }, { ignoreCase: true }),
-      [{ id: "about", mod: { loader: () => ({ matched: true }) } }],
-    ]]);
+    const router = Router([
+      [
+        new URLPattern({ pathname: "/About" }, { ignoreCase: true }),
+        [{ id: "about", mod: { loader: () => ({ matched: true }) } }],
+      ],
+    ]);
     const { ctx } = makeCtx();
 
-    const response = await router.handle(
-      new Request("https://example.com/about"),
-      {} as Env,
-      ctx,
-    );
+    const response = await router.handle(new Request("https://example.com/about"), {} as Env, ctx);
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ matched: true });
@@ -121,16 +116,18 @@ describe("Router updates", () => {
   it("observes a losing loader rejection after an earlier loader returns a response", async () => {
     const parent = deferred<unknown>();
     const child = deferred<unknown>();
-    const router = Router([[
-      new URLPattern({ pathname: "/redirect" }),
+    const router = Router([
       [
-        {
-          id: "parent",
-          mod: { default: ({ children }) => children, loader: () => parent.promise },
-        },
-        { id: "child", mod: { default: () => "child", loader: () => child.promise } },
+        new URLPattern({ pathname: "/redirect" }),
+        [
+          {
+            id: "parent",
+            mod: { default: ({ children }) => children, loader: () => parent.promise },
+          },
+          { id: "child", mod: { default: () => "child", loader: () => child.promise } },
+        ],
       ],
-    ]]);
+    ]);
     const { ctx } = makeCtx();
     const handling = router.handle(new Request("https://example.com/redirect"), {} as Env, ctx);
 
@@ -144,17 +141,21 @@ describe("Router updates", () => {
   });
 
   it("rethrows loader errors so applications can respond to them", async () => {
-    const router = Router([[
-      new URLPattern({ pathname: "/items/:id" }),
-      [{
-        id: "item",
-        mod: {
-          loader: () => {
-            throw new Error("broken");
+    const router = Router([
+      [
+        new URLPattern({ pathname: "/items/:id" }),
+        [
+          {
+            id: "item",
+            mod: {
+              loader: () => {
+                throw new Error("broken");
+              },
+            },
           },
-        },
-      }],
-    ]]);
+        ],
+      ],
+    ]);
     const { ctx } = makeCtx();
 
     let caught: unknown;
@@ -168,17 +169,21 @@ describe("Router updates", () => {
   });
 
   it("lets applications wrap handle for not-found and error responses", async () => {
-    const router = Router([[
-      new URLPattern({ pathname: "/items/:id" }),
-      [{
-        id: "item",
-        mod: {
-          loader: () => {
-            throw new Error("broken");
+    const router = Router([
+      [
+        new URLPattern({ pathname: "/items/:id" }),
+        [
+          {
+            id: "item",
+            mod: {
+              loader: () => {
+                throw new Error("broken");
+              },
+            },
           },
-        },
-      }],
-    ]]);
+        ],
+      ],
+    ]);
     const { ctx } = makeCtx();
 
     const fetch = async (request: Request): Promise<Response> => {
@@ -203,19 +208,23 @@ describe("Router updates", () => {
   });
 
   it("allows fragment endpoints to opt into POST", async () => {
-    const router = Router([[
-      new URLPattern({ pathname: "/form" }),
-      [{
-        id: "form",
-        mod: {
-          fragments: {
-            submit: fragment(() => new Response("saved", { status: 201 }), {
-              methods: ["POST"],
-            }),
+    const router = Router([
+      [
+        new URLPattern({ pathname: "/form" }),
+        [
+          {
+            id: "form",
+            mod: {
+              fragments: {
+                submit: fragment(() => new Response("saved", { status: 201 }), {
+                  methods: ["POST"],
+                }),
+              },
+            },
           },
-        },
-      }],
-    ]]);
+        ],
+      ],
+    ]);
     const { ctx } = makeCtx();
 
     const post = await router.handle(
@@ -243,10 +252,12 @@ describe("Router updates", () => {
       ],
       [
         new URLPattern({ pathname: "/items/special" }),
-        [{
-          id: "static",
-          mod: { fragments: { details: fragment(() => "static fragment") } },
-        }],
+        [
+          {
+            id: "static",
+            mod: { fragments: { details: fragment(() => "static fragment") } },
+          },
+        ],
       ],
     ]);
     const { ctx } = makeCtx();
@@ -261,19 +272,23 @@ describe("Router updates", () => {
   });
 
   it("rethrows fragment endpoint errors to the caller", async () => {
-    const router = Router([[
-      new URLPattern({ pathname: "/items/:id" }),
-      [{
-        id: "item",
-        mod: {
-          fragments: {
-            details: fragment(() => {
-              throw new Error("fragment failed");
-            }),
+    const router = Router([
+      [
+        new URLPattern({ pathname: "/items/:id" }),
+        [
+          {
+            id: "item",
+            mod: {
+              fragments: {
+                details: fragment(() => {
+                  throw new Error("fragment failed");
+                }),
+              },
+            },
           },
-        },
-      }],
-    ]]);
+        ],
+      ],
+    ]);
     const { ctx } = makeCtx();
 
     let caught: unknown;
@@ -291,10 +306,12 @@ describe("Router updates", () => {
   });
 
   it("returns a bodyless 404 for fragment misses", async () => {
-    const router = Router([[
-      new URLPattern({ pathname: "/items/:id" }),
-      [{ id: "item", mod: { default: () => "item" } }],
-    ]]);
+    const router = Router([
+      [
+        new URLPattern({ pathname: "/items/:id" }),
+        [{ id: "item", mod: { default: () => "item" } }],
+      ],
+    ]);
     const { ctx } = makeCtx();
 
     const matchedRoute = await router.handle(
@@ -315,10 +332,12 @@ describe("Router updates", () => {
   });
 
   it("returns 404 for a malformed encoded fragment name", async () => {
-    const router = Router([[
-      new URLPattern({ pathname: "/items/:id" }),
-      [{ id: "item", mod: { fragments: { details: fragment(() => "details") } } }],
-    ]]);
+    const router = Router([
+      [
+        new URLPattern({ pathname: "/items/:id" }),
+        [{ id: "item", mod: { fragments: { details: fragment(() => "details") } } }],
+      ],
+    ]);
     const { ctx } = makeCtx();
 
     const response = await router.handle(
@@ -332,20 +351,22 @@ describe("Router updates", () => {
   });
 
   it("cannot change a streaming response after it is committed", async () => {
-    const router = Router([[
-      new URLPattern({ pathname: "/late-error" }),
+    const router = Router([
       [
-        { id: "layout", mod: { default: ({ children }) => children } },
-        {
-          id: "page",
-          mod: {
-            default: () => {
-              throw new Error("late component failure");
+        new URLPattern({ pathname: "/late-error" }),
+        [
+          { id: "layout", mod: { default: ({ children }) => children } },
+          {
+            id: "page",
+            mod: {
+              default: () => {
+                throw new Error("late component failure");
+              },
             },
           },
-        },
+        ],
       ],
-    ]]);
+    ]);
     const { ctx } = makeCtx();
     const response = await router.handle(
       new Request("https://example.com/late-error"),

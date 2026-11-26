@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@mewhhaha/ruwuter",
+    "lib": ["ESNext", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
+    "types": ["node", "./src/global.workers.d.ts"],
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src",
+    "test",
+    "test-dom",
+    "test-browser",
+    "test-support",
+    "scripts",
+    "examples",
+    "vitest.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", "examples/cloudflare/dist"]
+}

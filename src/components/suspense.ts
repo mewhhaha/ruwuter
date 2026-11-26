@@ -166,9 +166,7 @@ type SuspenseProviderProps = {
 /**
  * Enables streaming Suspense by wiring a per-render registry and appending `<Resolve />`.
  */
-export const SuspenseProvider = ({
-  children,
-}: SuspenseProviderProps): JSX.Element => {
+export const SuspenseProvider = ({ children }: SuspenseProviderProps): JSX.Element => {
   const registry: SuspenseRegistry = {
     counter: 0,
     pending: 0,
@@ -203,7 +201,7 @@ export function withPanels(
     queue: [],
     wake: undefined,
   };
-  const tail = () => (registry.pending || registry.queue.length) ? Resolve() : undefined;
+  const tail = () => (registry.pending || registry.queue.length ? Resolve() : undefined);
   return context.Provider({
     value: { registry, isShell: true },
     children: fromParts([...value.parts, { v: tail, esc: false }]),

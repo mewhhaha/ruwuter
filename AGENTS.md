@@ -26,23 +26,24 @@ repository.
   - `generate-router.ts`, `generate-types.ts`, and Vite-only `generate-controllers.ts`.
   - CLI entry: `src/fs-routes/routes.ts` (shebang runner).
 - How to run generation for an app folder:
-  - Repository CLI: `deno run -A src/fs-routes/routes.ts ./app`
+  - Repository CLI: `node src/fs-routes/routes.ts ./app`
   - Programmatic: `import { generate } from "@mewhhaha/ruwuter/fs-routes"; await generate('./app');`
 
 ## Types and Lint
 
-- TypeScript config lives in `deno.json` (Deno compiler options). Prefer `.ts` over `.mjs`.
-- Linting uses `deno lint`. Formatting uses `deno fmt`.
+- TypeScript config lives in `tsconfig.json`. Prefer `.ts` over `.mjs`.
+- Linting uses `oxlint`. Formatting uses `oxfmt`.
 
-### Commands (via Deno tasks)
+### Commands (via pnpm scripts)
 
-- Type check: `deno task typecheck`
-- Lint: `deno lint`
-- Format: `deno fmt`
-- Browser size budgets: `deno task size`
+- Type check: `pnpm run typecheck`
+- Lint: `pnpm run lint`
+- Format: `pnpm run fmt`
+- Browser size budgets: `pnpm run size`
 - Tests:
-  - Unit/router tests: `deno task test`
-  - DOM integration tests: `deno task test:dom`
+  - Unit/router tests: `pnpm test`
+  - DOM integration tests: `pnpm run test:dom`
+  - Browser tests: `pnpm run test:browser`
 
 ## Coding Conventions
 
@@ -60,8 +61,8 @@ repository.
 
 ## Quick Checklist (before you finish)
 
-- [ ] `deno task typecheck` is clean
-- [ ] `deno lint` is clean
-- [ ] `deno task size` is within budget
+- [ ] `pnpm run typecheck` is clean
+- [ ] `pnpm run lint` is clean
+- [ ] `pnpm run size` is within budget
 - [ ] README examples and `docs/SKILLS.md` stay in sync with behavior
 - [ ] No legacy client paths or APIs reintroduced

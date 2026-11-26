@@ -10,7 +10,9 @@ export const generatedController = controllerHref as unknown as ControllerHrefOf
   typeof import("./fixtures/generated-controller.client.ts")
 >;
 
-// @ts-expect-error invalid default exports are rejected by the generated href constraint
-type InvalidController = Assert<IsControllerModule<typeof import("./fixtures/invalid.client.ts")>>;
+export type InvalidController = Assert<
+  // @ts-expect-error invalid default exports are rejected by the generated href constraint
+  IsControllerModule<typeof import("./fixtures/invalid.client.ts")>
+>;
 
 void (0 as unknown as ValidController);

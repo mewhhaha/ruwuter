@@ -1,0 +1,24 @@
+{
+  "name": "@mewhhaha/ruwuter",
+  "version": "0.7.1",
+  "license": "MIT",
+  "publish": {
+    "include": ["jsr.json", "package.json", "README.md", "src"]
+  },
+  "exports": {
+    ".": "./src/router.ts",
+    "./browser": "./src/browser.ts",
+    "./components": "./src/components/index.ts",
+    "./fs-routes": "./src/fs-routes/js.ts",
+    "./fs-routes/cli": "./src/fs-routes/routes.ts",
+    "./vite": "./src/vite.ts",
+    "./types": "./src/types.ts",
+    "./jsx-runtime": "./src/runtime/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.ts",
+    "./client.js": "./src/runtime/client.ts",
+    "./resolve.js": "./src/runtime/resolve.ts",
+    "./swap.js": "./src/runtime/swap.ts",
+    "./vt.js": "./src/runtime/vt.ts",
+    "./legacy": "./src/legacy.ts"
+  }
+}

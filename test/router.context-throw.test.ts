@@ -1,4 +1,4 @@
-import { expect, it } from "../test-support/deno_vitest_shim.ts";
+import { expect, it } from "vitest";
 import { bindGenerator } from "../src/legacy.ts";
 import { createContext, runWithContextStore } from "../src/components/context.ts";
 

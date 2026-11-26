@@ -1,4 +1,4 @@
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { makeCtx } from "../test-support/ctx.ts";
 import { type Env, type fragment, type JSX as RuwuterJSX, Router } from "../src/legacy.ts";
 
@@ -24,11 +24,7 @@ describe("Thrown Response handling", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
 
     expect(res.status).toBe(404);
     const text = await res.text();
@@ -56,11 +52,7 @@ describe("Thrown Response handling", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/"), {} as Env, ctx);
 
     expect(res.status).toBe(404);
     const text = await res.text();
@@ -80,11 +72,7 @@ describe("Thrown Response handling", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/data-return"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/data-return"), {} as Env, ctx);
     expect(res.status).toBe(418);
     expect(await res.text()).toBe("Custom");
   });
@@ -104,11 +92,7 @@ describe("Thrown Response handling", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/data-throw"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/data-throw"), {} as Env, ctx);
     expect(res.status).toBe(418);
     expect(await res.text()).toBe("Custom Throw");
   });
@@ -138,11 +122,7 @@ describe("Thrown Response handling", () => {
 
     const router = Router([[pattern, fragments]]);
     const { ctx } = makeCtx();
-    const res = await router.handle(
-      new Request("https://example.com/throw"),
-      {} as Env,
-      ctx,
-    );
+    const res = await router.handle(new Request("https://example.com/throw"), {} as Env, ctx);
 
     expect(res.status).toBe(200);
     let error: unknown;

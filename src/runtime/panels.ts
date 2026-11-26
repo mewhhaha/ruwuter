@@ -5,9 +5,7 @@ export function resolvePanels(
   let replaced: boolean;
   do {
     replaced = false;
-    for (
-      const template of root.querySelectorAll<HTMLTemplateElement>("template[data-rw-target]")
-    ) {
+    for (const template of root.querySelectorAll<HTMLTemplateElement>("template[data-rw-target]")) {
       if (existing?.has(template)) continue;
       const end = template.nextSibling;
       if (end?.nodeType !== 8 || end.nodeValue !== "rw-end") continue;

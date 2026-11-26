@@ -39,26 +39,37 @@ type Pattern = string | URLPattern;
 type SimpleName<S extends string> = S extends `${infer C}${infer Rest}`
   ? C extends "_" | "$" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
     ? SimpleName<Rest>
-  : Lowercase<C> extends Uppercase<C> ? false
-  : SimpleName<Rest>
+    : Lowercase<C> extends Uppercase<C>
+      ? false
+      : SimpleName<Rest>
   : true;
 type Segment<S extends string> = S extends `:${infer N}?`
-  ? SimpleName<N> extends true ? { [K in N]?: string } : Params
-  : S extends `:${infer N}` ? SimpleName<N> extends true ? { [K in N]: string } : Params
-  : S extends `${string}:${string}` ? Params
-  : unknown;
+  ? SimpleName<N> extends true
+    ? { [K in N]?: string }
+    : Params
+  : S extends `:${infer N}`
+    ? SimpleName<N> extends true
+      ? { [K in N]: string }
+      : Params
+    : S extends `${string}:${string}`
+      ? Params
+      : unknown;
 type SimplePathParams<Path extends string> = Path extends `${infer First}/${infer Rest}`
   ? Segment<First> & SimplePathParams<Rest>
   : Segment<Path>;
 type PatternSyntax = "(" | ")" | "{" | "}" | "*" | "+" | "\\";
-type PathParams<Path extends Pattern> = Path extends string ? string extends Path ? Params
-  : Path extends `${string}${PatternSyntax}${string}` ? Params
-  : SimplePathParams<Path>
+type PathParams<Path extends Pattern> = Path extends string
+  ? string extends Path
+    ? Params
+    : Path extends `${string}${PatternSyntax}${string}`
+      ? Params
+      : SimplePathParams<Path>
   : Params;
 type PlatformArgs<B> = unknown extends B
   ? [platform?: unknown, executionContext?: HandlerContext["executionContext"]]
-  : [B] extends [undefined] ? [env?: B, executionContext?: HandlerContext["executionContext"]]
-  : [env: B, executionContext?: HandlerContext["executionContext"]];
+  : [B] extends [undefined]
+    ? [env?: B, executionContext?: HandlerContext["executionContext"]]
+    : [env: B, executionContext?: HandlerContext["executionContext"]];
 export interface HttpRouter<Bindings = unknown> {
   route<Path extends Pattern>(
     path: Path,
@@ -174,10 +185,7 @@ const compileMatcher = (path: Pattern, pattern: URLPattern): CompiledMatcher => 
   return { kind: "segments", segments };
 };
 
-const matchSegments = (
-  pathname: string,
-  segments: readonly SegmentSpec[],
-): Params | undefined => {
+const matchSegments = (pathname: string, segments: readonly SegmentSpec[]): Params | undefined => {
   if (pathname.charCodeAt(0) !== 47) return undefined;
   const len = pathname.length;
   let pos = 1;
@@ -226,13 +234,14 @@ export function router<Bindings = unknown>(
     route(path, handlers) {
       const existing = routes.get(path);
       const isNew = !existing;
-      const route = existing ?? (() => {
-        const pattern: URLPattern = typeof path === "string"
-          ? new URLPattern({ pathname: path })
-          : path as URLPattern;
-        const matcher = compileMatcher(path, pattern);
-        return { pattern, matcher, handlers: Object.create(null), allow: "" };
-      })();
+      const route =
+        existing ??
+        (() => {
+          const pattern: URLPattern =
+            typeof path === "string" ? new URLPattern({ pathname: path }) : (path as URLPattern);
+          const matcher = compileMatcher(path, pattern);
+          return { pattern, matcher, handlers: Object.create(null), allow: "" };
+        })();
       const entries = methods.filter((method) => Object.hasOwn(handlers, method));
       if (!entries.length) throw new TypeError("A route needs at least one HTTP method handler.");
       for (const method of entries) {
@@ -336,9 +345,10 @@ export function router<Bindings = unknown>(
         cancelReason = reason;
         lifetime?.abort(reason);
       };
-      const resolverSrc = typeof options.resolverSrc === "function"
-        ? options.resolverSrc(request)
-        : (options.resolverSrc ?? resolverPath);
+      const resolverSrc =
+        typeof options.resolverSrc === "function"
+          ? options.resolverSrc(request)
+          : (options.resolverSrc ?? resolverPath);
       const context: HandlerContext<Bindings> = {
         request,
         params: matchedParams!,

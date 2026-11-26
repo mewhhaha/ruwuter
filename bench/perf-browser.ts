@@ -21,7 +21,10 @@ for (const engine of engines) {
   try {
     // 1. Streaming controller activation latency (2 warmups + 10 alternating pairs).
     for (let pair = -2; pair < 10; pair++) {
-      const order: Array<["base" | "head", string]> = [["base", base], ["head", head]];
+      const order: Array<["base" | "head", string]> = [
+        ["base", base],
+        ["head", head],
+      ];
       if (pair % 2) order.reverse();
       for (const [version, origin] of order) {
         const page = await browser.newPage();
@@ -38,9 +41,10 @@ for (const engine of engines) {
           });
           const res = await page.goto(origin + "/stream-controller");
           if (res?.status() !== 200) throw new Error("stream-controller failed");
-          await page.waitForFunction(() =>
-            performance.getEntriesByName("controller-mounted").length > 0 &&
-            performance.getEntriesByName("slow").length > 0
+          await page.waitForFunction(
+            () =>
+              performance.getEntriesByName("controller-mounted").length > 0 &&
+              performance.getEntriesByName("slow").length > 0,
           );
           const sample = await page.evaluate(() => ({
             shell: performance.getEntriesByName("shell")[0].startTime,
@@ -64,16 +68,20 @@ for (const engine of engines) {
 
     // 2. Post-load DOM mutation overhead on a page with Deferred + client.js (2 warmups + 10 pairs).
     for (let pair = -2; pair < 10; pair++) {
-      const order: Array<["base" | "head", string]> = [["base", base], ["head", head]];
+      const order: Array<["base" | "head", string]> = [
+        ["base", base],
+        ["head", head],
+      ];
       if (pair % 2) order.reverse();
       for (const [version, origin] of order) {
         const page = await browser.newPage();
         try {
           const res = await page.goto(origin + "/mutations");
           if (res?.status() !== 200) throw new Error("mutations route failed");
-          await page.waitForFunction(() =>
-            !!document.getElementById("panel-ready") &&
-            document.getElementById("widget")?.dataset.mounted === "1"
+          await page.waitForFunction(
+            () =>
+              !!document.getElementById("panel-ready") &&
+              document.getElementById("widget")?.dataset.mounted === "1",
           );
           // Perform 400 rounds of realistic post-load DOM writes & leaf removals, yielding to
           // microtasks so MutationObservers fire after each batch just like real user events.

@@ -57,10 +57,13 @@ const reservedWords = new Set([
 
 const toIdentifier = (raw: string): string => {
   const parts = raw.split(/[^A-Za-z0-9_$]+/).filter(Boolean);
-  const name = parts.map((part, index) => {
-    if (index === 0) return part.slice(0, 1).toLowerCase() + part.slice(1);
-    return part.slice(0, 1).toUpperCase() + part.slice(1);
-  }).join("") || "controller";
+  const name =
+    parts
+      .map((part, index) => {
+        if (index === 0) return part.slice(0, 1).toLowerCase() + part.slice(1);
+        return part.slice(0, 1).toUpperCase() + part.slice(1);
+      })
+      .join("") || "controller";
   return /^[A-Za-z_$]/.test(name) && !reservedWords.has(name) ? name : `controller${name}`;
 };
 
@@ -75,14 +78,16 @@ const qualifiedControllerName = (appFolder: string, file: string): string => {
 
 const findClientModules = async (folder: string): Promise<string[]> => {
   const entries = await readdir(folder, { withFileTypes: true });
-  const files = await Promise.all(entries.map((entry) => {
-    const entryPath = path.join(folder, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name === "node_modules" || entry.name.startsWith(".")) return [];
-      return findClientModules(entryPath);
-    }
-    return entry.isFile() && CLIENT_MODULE.test(entry.name) ? [entryPath] : [];
-  }));
+  const files = await Promise.all(
+    entries.map((entry) => {
+      const entryPath = path.join(folder, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) return [];
+        return findClientModules(entryPath);
+      }
+      return entry.isFile() && CLIENT_MODULE.test(entry.name) ? [entryPath] : [];
+    }),
+  );
   return files.flat();
 };
 
@@ -96,7 +101,7 @@ export const generateControllers = async (appFolder: string): Promise<GeneratedF
     if ((error as { code?: string }).code === "ENOENT") return [];
     throw error;
   }
-  modules.sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+  modules.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
 
   const shortCounts = new Map<string, number>();
   for (const file of modules) {
@@ -107,29 +112,28 @@ export const generateControllers = async (appFolder: string): Promise<GeneratedF
   const names = new Map<string, string>();
   const entries = modules.map((file) => {
     const short = controllerName(file);
-    const name = (shortCounts.get(short) ?? 0) > 1
-      ? qualifiedControllerName(resolvedAppFolder, file)
-      : short;
+    const name =
+      (shortCounts.get(short) ?? 0) > 1 ? qualifiedControllerName(resolvedAppFolder, file) : short;
     const previous = names.get(name);
     if (previous) {
       throw new Error(
-        `Generated controller symbol collision between ${
-          JSON.stringify(
-            path.relative(resolvedAppFolder, previous),
-          )
-        } and ${JSON.stringify(path.relative(resolvedAppFolder, file))}: ${name}.`,
+        `Generated controller symbol collision between ${JSON.stringify(
+          path.relative(resolvedAppFolder, previous),
+        )} and ${JSON.stringify(path.relative(resolvedAppFolder, file))}: ${name}.`,
       );
     }
     names.set(name, file);
     const relative = path.relative(resolvedAppFolder, file).split(path.sep).join("/");
     const specifier = `./${relative}`;
-    return `import ${name}Href from ${JSON.stringify(`${specifier}?ruwuter-controller-url`)};\n` +
+    return (
+      `import ${name}Href from ${JSON.stringify(`${specifier}?ruwuter-controller-url`)};\n` +
       `type __${name}ControllerCheck = __RuwuterAssert<` +
       `import("@mewhhaha/ruwuter/browser").IsControllerModule<` +
       `typeof import(${JSON.stringify(specifier)})>>;\n` +
       `export const ${name} = ${name}Href as unknown as ` +
       `import("@mewhhaha/ruwuter/browser").ControllerHrefOf<` +
-      `typeof import(${JSON.stringify(specifier)})>;`;
+      `typeof import(${JSON.stringify(specifier)})>;`
+    );
   });
 
   if (!entries.length) return [];

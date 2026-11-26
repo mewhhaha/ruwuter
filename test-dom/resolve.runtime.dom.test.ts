@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import "./setup.ts";
 import { DOMParser } from "linkedom";
 import { nextResolveRuntimeUrl } from "../test-support/client-runtime.inline.ts";
@@ -193,8 +193,7 @@ describe("Resolve runtime DOM behaviour", () => {
       expect(loadingEnv.observers.length).toBe(1);
       expect(loadingEnv.disconnects).toBe(0);
 
-      loadingEnv.doc.body.innerHTML +=
-        `<template data-rw-target="p"><span id="done">done</span></template><!--rw-end-->`;
+      loadingEnv.doc.body.innerHTML += `<template data-rw-target="p"><span id="done">done</span></template><!--rw-end-->`;
       dclListener?.();
 
       expect(loadingEnv.doc.getElementById("done")?.textContent).toBe("done");

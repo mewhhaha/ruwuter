@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { DOMParser } from "linkedom";
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import { swap, type SwapInput, type SwapMode } from "../src/runtime/swap.ts";
 import { viewTransition } from "../src/runtime/view-transition.ts";
 
@@ -223,13 +223,14 @@ describe("swap runtime DOM behaviour", () => {
     (globalThis as any).Element = (doc.createElement("div") as any).constructor;
     (globalThis as any).CSS = { escape: (v: string) => v };
     try {
-      const fragmentHtml = `<div id="rw-frag-0">loading</div>` +
+      const fragmentHtml =
+        `<div id="rw-frag-0">loading</div>` +
         `<script src="/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>` +
         `<template data-rw-target="rw-frag-0"><p>Ready</p></template><!--rw-end-->`;
-      await swap(
-        new Response(fragmentHtml, { headers: { "Content-Type": "text/html" } }),
-        { target: "#slot", write: "outerHTML" },
-      );
+      await swap(new Response(fragmentHtml, { headers: { "Content-Type": "text/html" } }), {
+        target: "#slot",
+        write: "outerHTML",
+      });
       expect(doc.body.textContent).toContain("Ready");
       expect(doc.querySelectorAll("script[data-rw-resolver]").length).toBe(1);
       expect(doc.getElementById("host-resolver") != null).toBe(true);
@@ -346,18 +347,24 @@ describe("swap runtime DOM behaviour", () => {
         };
       };
       let ran = 0;
-      const vt = await viewTransition(() => {
-        ran += 1;
-      }, { types: ["slide"] });
+      const vt = await viewTransition(
+        () => {
+          ran += 1;
+        },
+        { types: ["slide"] },
+      );
       expect(vt != null).toBe(true);
       expect(ran).toBe(1);
       expect(fallbackCalls).toEqual(["dict-rejected", "callback"]);
 
       // Skips startViewTransition when document is hidden.
       (globalThis as any).document.visibilityState = "hidden";
-      const hiddenVt = await viewTransition(() => {
-        ran += 1;
-      }, { types: ["slide"] });
+      const hiddenVt = await viewTransition(
+        () => {
+          ran += 1;
+        },
+        { types: ["slide"] },
+      );
       expect(hiddenVt).toBe(null);
       expect(ran).toBe(2);
     } finally {

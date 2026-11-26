@@ -13,13 +13,14 @@ export interface HtmlOptions extends ResponseInit {
 
 /** @internal Response lifetime shared by the handler and its HTML body. */
 export const renderRequest = createContext<
-  {
-    getSignal(): AbortSignal;
-    streamSignal(): AbortSignal;
-    cancel(reason: unknown): void;
-    head: boolean;
-    resolverSrc: string;
-  } | undefined
+  | {
+      getSignal(): AbortSignal;
+      streamSignal(): AbortSignal;
+      cancel(reason: unknown): void;
+      head: boolean;
+      resolverSrc: string;
+    }
+  | undefined
 >(undefined);
 
 const DEFAULT_HTML_HEADERS = { "Content-Type": "text/html; charset=utf-8" };

@@ -10,7 +10,13 @@ export function productApp(products: Products) {
   async function Reviews({ id, signal }: { id: string; signal: AbortSignal }) {
     const reviews = await products.reviews(id, signal);
     // deno-lint-ignore jsx-key -- server-rendered list without DOM reconciliation
-    return <ul>{reviews.map((text) => <li>{text}</li>)}</ul>;
+    return (
+      <ul>
+        {reviews.map((text) => (
+          <li>{text}</li>
+        ))}
+      </ul>
+    );
   }
 
   return router()
@@ -37,7 +43,7 @@ export function productApp(products: Products) {
       );
     })
     .post("/products/:id/reviews", async ({ params, request, signal }) => {
-      if (!await products.name(params.id, signal)) return new Response(null, { status: 404 });
+      if (!(await products.name(params.id, signal))) return new Response(null, { status: 404 });
       const text = (await request.formData()).get("review");
       if (typeof text !== "string" || !text.trim()) return new Response(null, { status: 400 });
       await products.addReview(params.id, text.trim(), signal);

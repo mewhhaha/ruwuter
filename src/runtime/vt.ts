@@ -121,9 +121,11 @@ if (typeof document !== "undefined" && typeof globalThis.addEventListener === "f
     globalThis.addEventListener("pagereveal", (event) => {
       const revealEvent = event as PageRevealEventLike;
       if (!revealEvent.viewTransition) return;
-      const activation = (globalThis as {
-        navigation?: { activation?: NavigationActivationLike | null };
-      }).navigation?.activation;
+      const activation = (
+        globalThis as {
+          navigation?: { activation?: NavigationActivationLike | null };
+        }
+      ).navigation?.activation;
       const fromPath = pathnameOf(activation?.from?.url);
       activate(revealEvent.viewTransition, activation, fromPath);
     });

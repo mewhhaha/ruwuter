@@ -10,9 +10,7 @@ import type { GeneratedFile } from "./types.ts";
  * @param appFolder - Path to the application folder containing the routes directory
  * @internal
  */
-export const generateTypes = async (
-  appFolder: string,
-): Promise<GeneratedFile[]> => {
+export const generateTypes = async (appFolder: string): Promise<GeneratedFile[]> => {
   const resolvedAppFolder = path.resolve(appFolder);
   const routesFolder = path.join(resolvedAppFolder, "routes");
   let routeEntries: DiscoveredRouteEntry[] = [];
@@ -30,15 +28,16 @@ export const generateTypes = async (
 
   for (const entry of routeEntries) {
     const { paramNames, optionalParams } = extractRouteParams(entry.routeId);
-    const fields = Array.from(paramNames).sort().map((name) => {
-      let key = JSON.stringify(name);
-      if (optionalParams.has(name)) key += "?";
-      return `  ${key}: string;`;
-    });
-    const contents =
-      `import type { HandlerContext } from "@mewhhaha/ruwuter";\n\nexport type RouteParams = {\n${
-        fields.join("\n")
-      }\n};\nexport type Context<Bindings = unknown> = HandlerContext<Bindings, RouteParams>;\n`;
+    const fields = Array.from(paramNames)
+      .sort()
+      .map((name) => {
+        let key = JSON.stringify(name);
+        if (optionalParams.has(name)) key += "?";
+        return `  ${key}: string;`;
+      });
+    const contents = `import type { HandlerContext } from "@mewhhaha/ruwuter";\n\nexport type RouteParams = {\n${fields.join(
+      "\n",
+    )}\n};\nexport type Context<Bindings = unknown> = HandlerContext<Bindings, RouteParams>;\n`;
     let filename = `+types.${stripRouteExtension(entry.sourceName)}.ts`;
     if (entry.isDirectory) filename = path.join(entry.sourceName, "+types.route.d.ts");
     outputs.push({ path: path.join(routesTypesRoot, filename), contents });

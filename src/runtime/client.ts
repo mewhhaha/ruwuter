@@ -41,21 +41,18 @@ function initializeActivationRuntime(): void {
   };
 
   const resolveModuleUrl = (spec: string): URL => {
-    const base = (typeof document.baseURI === "string" && document.baseURI &&
-        document.baseURI !== "about:blank")
-      ? document.baseURI
-      : (typeof globalThis.location?.href === "string"
-        ? globalThis.location.href
-        : "http://localhost/");
+    const base =
+      typeof document.baseURI === "string" && document.baseURI && document.baseURI !== "about:blank"
+        ? document.baseURI
+        : typeof globalThis.location?.href === "string"
+          ? globalThis.location.href
+          : "http://localhost/";
     const url = new URL(spec, base);
     const locationUrl = new URL(
       typeof globalThis.location?.href === "string" ? globalThis.location.href : base,
     );
 
-    if (
-      !["http:", "https:"].includes(url.protocol) ||
-      url.origin !== locationUrl.origin
-    ) {
+    if (!["http:", "https:"].includes(url.protocol) || url.origin !== locationUrl.origin) {
       throw new TypeError(`Browser module URL is not allowed: ${url.href}`);
     }
 
@@ -64,9 +61,11 @@ function initializeActivationRuntime(): void {
 
   const loadModule = async <ModuleExport>(spec: string): Promise<ModuleExport> => {
     const url = resolveModuleUrl(spec);
-    const customLoader = (globalThis as {
-      __ruwuterControllerModuleLoader?: ClientModuleLoader;
-    }).__ruwuterControllerModuleLoader;
+    const customLoader = (
+      globalThis as {
+        __ruwuterControllerModuleLoader?: ClientModuleLoader;
+      }
+    ).__ruwuterControllerModuleLoader;
     const mod = customLoader ? await customLoader(url) : await import(url.href);
     if (!mod || typeof mod.default !== "function") {
       throw new TypeError(`Browser module must default export a function: ${url.href}`);
@@ -235,5 +234,3 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     initializeActivationRuntime();
   }
 }
-
-export {};

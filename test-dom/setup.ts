@@ -12,7 +12,7 @@ if (typeof globalWithURLPattern.URLPattern === "undefined") {
   try {
     // Importing this module defines URLPattern globally
     // and also exports it; we ensure the global assignment.
-    const mod = await import("urlpattern-polyfill") as unknown as URLPatternModule;
+    const mod = (await import("urlpattern-polyfill")) as unknown as URLPatternModule;
     const urlPatternCtor = mod.URLPattern ?? globalWithURLPattern.URLPattern;
     if (urlPatternCtor) {
       Object.defineProperty(globalThis, "URLPattern", {
@@ -25,3 +25,5 @@ if (typeof globalWithURLPattern.URLPattern === "undefined") {
     // If the polyfill isn't installed, tests that rely on URLPattern will fail.
   }
 }
+
+export {};

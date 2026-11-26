@@ -33,7 +33,8 @@ export type InferComponentProps<module> = {
   children?: JSX.Element;
   loaderData: module extends {
     loader: infer loader extends (...args: unknown[]) => unknown;
-  } ? Awaited<ReturnType<loader>>
+  }
+    ? Awaited<ReturnType<loader>>
     : undefined;
 };
 
@@ -61,15 +62,13 @@ export type InferActionArgs<params extends Record<string, string>> = {
  * @typeParam params - Route parameters as a Record<string, string>
  * @typeParam module - The module type containing the loader export
  */
-export type InferHeadersFunction<
-  params extends Record<string, string>,
-  module,
-> = (
+export type InferHeadersFunction<params extends Record<string, string>, module> = (
   args: {
     params: params;
     loaderData: module extends {
       loader: infer loader extends (...args: unknown[]) => unknown;
-    } ? Awaited<ReturnType<loader>>
+    }
+      ? Awaited<ReturnType<loader>>
       : undefined;
   } & Omit<RequestContext<Env>, "params">,
 ) => Promise<Headers | HeadersLike> | Headers | HeadersLike;

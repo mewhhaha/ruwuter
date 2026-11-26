@@ -1,5 +1,7 @@
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
+import { describe, expect, it } from "vitest";
 import {
   generateControllers,
   GENERATED_CONTROLLERS_MARKER,
@@ -7,19 +9,21 @@ import {
 import { generatedTypesRoot, writeGeneratedFiles } from "../src/fs-routes/write.ts";
 
 const exists = async (path: string): Promise<boolean> => {
-  return await Deno.stat(path).then(() => true).catch(() => false);
+  return await stat(path)
+    .then(() => true)
+    .catch(() => false);
 };
 
 describe("generateControllers", () => {
   it("generates deterministic hrefs whose types come from each default export", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-ctrl-"));
     try {
-      await Deno.mkdir(join(app, "routes", "palette"), { recursive: true });
-      await Deno.writeTextFile(
+      await mkdir(join(app, "routes", "palette"), { recursive: true });
+      await writeFile(
         join(app, "routes", "palette", "open-palette.client.ts"),
         "export default 1;",
       );
-      await Deno.writeTextFile(join(app, "dialog.client.tsx"), "export default 1;");
+      await writeFile(join(app, "dialog.client.tsx"), "export default 1;");
 
       const [output] = await generateControllers(app);
       if (!output) throw new Error("Expected controller output");
@@ -34,18 +38,18 @@ describe("generateControllers", () => {
       );
       expect(output.contents).toContain('typeof import("./routes/palette/open-palette.client.ts")');
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("disambiguates same-basename controllers in different subdirectories", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-ctrl-"));
     try {
-      await Deno.mkdir(join(app, "products"), { recursive: true });
-      await Deno.mkdir(join(app, "users"), { recursive: true });
-      await Deno.writeTextFile(join(app, "products", "form.client.ts"), "export default 1;");
-      await Deno.writeTextFile(join(app, "users", "form.client.ts"), "export default 1;");
-      await Deno.writeTextFile(join(app, "unique.client.ts"), "export default 1;");
+      await mkdir(join(app, "products"), { recursive: true });
+      await mkdir(join(app, "users"), { recursive: true });
+      await writeFile(join(app, "products", "form.client.ts"), "export default 1;");
+      await writeFile(join(app, "users", "form.client.ts"), "export default 1;");
+      await writeFile(join(app, "unique.client.ts"), "export default 1;");
 
       const [output] = await generateControllers(app);
       if (!output) throw new Error("Expected controller output");
@@ -53,15 +57,15 @@ describe("generateControllers", () => {
       expect(output.contents).toContain("export const usersForm =");
       expect(output.contents).toContain("export const unique =");
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("rejects ambiguous generated controller names", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-ctrl-"));
     try {
-      await Deno.writeTextFile(join(app, "open-palette.client.ts"), "export default 1;");
-      await Deno.writeTextFile(join(app, "open palette.client.ts"), "export default 1;");
+      await writeFile(join(app, "open-palette.client.ts"), "export default 1;");
+      await writeFile(join(app, "open palette.client.ts"), "export default 1;");
       let error: unknown;
       try {
         await generateControllers(app);
@@ -71,18 +75,18 @@ describe("generateControllers", () => {
       expect(error instanceof Error).toBe(true);
       expect((error as Error).message).toContain("controller symbol collision");
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("preserves an unmarked user-owned controllers.ts file", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-ctrl-"));
     try {
-      await Deno.mkdir(join(app, "routes"), { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
-      await Deno.writeTextFile(join(app, "example.client.ts"), "export default 1;");
-      await Deno.writeTextFile(join(app, "controllers.ts"), "export const mine = true;");
+      await mkdir(join(app, "routes"), { recursive: true });
+      await writeFile(join(app, "document.tsx"), "export default 1;");
+      await writeFile(join(app, "routes", "index.ts"), "export default 1;");
+      await writeFile(join(app, "example.client.ts"), "export default 1;");
+      await writeFile(join(app, "controllers.ts"), "export const mine = true;");
       let error: unknown;
       try {
         await writeGeneratedFiles(app, { controllers: true });
@@ -90,20 +94,20 @@ describe("generateControllers", () => {
         error = caught;
       }
       expect(error instanceof Error).toBe(true);
-      expect(await Deno.readTextFile(join(app, "controllers.ts"))).toContain("mine");
+      expect(await readFile(join(app, "controllers.ts"), "utf8")).toContain("mine");
     } finally {
-      await Deno.remove(app, { recursive: true });
+      await rm(app, { recursive: true, force: true });
     }
   });
 
   it("removes a marked controllers.ts once no controllers remain", async () => {
-    const app = await Deno.makeTempDir();
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-ctrl-"));
     try {
-      await Deno.mkdir(join(app, "routes"), { recursive: true });
-      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
-      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
+      await mkdir(join(app, "routes"), { recursive: true });
+      await writeFile(join(app, "document.tsx"), "export default 1;");
+      await writeFile(join(app, "routes", "index.ts"), "export default 1;");
       // No `*.client.*` module exists, so the previously generated barrel is stale.
-      await Deno.writeTextFile(
+      await writeFile(
         join(app, "controllers.ts"),
         `${GENERATED_CONTROLLERS_MARKER}\nexport const stale = 1;\n`,
       );
@@ -112,8 +116,8 @@ describe("generateControllers", () => {
 
       expect(await exists(join(app, "controllers.ts"))).toBe(false);
     } finally {
-      await Deno.remove(app, { recursive: true });
-      await Deno.remove(generatedTypesRoot(app), { recursive: true }).catch(() => {});
+      await rm(app, { recursive: true, force: true });
+      await rm(generatedTypesRoot(app), { recursive: true, force: true }).catch(() => {});
     }
   });
 });

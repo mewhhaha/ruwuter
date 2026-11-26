@@ -1,48 +1,60 @@
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { expect, it } from "vitest";
 import { html, renderToStream, renderToString, router, unsafeHTML } from "../src/router.ts";
 import { createContext, Deferred } from "../src/components/index.ts";
 
 const request = (path: string, method = "GET") =>
   new Request("https://example.test" + path, { method });
 
-Deno.test("method handlers receive params, bindings and status control before the shell", async () => {
+it("method handlers receive params, bindings and status control before the shell", async () => {
   const app = router<{ title: string }>()
-    .get("/books/:id", ({ params, env }) => html(<h1>{env.title} {params.id}</h1>))
+    .get("/books/:id", ({ params, env }) =>
+      html(
+        <h1>
+          {env.title} {params.id}
+        </h1>,
+      ),
+    )
     .post("/books/:id", () => new Response(null, { status: 201 }));
   const { fetch } = app;
   const env = { title: "Book" };
-  assertEquals(await (await fetch(request("/books/42"), env)).text(), "<h1>Book 42</h1>");
-  assertEquals((await fetch(request("/books/42", "POST"), env)).status, 201);
+  expect(await (await fetch(request("/books/42"), env)).text()).toBe("<h1>Book 42</h1>");
+  expect((await fetch(request("/books/42", "POST"), env)).status).toBe(201);
   const head = await fetch(request("/books/42", "HEAD"), env);
-  assertEquals(head.body, null);
-  assertEquals(head.headers.get("content-type"), "text/html; charset=utf-8");
-  for (const [method, status] of [["OPTIONS", 204], ["PATCH", 405]] as const) {
+  expect(head.body).toBe(null);
+  expect(head.headers.get("content-type")).toBe("text/html; charset=utf-8");
+  for (const [method, status] of [
+    ["OPTIONS", 204],
+    ["PATCH", 405],
+  ] as const) {
     const res = await fetch(request("/books/42", method), env);
-    assertEquals(res.status, status);
-    assertEquals(res.headers.get("allow"), "GET, HEAD, OPTIONS, POST");
+    expect(res.status).toBe(status);
+    expect(res.headers.get("allow")).toBe("GET, HEAD, OPTIONS, POST");
   }
-  assertEquals((await fetch(request("/missing"), env)).status, 404);
-  assertThrows(() => app.get("/books/:id", () => new Response()));
+  expect((await fetch(request("/missing"), env)).status).toBe(404);
+  expect(() => app.get("/books/:id", () => new Response())).toThrow();
 });
 
-Deno.test("html, text helpers and fragments escape strings through async containers", async () => {
+it("html, text helpers and fragments escape strings through async containers", async () => {
   const values = ["<b>", Promise.resolve("<b>"), () => ["<b>"]];
   for (const value of values) {
-    assertEquals(await html(value).text(), "&lt;b&gt;");
-    assertEquals(await renderToString(value), "&lt;b&gt;");
-    assertEquals(await new Response(renderToStream(value)).text(), "&lt;b&gt;");
+    expect(await html(value).text()).toBe("&lt;b&gt;");
+    expect(await renderToString(value)).toBe("&lt;b&gt;");
+    expect(await new Response(renderToStream(value)).text()).toBe("&lt;b&gt;");
   }
-  assertEquals(await html(unsafeHTML("<b>trusted</b>")).text(), "<b>trusted</b>");
-  const app = router().get(
-    "/part",
-    () => html(<Deferred fallback={<i>wait</i>}>{<p>done</p>}</Deferred>),
+  expect(await html(unsafeHTML("<b>trusted</b>")).text()).toBe("<b>trusted</b>");
+  const app = router().get("/part", () =>
+    html(<Deferred fallback={<i>wait</i>}>{<p>done</p>}</Deferred>),
   );
   const fragment = await (await app.fetch(request("/part"))).text();
-  assert(fragment.includes("<p>done</p></template><!--rw-end-->"));
-  assertEquals(fragment.match(/<script /g)?.length, 1);
+  expect(fragment).toContain("<p>done</p></template><!--rw-end-->");
+  expect(fragment.match(/<script /g)?.length).toBe(1);
 });
 
-Deno.test("reader cancellation and request abort propagate during pending renders", async () => {
+it("reader cancellation and request abort propagate during pending renders", async () => {
   for (const fromRequest of [true, false]) {
     const started = Promise.withResolvers<void>();
     const stopped = Promise.withResolvers<void>();
@@ -50,10 +62,14 @@ Deno.test("reader cancellation and request abort propagate during pending render
       const Panel = async () => {
         started.resolve();
         await new Promise<void>((_, reject) =>
-          signal.addEventListener("abort", () => {
-            stopped.resolve();
-            reject(signal.reason);
-          }, { once: true })
+          signal.addEventListener(
+            "abort",
+            () => {
+              stopped.resolve();
+              reject(signal.reason);
+            },
+            { once: true },
+          ),
         );
         return <p>done</p>;
       };
@@ -72,30 +88,31 @@ Deno.test("reader cancellation and request abort propagate during pending render
     await started.promise;
     if (fromRequest) {
       controller.abort();
-      await assertRejects(() => pending);
+      await expect(pending).rejects.toThrow();
     } else {
       await reader.cancel();
-      assert((await pending).done);
+      expect((await pending).done).toBe(true);
     }
     await stopped.promise;
   }
 });
 
-Deno.test("complex URLPatterns match the full URL and expose their real groups", async () => {
+it("complex URLPatterns match the full URL and expose their real groups", async () => {
   const host = new URLPattern({ hostname: "example.test", pathname: "/only", search: "version=2" });
-  const app = router().get(host, () => new Response("yes"))
+  const app = router()
+    .get(host, () => new Response("yes"))
     .get("/products/:id([0-9]+)", ({ params }) => new Response(params.id))
     .route("/only", { OPTIONS: () => new Response("custom", { headers: { "X-Route": "yes" } }) });
-  assertEquals(await (await app.fetch(request("/only?version=2"))).text(), "yes");
-  assertEquals((await app.fetch(new Request("https://other.test/only?version=2"))).status, 405);
-  assertEquals(await (await app.fetch(request("/products/42"))).text(), "42");
+  expect(await (await app.fetch(request("/only?version=2"))).text()).toBe("yes");
+  expect((await app.fetch(new Request("https://other.test/only?version=2"))).status).toBe(405);
+  expect(await (await app.fetch(request("/products/42"))).text()).toBe("42");
   const options = await app.fetch(request("/only", "OPTIONS"));
-  assertEquals(options.headers.get("Allow"), "OPTIONS");
-  assertEquals(options.headers.get("X-Route"), "yes");
-  assertEquals(await options.text(), "custom");
+  expect(options.headers.get("Allow")).toBe("OPTIONS");
+  expect(options.headers.get("X-Route")).toBe("yes");
+  expect(await options.text()).toBe("custom");
 });
 
-Deno.test("a slow error fallback leaves ready sibling panels free to stream", async () => {
+it("a slow error fallback leaves ready sibling panels free to stream", async () => {
   const recover = Promise.withResolvers<void>();
   const app = router().get("/", () =>
     html(
@@ -111,17 +128,19 @@ Deno.test("a slow error fallback leaves ready sibling panels free to stream", as
         </Deferred>
         <Deferred fallback="waiting">{<b>Ready</b>}</Deferred>
       </>,
-    ));
-  const reader = (await app.fetch(request("/"))).body!.pipeThrough(new TextDecoderStream())
+    ),
+  );
+  const reader = (await app.fetch(request("/")))
+    .body!.pipeThrough(new TextDecoderStream())
     .getReader();
   let text = "";
   try {
     while (!text.includes("<b>Ready</b>")) {
       const step = await reader.read();
-      assert(!step.done);
+      expect(step.done).toBe(false);
       text += step.value;
     }
-    assert(!text.includes("<b>Recovered</b>"));
+    expect(text).not.toContain("<b>Recovered</b>");
   } finally {
     recover.resolve();
     while (true) {
@@ -130,51 +149,54 @@ Deno.test("a slow error fallback leaves ready sibling panels free to stream", as
       text += step.value;
     }
   }
-  assert(text.includes("<b>Recovered</b>"));
+  expect(text).toContain("<b>Recovered</b>");
 });
 
-Deno.test("failed handlers abort work they already started", async () => {
+it("failed handlers abort work they already started", async () => {
   const observed: AbortSignal[] = [];
   const app = router().get("/", ({ signal }) => {
     observed.push(signal);
     throw new Error("could not respond");
   });
-  await assertRejects(() => app.fetch(request("/")), Error, "could not respond");
-  assert(observed[0].aborted);
+  await expect(app.fetch(request("/"))).rejects.toThrow("could not respond");
+  expect(observed[0].aborted).toBe(true);
 });
 
-Deno.test("optional groups spanning path segments expose possibly absent parameters", async () => {
+it("optional groups spanning path segments expose possibly absent parameters", async () => {
   const app = router().get("/items{/:org/extra}?", ({ params }) => {
     // @ts-expect-error The entire group can be absent.
     const name: string = params.org;
     return new Response(name ?? "all");
   });
-  assertEquals(await (await app.fetch(request("/items"))).text(), "all");
-  assertEquals(await (await app.fetch(request("/items/shop/extra"))).text(), "shop");
+  expect(await (await app.fetch(request("/items"))).text()).toBe("all");
+  expect(await (await app.fetch(request("/items/shop/extra"))).text()).toBe("shop");
 });
 
-Deno.test("an eager rejected input stays observed until rendering, including HEAD", async () => {
+it("an eager rejected input stays observed until rendering, including HEAD", async () => {
   const turn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
   const gate = Promise.withResolvers<string>();
-  const app = router().get("/", () =>
-    html(
-      <main>
-        {gate.promise}
-        <Deferred fallback="loading" errorFallback={<p>Recovered</p>}>
-          {Promise.reject(new Error("early rejection"))}
-        </Deferred>
-      </main>,
-    )).get("/head", () => html(Promise.reject(new Error("head"))));
+  const app = router()
+    .get("/", () =>
+      html(
+        <main>
+          {gate.promise}
+          <Deferred fallback="loading" errorFallback={<p>Recovered</p>}>
+            {Promise.reject(new Error("early rejection"))}
+          </Deferred>
+        </main>,
+      ),
+    )
+    .get("/head", () => html(Promise.reject(new Error("head"))));
   const response = await app.fetch(request("/"));
   const arrayResponse = html([gate.promise, Promise.reject(new Error("array rejection"))]);
-  assertEquals((await app.fetch(request("/head", "HEAD"))).body, null);
+  expect((await app.fetch(request("/head", "HEAD"))).body).toBe(null);
   await turn();
   gate.resolve("ready");
-  assert((await response.text()).includes("<p>Recovered</p>"));
-  await assertRejects(() => arrayResponse.text(), Error, "array rejection");
+  expect(await response.text()).toContain("<p>Recovered</p>");
+  await expect(arrayResponse.text()).rejects.toThrow("array rejection");
 });
 
-Deno.test("nested ordered renders isolate panels while keeping lexical application context", async () => {
+it("nested ordered renders isolate panels while keeping lexical application context", async () => {
   const theme = createContext("outer");
   const Name = () => <i>{theme.use()}</i>;
   const doc = () => (
@@ -197,15 +219,16 @@ Deno.test("nested ordered renders isolate panels while keeping lexical applicati
           }}
         </Deferred>
       </theme.Provider>,
-    ));
+    ),
+  );
   const output = await (await app.fetch(request("/"))).text();
-  assertEquals(output.match(/<template data-rw-target=/g)?.length, 1);
-  assertEquals(output.match(/&lt;i&gt;inside&lt;\/i&gt;/g)?.length, 2);
-  assert(!output.includes("inner pending"));
-  assert(output.includes("<section"));
+  expect(output.match(/<template data-rw-target=/g)?.length).toBe(1);
+  expect(output.match(/&lt;i&gt;inside&lt;\/i&gt;/g)?.length).toBe(2);
+  expect(output).not.toContain("inner pending");
+  expect(output).toContain("<section");
 });
 
-Deno.test("HEAD observes stored promises without iterating array props or reading their getters", async () => {
+it("HEAD observes stored promises without iterating array props or reading their getters", async () => {
   const accessor: string[] = [];
   Object.defineProperty(accessor, "0", {
     enumerable: true,
@@ -225,27 +248,30 @@ Deno.test("HEAD observes stored promises without iterating array props or readin
   for (const items of [accessor, iterable]) {
     const app = router().get("/", () => html(<Widget items={items} />));
     const response = await app.fetch(request("/", "HEAD"));
-    assertEquals(response.status, 200);
-    assertEquals(response.body, null);
+    expect(response.status).toBe(200);
+    expect(response.body).toBe(null);
   }
 });
 
-Deno.test("nested app.fetch isolates request context from outer AsyncLocalStorage values", async () => {
+it("nested app.fetch isolates request context from outer AsyncLocalStorage values", async () => {
   const theme = createContext("default");
   const app = router();
   app
     .get("/inner", () => new Response(theme.use()))
     .get("/outer", () => theme.withValue("outer-only", () => app.fetch(request("/inner"))));
-  assertEquals(await (await app.fetch(request("/outer"))).text(), "default");
+  expect(await (await app.fetch(request("/outer"))).text()).toBe("default");
 });
 
-Deno.test("resolver script defaults to root-relative path and supports resolverSrc and nonce", async () => {
+it("resolver script defaults to root-relative path and supports resolverSrc and nonce", async () => {
   const page = () => <Deferred fallback="wait">{<p>done</p>}</Deferred>;
   const defaultApp = router().get("/proxy", () => html(page()));
-  const proxyHtml = await (await defaultApp.fetch(new Request("http://127.0.0.1:8000/proxy")))
-    .text();
-  assert(proxyHtml.includes('<script src="/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>'));
-  assert(!proxyHtml.includes("127.0.0.1:8000"));
+  const proxyHtml = await (
+    await defaultApp.fetch(new Request("http://127.0.0.1:8000/proxy"))
+  ).text();
+  expect(proxyHtml).toContain(
+    '<script src="/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>',
+  );
+  expect(proxyHtml).not.toContain("127.0.0.1:8000");
 
   const configuredApp = router([], {
     resolverSrc: (req) => new URL("/prefix/_ruwuter/resolve-v1.js", req.url).href,
@@ -254,50 +280,40 @@ Deno.test("resolver script defaults to root-relative path and supports resolverS
     .get("/html-opt", () => html(page(), { resolverSrc: "/custom/resolve.js", nonce: "abc123" }));
 
   const fromRouter = await (await configuredApp.fetch(request("/router-opt"))).text();
-  assert(
-    fromRouter.includes(
-      '<script src="https://example.test/prefix/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>',
-    ),
+  expect(fromRouter).toContain(
+    '<script src="https://example.test/prefix/_ruwuter/resolve-v1.js" data-rw-resolver=""></script>',
   );
   const fromHtml = await (await configuredApp.fetch(request("/html-opt"))).text();
-  assert(
-    fromHtml.includes(
-      '<script src="/custom/resolve.js" data-rw-resolver="" nonce="abc123"></script>',
-    ),
+  expect(fromHtml).toContain(
+    '<script src="/custom/resolve.js" data-rw-resolver="" nonce="abc123"></script>',
   );
 
   // Reserved resolver endpoint still handles GET, HEAD, OPTIONS, 405
   const asset = await defaultApp.fetch(request("/_ruwuter/resolve-v1.js"));
-  assertEquals(asset.status, 200);
-  assert(asset.headers.get("content-type")?.includes("text/javascript"));
+  expect(asset.status).toBe(200);
+  expect(asset.headers.get("content-type")).toContain("text/javascript");
   const head = await defaultApp.fetch(request("/_ruwuter/resolve-v1.js", "HEAD"));
-  assertEquals(head.status, 200);
-  assertEquals(head.body, null);
+  expect(head.status).toBe(200);
+  expect(head.body).toBe(null);
   const options = await defaultApp.fetch(request("/_ruwuter/resolve-v1.js", "OPTIONS"));
-  assertEquals(options.status, 204);
-  assertEquals(options.headers.get("allow"), "GET, HEAD, OPTIONS");
+  expect(options.status).toBe(204);
+  expect(options.headers.get("allow")).toBe("GET, HEAD, OPTIONS");
   const bad = await defaultApp.fetch(request("/_ruwuter/resolve-v1.js", "POST"));
-  assertEquals(bad.status, 405);
+  expect(bad.status).toBe(405);
 });
 
-Deno.test("standalone Deferred honors errorFallback and nested routed Deferred resolves both levels", async () => {
+it("standalone Deferred honors errorFallback and nested routed Deferred resolves both levels", async () => {
   const originalError = console.error;
   console.error = () => {};
   try {
     const failing = () => (
-      <Deferred
-        fallback="wait"
-        errorFallback={(err) => <p>Fallback: {(err as Error).message}</p>}
-      >
+      <Deferred fallback="wait" errorFallback={(err) => <p>Fallback: {(err as Error).message}</p>}>
         {() => Promise.reject(new Error("boom"))}
       </Deferred>
     );
-    assertEquals(await renderToString(failing()), "<p>Fallback: boom</p>");
-    assertEquals(await html(failing()).text(), "<p>Fallback: boom</p>");
-    assertEquals(
-      await new Response(renderToStream(failing())).text(),
-      "<p>Fallback: boom</p>",
-    );
+    expect(await renderToString(failing())).toBe("<p>Fallback: boom</p>");
+    expect(await html(failing()).text()).toBe("<p>Fallback: boom</p>");
+    expect(await new Response(renderToStream(failing())).text()).toBe("<p>Fallback: boom</p>");
   } finally {
     console.error = originalError;
   }
@@ -323,37 +339,39 @@ Deno.test("standalone Deferred honors errorFallback and nested routed Deferred r
           </Deferred>
         </body>
       </html>,
-    ));
+    ),
+  );
   const output = await (await app.fetch(request("/"))).text();
-  assertEquals(output.match(/<template data-rw-target=/g)?.length, 2);
-  assertEquals(output.match(/<script /g)?.length, 1);
-  assert(output.includes("<p>inner-done</p>"));
+  expect(output.match(/<template data-rw-target=/g)?.length).toBe(2);
+  expect(output.match(/<script /g)?.length).toBe(1);
+  expect(output).toContain("<p>inner-done</p>");
 });
 
-Deno.test("Deferred cancellation stops pending async iterators immediately", async () => {
+it("Deferred cancellation stops pending async iterators immediately", async () => {
   const { into } = await import("../src/runtime/node.ts");
   const started = Promise.withResolvers<void>();
   const cleanedUp = Promise.withResolvers<void>();
   const never = new Promise<never>(() => {});
   const streamPanel = () =>
-    into((async function* () {
-      try {
-        started.resolve();
-        yield "<p>partial</p>";
-        await never;
-      } finally {
-        cleanedUp.resolve();
-      }
-    })());
+    into(
+      (async function* () {
+        try {
+          started.resolve();
+          yield "<p>partial</p>";
+          await never;
+        } finally {
+          cleanedUp.resolve();
+        }
+      })(),
+    );
   const app = router().get("/", () =>
     html(
       <main>
         <h1>Shell</h1>
-        <Deferred fallback="loading">
-          {streamPanel}
-        </Deferred>
+        <Deferred fallback="loading">{streamPanel}</Deferred>
       </main>,
-    ));
+    ),
+  );
   const res = await app.fetch(request("/"));
   const reader = res.body!.getReader();
   await reader.read();
@@ -362,27 +380,22 @@ Deno.test("Deferred cancellation stops pending async iterators immediately", asy
   await cleanedUp.promise;
 });
 
-Deno.test("generated fs-routes tables mount directly on router() with specificity order", async () => {
-  const { join } = await import("node:path");
-  const { pathToFileURL } = await import("node:url");
+it("generated fs-routes tables mount directly on router() with specificity order", async () => {
   const { writeGeneratedFiles, generatedTypesRoot } = await import("../src/fs-routes/write.ts");
-  const appDir = await Deno.makeTempDir();
+  const appDir = await mkdtemp(join(tmpdir(), "ruwuter-fs-"));
   try {
     const routesDir = join(appDir, "routes");
-    await Deno.mkdir(routesDir, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(
       join(routesDir, "_app.$slug.ts"),
       `export const GET = ({ params }: { params: { slug: string } }) => new Response("slug:" + params.slug);`,
     );
-    await Deno.writeTextFile(
-      join(routesDir, "about.ts"),
-      `export const GET = () => new Response("about");`,
-    );
-    await Deno.writeTextFile(
+    await writeFile(join(routesDir, "about.ts"), `export const GET = () => new Response("about");`);
+    await writeFile(
       join(routesDir, "$.ts"),
       `export const GET = () => new Response("root-catchall");`,
     );
-    await Deno.writeTextFile(
+    await writeFile(
       join(routesDir, "products.$.ts"),
       `export const GET = () => new Response("products-catchall");`,
     );
@@ -390,33 +403,32 @@ Deno.test("generated fs-routes tables mount directly on router() with specificit
     const { routes } = await import(pathToFileURL(join(appDir, "routes.ts")).href);
     const app = router(routes);
 
-    assertEquals(await (await app.fetch(request("/about"))).text(), "about");
-    assertEquals(await (await app.fetch(request("/other"))).text(), "slug:other");
-    assertEquals(await (await app.fetch(request("/products/a/b"))).text(), "products-catchall");
-    assertEquals(await (await app.fetch(request("/x/y/z"))).text(), "root-catchall");
+    expect(await (await app.fetch(request("/about"))).text()).toBe("about");
+    expect(await (await app.fetch(request("/other"))).text()).toBe("slug:other");
+    expect(await (await app.fetch(request("/products/a/b"))).text()).toBe("products-catchall");
+    expect(await (await app.fetch(request("/x/y/z"))).text()).toBe("root-catchall");
   } finally {
-    await Deno.remove(appDir, { recursive: true }).catch(() => {});
-    await Deno.remove(generatedTypesRoot(appDir), { recursive: true }).catch(() => {});
+    await rm(appDir, { recursive: true, force: true }).catch(() => {});
+    await rm(generatedTypesRoot(appDir), { recursive: true, force: true }).catch(() => {});
   }
 });
 
-Deno.test("static and simple-segment fast paths preserve registration order, ignoreCase, and encoding", async () => {
+it("static and simple-segment fast paths preserve registration order, ignoreCase, and encoding", async () => {
   const staticFirst = router()
     .get("/about", () => html(<p>static-about</p>))
     .get("/hello/:name", ({ params }) => html(<p>hi {params.name}</p>))
     .get("/items/:id", ({ params }) => new Response(`item:${params.id}`))
     .get("/items/special", () => new Response("after-dynamic"));
 
-  assertEquals(
-    await (await staticFirst.fetch(request("/about?ref=nav"))).text(),
+  expect(await (await staticFirst.fetch(request("/about?ref=nav"))).text()).toBe(
     "<p>static-about</p>",
   );
-  assertEquals(await (await staticFirst.fetch(request("/about/"))).status, 404);
-  assertEquals(await (await staticFirst.fetch(request("/hello/a%20b"))).text(), "<p>hi a%20b</p>");
-  assertEquals(await (await staticFirst.fetch(request("/hello/"))).status, 404);
-  assertEquals(await (await staticFirst.fetch(request("/hello/a/b"))).status, 404);
+  expect((await staticFirst.fetch(request("/about/"))).status).toBe(404);
+  expect(await (await staticFirst.fetch(request("/hello/a%20b"))).text()).toBe("<p>hi a%20b</p>");
+  expect((await staticFirst.fetch(request("/hello/"))).status).toBe(404);
+  expect((await staticFirst.fetch(request("/hello/a/b"))).status).toBe(404);
   // Dynamic route registered before /items/special still wins.
-  assertEquals(await (await staticFirst.fetch(request("/items/special"))).text(), "item:special");
+  expect(await (await staticFirst.fetch(request("/items/special"))).text()).toBe("item:special");
 
   const ignoreCaseApp = router([
     [
@@ -424,7 +436,7 @@ Deno.test("static and simple-segment fast paths preserve registration order, ign
       { GET: () => new Response("case-insensitive") },
     ],
   ]);
-  assertEquals(await (await ignoreCaseApp.fetch(request("/about"))).text(), "case-insensitive");
+  expect(await (await ignoreCaseApp.fetch(request("/about"))).text()).toBe("case-insensitive");
 
   const doc = await router()
     .get("/", () =>
@@ -435,16 +447,14 @@ Deno.test("static and simple-segment fast paths preserve registration order, ign
           </body>
         </html>,
         { status: 201, headers: { "X-Fast": "1" } },
-      ))
+      ),
+    )
     .fetch(request("/"));
-  assertEquals(doc.status, 201);
-  assertEquals(doc.headers.get("content-type"), "text/html; charset=utf-8");
-  assertEquals(doc.headers.get("x-fast"), "1");
-  assertEquals(
-    await doc.text(),
-    "<!doctype html><html><body><p>Static fast path</p></body></html>",
-  );
+  expect(doc.status).toBe(201);
+  expect(doc.headers.get("content-type")).toBe("text/html; charset=utf-8");
+  expect(doc.headers.get("x-fast")).toBe("1");
+  expect(await doc.text()).toBe("<!doctype html><html><body><p>Static fast path</p></body></html>");
 
   const asset = await staticFirst.fetch(request("/_ruwuter/resolve-v1.js"));
-  assert(asset.headers.get("cache-control")?.includes("immutable"));
+  expect(asset.headers.get("cache-control")).toContain("immutable");
 });
