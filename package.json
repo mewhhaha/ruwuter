@@ -4,11 +4,12 @@
   "description": "Server-first TypeScript router for Web API runtimes with file-system routing and streaming JSX",
   "license": "MIT",
   "bin": {
-    "fs-routes": "./src/fs-routes/routes.ts"
+    "fs-routes": "./lib/fs-routes-cli.js"
   },
   "files": [
     "README.md",
     "jsr.json",
+    "lib",
     "src"
   ],
   "type": "module",
@@ -16,9 +17,18 @@
     ".": "./src/router.ts",
     "./browser": "./src/browser.ts",
     "./components": "./src/components/index.ts",
-    "./fs-routes": "./src/fs-routes/js.ts",
-    "./fs-routes/cli": "./src/fs-routes/routes.ts",
-    "./vite": "./src/vite.ts",
+    "./fs-routes": {
+      "types": "./src/fs-routes/js.ts",
+      "default": "./lib/fs-routes.js"
+    },
+    "./fs-routes/cli": {
+      "types": "./src/fs-routes/routes.ts",
+      "default": "./lib/fs-routes-cli.js"
+    },
+    "./vite": {
+      "types": "./src/vite.ts",
+      "default": "./lib/vite.js"
+    },
     "./types": "./src/types.ts",
     "./jsx-runtime": "./src/runtime/jsx-runtime.ts",
     "./jsx-dev-runtime": "./src/runtime/jsx-dev-runtime.ts",
@@ -36,9 +46,11 @@
     "test": "vitest run --project unit",
     "test:dom": "vitest run --project dom",
     "test:browser": "vitest run --project browser",
+    "build:node": "node scripts/build-node.ts",
+    "build:check": "node scripts/build-node.ts --check",
     "resolver:build": "node scripts/build-resolver.ts",
     "size": "node scripts/build-resolver.ts --check && node scripts/check-size.ts",
-    "ci": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:dom && pnpm run size",
+    "ci": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run build:check && pnpm run test && pnpm run test:dom && pnpm run size",
     "browsers:install": "pnpm exec playwright-core install --with-deps chromium firefox webkit"
   },
   "devDependencies": {

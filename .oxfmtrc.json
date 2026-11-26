@@ -6,6 +6,7 @@
     ".zed/**",
     "docs/benchmarks/*.svg",
     "docs/benchmarks/*.json",
+    "lib/**",
     "src/runtime/resolve-source.ts"
   ]
 }

@@ -137,4 +137,8 @@ export class ControllerUrls {
       `${base.endsWith("/") ? base : `${base}/`}${fileName}`,
     )};\n`;
   }
+
+  emittedFileNames(): Iterable<string> {
+    return this.#emitted.values();
+  }
 }

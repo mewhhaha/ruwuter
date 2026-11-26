@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 type Context = {
@@ -8,12 +8,27 @@ type Context = {
 
 const MODULE_PREFIX = "\0ruwuter-runtime:";
 const URL_PREFIX = "\0ruwuter-runtime-url:";
+
+const resolveRuntimeSource = (name: string): URL => {
+  const candidates = [
+    new URL(`../runtime/${name}.ts`, import.meta.url),
+    new URL(`../runtime/${name}.js`, import.meta.url),
+    new URL(`../src/runtime/${name}.ts`, import.meta.url),
+  ];
+  for (const candidate of candidates) {
+    if (candidate.protocol === "file:" && existsSync(fileURLToPath(candidate))) {
+      return candidate;
+    }
+  }
+  return candidates[0];
+};
+
 const RUNTIME_SOURCES: ReadonlyMap<string, URL> = new Map([
-  ["@mewhhaha/ruwuter/client.js", new URL("../runtime/client.ts", import.meta.url)],
+  ["@mewhhaha/ruwuter/client.js", resolveRuntimeSource("client")],
   // Retained for legacy SuspenseProvider apps; the 0.7 router serves /_ruwuter/resolve-v1.js itself.
-  ["@mewhhaha/ruwuter/resolve.js", new URL("../runtime/resolve.ts", import.meta.url)],
-  ["@mewhhaha/ruwuter/swap.js", new URL("../runtime/swap.ts", import.meta.url)],
-  ["@mewhhaha/ruwuter/vt.js", new URL("../runtime/vt.ts", import.meta.url)],
+  ["@mewhhaha/ruwuter/resolve.js", resolveRuntimeSource("resolve")],
+  ["@mewhhaha/ruwuter/swap.js", resolveRuntimeSource("swap")],
+  ["@mewhhaha/ruwuter/vt.js", resolveRuntimeSource("vt")],
 ]);
 
 const publicId = (id: string): string => `/@id/${id.replace("\0", "__x00__")}`;
@@ -78,5 +93,9 @@ export class RuntimeUrls {
     return `export default ${JSON.stringify(
       `${base.endsWith("/") ? base : `${base}/`}${fileName}`,
     )};\n`;
+  }
+
+  emittedFileNames(): Iterable<string> {
+    return this.#emitted.values();
   }
 }

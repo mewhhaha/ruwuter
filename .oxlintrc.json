@@ -3,5 +3,10 @@
   "rules": {
     "typescript/no-explicit-any": "off"
   },
-  "ignorePatterns": ["dist/**", "examples/cloudflare/dist/**", "src/runtime/resolve-source.ts"]
+  "ignorePatterns": [
+    "dist/**",
+    "examples/cloudflare/dist/**",
+    "lib/**",
+    "src/runtime/resolve-source.ts"
+  ]
 }

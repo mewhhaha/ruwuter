@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { writeGeneratedFiles } from "./fs-routes/write.ts";
 import { ControllerUrls } from "./vite/controller-urls.ts";
@@ -25,6 +27,35 @@ type ViteDevServer = {
   ws?: ViteWebSocket;
 };
 
+type OutputChunk = {
+  type: "chunk";
+  fileName: string;
+  code: string;
+  isEntry?: boolean;
+  imports?: string[];
+  dynamicImports?: string[];
+  viteMetadata?: {
+    importedAssets?: Set<string>;
+    importedCss?: Set<string>;
+  };
+};
+
+type OutputBundle = Record<string, OutputChunk | { type: string; fileName: string }>;
+
+type BundleContext = {
+  environment?: { name: string };
+  emitFile(file: { type: "asset"; fileName: string; source: string }): string;
+  error(message: string): never;
+};
+
+type ViteBuilder = {
+  config: { root: string };
+  environments: Record<
+    string,
+    { isBuilt?: boolean; config: { build: { outDir: string } } } | undefined
+  >;
+};
+
 export interface RuwuterPluginOptions {
   /**
    * The folder containing the route files.
@@ -36,6 +67,7 @@ export interface RuwuterPluginOptions {
 type RuwuterPlugin = {
   name: string;
   enforce?: "post";
+  sharedDuringBuild?: boolean;
   config?: () => { ssr: { noExternal: string[] } };
   configResolved?: (config: { command: "serve" | "build"; base?: string }) => void;
   buildStart?: () => Promise<void>;
@@ -50,10 +82,33 @@ type RuwuterPlugin = {
     source: string,
     id: string,
   ) => Promise<{ code: string; map: null } | undefined> | { code: string; map: null } | undefined;
+  generateBundle?: (this: any, options: any, bundle: Record<string, any>) => void;
+  buildApp?: {
+    order: "post";
+    handler(builder: ViteBuilder): Promise<void>;
+  };
 };
 
 const isWithinFolder = (folder: string, file: string): boolean => {
   return file === folder || file.startsWith(`${folder}${path.sep}`);
+};
+
+const isChunk = (output: OutputBundle[string] | undefined): output is OutputChunk => {
+  return output?.type === "chunk";
+};
+
+const walkChunkGraph = (bundle: OutputBundle, seeds: Iterable<string>): Set<string> => {
+  const visited = new Set<string>();
+  const pending = [...seeds];
+  for (const fileName of pending) {
+    if (visited.has(fileName)) continue;
+    const output = bundle[fileName];
+    if (!isChunk(output)) continue;
+    visited.add(fileName);
+    for (const dep of output.imports ?? []) pending.push(dep);
+    for (const dep of output.dynamicImports ?? []) pending.push(dep);
+  }
+  return visited;
 };
 
 export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
@@ -75,6 +130,8 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
     () => building,
     () => base,
   );
+  const browserModules = new Map<string, string>();
+  const sharedBrowserModules = new Map<string, string>();
 
   let queuedWrite = Promise.resolve();
 
@@ -107,6 +164,7 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
 
   return {
     name: "vite-plugin-ruwuter",
+    sharedDuringBuild: true,
     config() {
       // Bundle Ruwuter's own browser helpers into emitted controller/runtime chunks
       // during SSR builds so browser modules never retain bare npm specifiers.
@@ -135,6 +193,89 @@ export const ruwuter = (options: RuwuterPluginOptions = {}): RuwuterPlugin => {
     transform(this: unknown, source: string, id: string) {
       void this;
       return transformControllerImports(source, id);
+    },
+    generateBundle(this: unknown, _options: unknown, rawBundle: Record<string, any>) {
+      const context = this as BundleContext | undefined;
+      const bundle = rawBundle as OutputBundle;
+
+      if (context?.environment?.name === "client") {
+        // Emit chunks shared between the server/Worker and browser controllers into the client
+        // build so server bundles keep their imports while browsers can still fetch them.
+        for (const [fileName, code] of sharedBrowserModules) {
+          if (fileName in bundle) continue;
+          context.emitFile({ type: "asset", fileName, source: code });
+        }
+        return;
+      }
+
+      const emittedEntries = new Set<string>();
+      for (const fileName of runtimeUrls.emittedFileNames()) {
+        if (isChunk(bundle[fileName])) emittedEntries.add(fileName);
+      }
+      for (const fileName of controllerUrls.emittedFileNames()) {
+        if (isChunk(bundle[fileName])) emittedEntries.add(fileName);
+      }
+      if (emittedEntries.size === 0) return;
+
+      const serverEntries = Object.values(bundle).filter(
+        (output): output is OutputChunk =>
+          isChunk(output) && Boolean(output.isEntry) && !emittedEntries.has(output.fileName),
+      );
+      const serverEntryFileNames = new Set(serverEntries.map((entry) => entry.fileName));
+      const serverReachable = walkChunkGraph(bundle, serverEntryFileNames);
+      const browserReachable = walkChunkGraph(bundle, emittedEntries);
+      const browserOnly: string[] = [];
+
+      for (const fileName of browserReachable) {
+        if (serverEntryFileNames.has(fileName)) {
+          context?.error(
+            `Ruwuter browser module graph unexpectedly imports server entry "${fileName}".`,
+          );
+          throw new Error(
+            `Ruwuter browser module graph unexpectedly imports server entry "${fileName}".`,
+          );
+        }
+        const chunk = bundle[fileName];
+        if (!isChunk(chunk)) continue;
+        browserModules.set(fileName, chunk.code);
+        if (serverReachable.has(fileName)) {
+          sharedBrowserModules.set(fileName, chunk.code);
+        } else {
+          browserOnly.push(fileName);
+        }
+      }
+
+      const hostChunk = serverEntries[0] ?? bundle[[...emittedEntries][0]];
+      if (isChunk(hostChunk) && browserOnly.length > 0) {
+        // Expose browser-only chunks as imported assets so multi-environment builders
+        // (such as @cloudflare/vite-plugin) build static assets and move them out of
+        // the server/Worker bundle automatically.
+        hostChunk.viteMetadata ??= { importedAssets: new Set(), importedCss: new Set() };
+        hostChunk.viteMetadata.importedAssets ??= new Set();
+        for (const fileName of browserOnly) {
+          hostChunk.viteMetadata.importedAssets.add(fileName);
+        }
+      }
+    },
+    buildApp: {
+      order: "post",
+      async handler(builder) {
+        if (browserModules.size === 0) return;
+        const client = builder.environments.client;
+        if (!client?.isBuilt) return;
+        const clientDir = path.resolve(builder.config.root, client.config.build.outDir);
+        const pending: Array<Promise<void>> = [];
+        for (const [fileName, code] of browserModules) {
+          const target = path.resolve(clientDir, fileName);
+          if (existsSync(target)) continue;
+          pending.push(
+            mkdir(path.dirname(target), { recursive: true }).then(() => writeFile(target, code)),
+          );
+        }
+        await Promise.all(pending);
+        browserModules.clear();
+        sharedBrowserModules.clear();
+      },
     },
     async buildStart() {
       await scheduleRegenerate();

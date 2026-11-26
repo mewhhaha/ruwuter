@@ -1,7 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { Plugin } from "vite";
 import { describe, expect, it } from "vitest";
 import { generatedTypesRoot } from "../src/fs-routes/write.ts";
 import { ruwuter } from "../src/vite.ts";
@@ -453,6 +454,275 @@ export { clientRuntime, vtRuntime };`,
       expect(vtCode).toContain("pageswap");
       await import(pathToFileURL(runtimePath).href);
       await import(pathToFileURL(vtPath).href);
+    } finally {
+      await rm(app, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+    }
+  });
+
+  it("publishes browser modules cleanly across multi-environment builds with shared server chunks", async () => {
+    const { createBuilder } = await import("vite");
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
+    const typesRoot = generatedTypesRoot(app);
+    try {
+      const routesDir = join(app, "routes");
+      const ssrDist = join(app, "dist", "worker");
+      const clientDist = join(app, "dist", "assets");
+      await mkdir(routesDir, { recursive: true });
+      await writeFile(
+        join(app, "routes", "index.ts"),
+        "export const GET = () => new Response('ok');",
+      );
+      await writeFile(
+        join(app, "shared.ts"),
+        `export const SHARED_LABEL = "shared-between-server-and-browser";\n`,
+      );
+      await writeFile(
+        join(app, "click.client.ts"),
+        `import { defineController } from "@mewhhaha/ruwuter/browser";
+import { SHARED_LABEL } from "./shared.ts";
+export default defineController(({ root }) => {
+  root.setAttribute("data-label", SHARED_LABEL);
+});`,
+      );
+      await writeFile(join(app, "client-entry.ts"), `export const noop = true;\n`);
+      await writeFile(
+        join(app, "entry.ts"),
+        `import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
+import vtRuntime from "@mewhhaha/ruwuter/vt.js?url&no-inline";
+import { controller } from "@mewhhaha/ruwuter/browser";
+import { click } from "./controllers.ts";
+import { SHARED_LABEL } from "./shared.ts";
+export const attrs = controller(click, { label: SHARED_LABEL }).root();
+export { clientRuntime, vtRuntime, click, SHARED_LABEL };`,
+      );
+
+      // Verify compile-time assignability to Vite's Plugin type.
+      const ruwuterPlugin: Plugin = ruwuter({ appFolder: app });
+
+      // Simulate @cloudflare/vite-plugin: build ssr, collect viteMetadata.importedAssets,
+      // build client, then move imported assets out of ssr into client.
+      const movedAssets = new Set<string>();
+      const cfLikePlugin: Plugin = {
+        name: "cf-like-asset-mover",
+        sharedDuringBuild: true,
+        writeBundle(_options, bundle) {
+          if (this.environment.name !== "ssr") return;
+          for (const output of Object.values(bundle)) {
+            if (output.type !== "chunk") continue;
+            for (const asset of output.viteMetadata?.importedAssets ?? []) {
+              movedAssets.add(asset);
+            }
+          }
+        },
+        buildApp: {
+          order: "post",
+          async handler(builder) {
+            await builder.build(builder.environments.ssr);
+            await builder.build(builder.environments.client);
+            for (const assetPath of movedAssets) {
+              const src = join(ssrDist, assetPath);
+              const dest = join(clientDist, assetPath);
+              await mkdir(dirname(dest), { recursive: true });
+              await rename(src, dest);
+            }
+          },
+        },
+      };
+
+      // Intentionally place ruwuter BEFORE cfLikePlugin to verify plugin-order independence.
+      const builder = await createBuilder({
+        root: app,
+        base: "/",
+        configFile: false,
+        logLevel: "silent",
+        plugins: [ruwuterPlugin, cfLikePlugin],
+        resolve: {
+          alias: [
+            { find: /^@mewhhaha\/ruwuter\/browser$/, replacement: resolve("src/browser.ts") },
+            {
+              find: /^@mewhhaha\/ruwuter$/,
+              replacement: resolve("src/router.ts"),
+            },
+            {
+              find: /^@mewhhaha\/ruwuter\/client\.js$/,
+              replacement: resolve("src/runtime/client.ts"),
+            },
+            {
+              find: /^@mewhhaha\/ruwuter\/vt\.js$/,
+              replacement: resolve("src/runtime/vt.ts"),
+            },
+          ],
+        },
+        environments: {
+          ssr: {
+            build: {
+              outDir: ssrDist,
+              emptyOutDir: true,
+              minify: false,
+              ssr: join(app, "entry.ts"),
+              rolldownOptions: { output: { entryFileNames: "index.js" } },
+            },
+          },
+          client: {
+            build: {
+              outDir: clientDist,
+              emptyOutDir: true,
+              minify: false,
+              rolldownOptions: { input: join(app, "client-entry.ts") },
+            },
+          },
+        },
+      });
+      await builder.buildApp();
+
+      // Server entry must still run cleanly (shared chunk was NOT deleted from ssrDist).
+      const serverMod = (await import(pathToFileURL(join(ssrDist, "index.js")).href)) as {
+        clientRuntime: string;
+        vtRuntime: string;
+        click: string;
+        attrs: Record<string, string>;
+      };
+      expect(serverMod.attrs["data-rw-controller"]).toBe(serverMod.click);
+
+      // Browser-only chunks were moved into clientDist and removed from ssrDist.
+      for (const href of [serverMod.clientRuntime, serverMod.vtRuntime, serverMod.click]) {
+        const rel = href.slice(1);
+        expect(movedAssets.has(rel)).toBe(true);
+        await expect(stat(join(clientDist, rel))).resolves.toBeTruthy();
+        await expect(stat(join(ssrDist, rel))).rejects.toThrow();
+      }
+
+      // Importing the built controller chunk from clientDist succeeds (shared chunk emitted there too).
+      const controllerMod = (await import(
+        pathToFileURL(join(clientDist, serverMod.click.slice(1))).href
+      )) as { default: unknown };
+      expect(typeof controllerMod.default).toBe("function");
+    } finally {
+      await rm(app, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+    }
+  });
+
+  it("copies browser modules into client outDir in generic buildApp builds without an asset mover", async () => {
+    const { createBuilder } = await import("vite");
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
+    const typesRoot = generatedTypesRoot(app);
+    try {
+      const ssrDist = join(app, "dist", "ssr");
+      const clientDist = join(app, "dist", "client");
+      await mkdir(join(app, "routes"), { recursive: true });
+      await writeFile(
+        join(app, "routes", "index.ts"),
+        "export const GET = () => new Response('ok');",
+      );
+      await writeFile(join(app, "client-entry.ts"), "export const ok = true;\n");
+      await writeFile(
+        join(app, "entry.ts"),
+        `import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
+export { clientRuntime };`,
+      );
+
+      const builder = await createBuilder({
+        root: app,
+        base: "/",
+        configFile: false,
+        logLevel: "silent",
+        plugins: [ruwuter({ appFolder: app })],
+        resolve: {
+          alias: [
+            {
+              find: /^@mewhhaha\/ruwuter\/client\.js$/,
+              replacement: resolve("src/runtime/client.ts"),
+            },
+          ],
+        },
+        builder: {
+          // Client builds BEFORE ssr, and nothing moves viteMetadata.importedAssets.
+          async buildApp(b) {
+            await b.build(b.environments.client);
+            await b.build(b.environments.ssr);
+          },
+        },
+        environments: {
+          ssr: {
+            build: {
+              outDir: ssrDist,
+              emptyOutDir: true,
+              minify: false,
+              ssr: join(app, "entry.ts"),
+              rolldownOptions: { output: { entryFileNames: "index.js" } },
+            },
+          },
+          client: {
+            build: {
+              outDir: clientDist,
+              emptyOutDir: true,
+              minify: false,
+              rolldownOptions: { input: join(app, "client-entry.ts") },
+            },
+          },
+        },
+      });
+      await builder.buildApp();
+
+      const serverMod = (await import(pathToFileURL(join(ssrDist, "index.js")).href)) as {
+        clientRuntime: string;
+      };
+      const code = await readFile(join(clientDist, serverMod.clientRuntime.slice(1)), "utf8");
+      expect(code).toContain("data-rw-controller");
+    } finally {
+      await rm(app, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+      await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+    }
+  });
+
+  it("loads the compiled Node Vite entrypoint with identical runtime source hashing", async () => {
+    const compiled = (await import(pathToFileURL(resolve("lib/vite.js")).href)) as {
+      ruwuter: typeof ruwuter;
+    };
+    const { build } = await import("vite");
+    const app = await mkdtemp(join(tmpdir(), "ruwuter-vite-"));
+    const typesRoot = generatedTypesRoot(app);
+    try {
+      await mkdir(join(app, "routes"), { recursive: true });
+      await writeFile(join(app, "routes", "index.ts"), "export default 1;");
+      await writeFile(
+        join(app, "entry.ts"),
+        `import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
+export { clientRuntime };`,
+      );
+
+      const runWith = async (pluginFactory: typeof ruwuter, outDir: string) => {
+        await build({
+          root: app,
+          base: "/",
+          configFile: false,
+          logLevel: "silent",
+          plugins: [pluginFactory({ appFolder: app })],
+          resolve: {
+            alias: [
+              {
+                find: /^@mewhhaha\/ruwuter\/client\.js$/,
+                replacement: resolve("src/runtime/client.ts"),
+              },
+            ],
+          },
+          build: {
+            outDir,
+            ssr: join(app, "entry.ts"),
+            minify: false,
+            rolldownOptions: { output: { entryFileNames: "entry.js" } },
+          },
+        });
+        return (await import(`${pathToFileURL(join(outDir, "entry.js")).href}?t=${outDir}`)) as {
+          clientRuntime: string;
+        };
+      };
+
+      const fromSource = await runWith(ruwuter, join(app, "dist-src"));
+      const fromCompiled = await runWith(compiled.ruwuter, join(app, "dist-lib"));
+      expect(fromCompiled.clientRuntime).toBe(fromSource.clientRuntime);
     } finally {
       await rm(app, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
       await rm(typesRoot, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
