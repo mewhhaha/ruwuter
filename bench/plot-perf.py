@@ -142,7 +142,7 @@ fig, ax = plt.subplots(figsize=(9.0, 2.5 + 0.95 * len(engines)))
 fig.subplots_adjust(left=.17, right=.93, top=.66, bottom=.21)
 heading(
     fig,
-    "When an above-the-fold controller activates on a streamed page",
+    "Controller activation on a streamed page",
     "Page streams a 600 ms Deferred panel below the widget. Median of 10 fresh navigations.",
     base_label="Deferred module script",
     head_label="Async module script",

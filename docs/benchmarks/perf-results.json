@@ -1,0 +1,1095 @@
+{
+  "deno": [
+    "deno 2.9.7 (stable, release, x86_64-unknown-linux-gnu)",
+    "v8 15.0.245.2-rusty",
+    "typescript 6.0.3"
+  ],
+  "python": "3.14.10",
+  "os": "Linux-7.3.5-2-cachyos-x86_64-with-glibc2.44",
+  "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+  "revisions": {
+    "base": {
+      "commit": "b51da4e0526e5562433745420f96fbd9d09034db",
+      "runtime": {
+        "client": {
+          "minified": 2703,
+          "gzip": 1204
+        },
+        "resolve": {
+          "minified": 631,
+          "gzip": 405
+        },
+        "swap": {
+          "minified": 3265,
+          "gzip": 1429
+        }
+      }
+    },
+    "head": {
+      "commit": "40892b9b86aa7a10a08c2cafcbf88260579e135c",
+      "runtime": {
+        "client": {
+          "minified": 2861,
+          "gzip": 1316
+        },
+        "resolve": {
+          "minified": 794,
+          "gzip": 482
+        },
+        "swap": {
+          "minified": 3305,
+          "gzip": 1442
+        }
+      }
+    }
+  },
+  "requestsPerBatch": 1000,
+  "serverHello": [
+    {
+      "pair": 0,
+      "version": "base",
+      "ms": 18.05082900000002
+    },
+    {
+      "pair": 0,
+      "version": "head",
+      "ms": 5.563534000000004
+    },
+    {
+      "pair": 1,
+      "version": "head",
+      "ms": 3.595860000000016
+    },
+    {
+      "pair": 1,
+      "version": "base",
+      "ms": 16.742879000000016
+    },
+    {
+      "pair": 2,
+      "version": "base",
+      "ms": 15.584059000000025
+    },
+    {
+      "pair": 2,
+      "version": "head",
+      "ms": 7.481617000000028
+    },
+    {
+      "pair": 3,
+      "version": "head",
+      "ms": 8.351139999999987
+    },
+    {
+      "pair": 3,
+      "version": "base",
+      "ms": 20.414368999999965
+    },
+    {
+      "pair": 4,
+      "version": "base",
+      "ms": 17.85554000000002
+    },
+    {
+      "pair": 4,
+      "version": "head",
+      "ms": 3.951836000000071
+    },
+    {
+      "pair": 5,
+      "version": "head",
+      "ms": 3.231292999999937
+    },
+    {
+      "pair": 5,
+      "version": "base",
+      "ms": 15.599408999999923
+    },
+    {
+      "pair": 6,
+      "version": "base",
+      "ms": 15.028393999999935
+    },
+    {
+      "pair": 6,
+      "version": "head",
+      "ms": 3.6604790000000094
+    },
+    {
+      "pair": 7,
+      "version": "head",
+      "ms": 3.1175140000000283
+    },
+    {
+      "pair": 7,
+      "version": "base",
+      "ms": 15.501250000000027
+    },
+    {
+      "pair": 8,
+      "version": "base",
+      "ms": 15.043883999999935
+    },
+    {
+      "pair": 8,
+      "version": "head",
+      "ms": 3.5187399999999798
+    },
+    {
+      "pair": 9,
+      "version": "head",
+      "ms": 3.058033999999907
+    },
+    {
+      "pair": 9,
+      "version": "base",
+      "ms": 14.431378999999879
+    },
+    {
+      "pair": 10,
+      "version": "base",
+      "ms": 15.304131999999981
+    },
+    {
+      "pair": 10,
+      "version": "head",
+      "ms": 3.882037000000082
+    },
+    {
+      "pair": 11,
+      "version": "head",
+      "ms": 3.25684299999989
+    },
+    {
+      "pair": 11,
+      "version": "base",
+      "ms": 15.36522100000002
+    },
+    {
+      "pair": 12,
+      "version": "base",
+      "ms": 16.826698999999735
+    },
+    {
+      "pair": 12,
+      "version": "head",
+      "ms": 3.900427000000036
+    },
+    {
+      "pair": 13,
+      "version": "head",
+      "ms": 3.0794639999999163
+    },
+    {
+      "pair": 13,
+      "version": "base",
+      "ms": 15.85199700000021
+    },
+    {
+      "pair": 14,
+      "version": "base",
+      "ms": 15.314212000000225
+    },
+    {
+      "pair": 14,
+      "version": "head",
+      "ms": 3.4624810000000252
+    },
+    {
+      "pair": 15,
+      "version": "head",
+      "ms": 3.0541849999999613
+    },
+    {
+      "pair": 15,
+      "version": "base",
+      "ms": 14.974303999999847
+    }
+  ],
+  "serverStatic": [
+    {
+      "pair": 0,
+      "version": "base",
+      "ms": 47.76479900000004
+    },
+    {
+      "pair": 0,
+      "version": "head",
+      "ms": 3.137723000000051
+    },
+    {
+      "pair": 1,
+      "version": "head",
+      "ms": 5.657891999999947
+    },
+    {
+      "pair": 1,
+      "version": "base",
+      "ms": 49.482646000000045
+    },
+    {
+      "pair": 2,
+      "version": "base",
+      "ms": 49.76803300000006
+    },
+    {
+      "pair": 2,
+      "version": "head",
+      "ms": 4.454581999999959
+    },
+    {
+      "pair": 3,
+      "version": "head",
+      "ms": 3.43745100000001
+    },
+    {
+      "pair": 3,
+      "version": "base",
+      "ms": 49.75164300000006
+    },
+    {
+      "pair": 4,
+      "version": "base",
+      "ms": 50.59697600000004
+    },
+    {
+      "pair": 4,
+      "version": "head",
+      "ms": 3.2063630000000103
+    },
+    {
+      "pair": 5,
+      "version": "head",
+      "ms": 2.831745999999953
+    },
+    {
+      "pair": 5,
+      "version": "base",
+      "ms": 47.571971000000076
+    },
+    {
+      "pair": 6,
+      "version": "base",
+      "ms": 46.999765000000025
+    },
+    {
+      "pair": 6,
+      "version": "head",
+      "ms": 2.969475999999986
+    },
+    {
+      "pair": 7,
+      "version": "head",
+      "ms": 2.6882579999999052
+    },
+    {
+      "pair": 7,
+      "version": "base",
+      "ms": 47.585821000000124
+    },
+    {
+      "pair": 8,
+      "version": "base",
+      "ms": 47.43442200000004
+    },
+    {
+      "pair": 8,
+      "version": "head",
+      "ms": 2.6928680000000895
+    },
+    {
+      "pair": 9,
+      "version": "head",
+      "ms": 2.5599879999999757
+    },
+    {
+      "pair": 9,
+      "version": "base",
+      "ms": 47.05713500000002
+    },
+    {
+      "pair": 10,
+      "version": "base",
+      "ms": 47.74700900000016
+    },
+    {
+      "pair": 10,
+      "version": "head",
+      "ms": 2.77910699999984
+    },
+    {
+      "pair": 11,
+      "version": "head",
+      "ms": 2.763246999999865
+    },
+    {
+      "pair": 11,
+      "version": "base",
+      "ms": 48.736801000000014
+    },
+    {
+      "pair": 12,
+      "version": "base",
+      "ms": 48.77169099999992
+    },
+    {
+      "pair": 12,
+      "version": "head",
+      "ms": 2.742226999999957
+    },
+    {
+      "pair": 13,
+      "version": "head",
+      "ms": 2.5599389999999858
+    },
+    {
+      "pair": 13,
+      "version": "base",
+      "ms": 47.02077599999984
+    },
+    {
+      "pair": 14,
+      "version": "base",
+      "ms": 47.49560199999996
+    },
+    {
+      "pair": 14,
+      "version": "head",
+      "ms": 2.670806999999968
+    },
+    {
+      "pair": 15,
+      "version": "head",
+      "ms": 2.6971569999998337
+    },
+    {
+      "pair": 15,
+      "version": "base",
+      "ms": 46.934716999999864
+    }
+  ],
+  "controllerStartup": [
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 0,
+      "version": "base",
+      "shell": 5.0999999940395355,
+      "mounted": 605.7000000178814,
+      "slow": 604.2000000178814
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 0,
+      "version": "head",
+      "shell": 5.799999982118607,
+      "mounted": 8.399999976158142,
+      "slow": 604.7999999821186
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 1,
+      "version": "head",
+      "shell": 5.4000000059604645,
+      "mounted": 8.400000005960464,
+      "slow": 604.1999999880791
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 1,
+      "version": "base",
+      "shell": 5.699999988079071,
+      "mounted": 605.4000000059605,
+      "slow": 604.0999999940395
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 2,
+      "version": "base",
+      "shell": 5.700000017881393,
+      "mounted": 606.1000000238419,
+      "slow": 604.8000000119209
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 2,
+      "version": "head",
+      "shell": 6.300000011920929,
+      "mounted": 8.800000011920929,
+      "slow": 604
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 3,
+      "version": "head",
+      "shell": 5.5,
+      "mounted": 8.299999982118607,
+      "slow": 604.1999999880791
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 3,
+      "version": "base",
+      "shell": 5.699999988079071,
+      "mounted": 607,
+      "slow": 605.5999999940395
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 4,
+      "version": "base",
+      "shell": 5.299999982118607,
+      "mounted": 605.1999999880791,
+      "slow": 603.9000000059605
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 4,
+      "version": "head",
+      "shell": 6.699999988079071,
+      "mounted": 9.899999976158142,
+      "slow": 604.5
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 5,
+      "version": "head",
+      "shell": 6.0999999940395355,
+      "mounted": 8.900000005960464,
+      "slow": 604.8000000119209
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 5,
+      "version": "base",
+      "shell": 5.700000017881393,
+      "mounted": 605.9000000059605,
+      "slow": 604.6000000238419
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 6,
+      "version": "base",
+      "shell": 5.0999999940395355,
+      "mounted": 605.5,
+      "slow": 604.1999999880791
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 6,
+      "version": "head",
+      "shell": 5.4000000059604645,
+      "mounted": 8.199999988079071,
+      "slow": 603.7999999821186
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 7,
+      "version": "head",
+      "shell": 5.0999999940395355,
+      "mounted": 7.699999988079071,
+      "slow": 605.1999999880791
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 7,
+      "version": "base",
+      "shell": 12.099999994039536,
+      "mounted": 605.5,
+      "slow": 604.0999999940395
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 8,
+      "version": "base",
+      "shell": 10.5,
+      "mounted": 606.1999999880791,
+      "slow": 604.7999999821186
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 8,
+      "version": "head",
+      "shell": 5.0999999940395355,
+      "mounted": 8.199999988079071,
+      "slow": 606.9000000059605
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 9,
+      "version": "head",
+      "shell": 4.5999999940395355,
+      "mounted": 7.0999999940395355,
+      "slow": 604.3000000119209
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 9,
+      "version": "base",
+      "shell": 5.0999999940395355,
+      "mounted": 605.7999999821186,
+      "slow": 604.2999999821186
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 0,
+      "version": "base",
+      "shell": 25,
+      "mounted": 606,
+      "slow": 604
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 0,
+      "version": "head",
+      "shell": 25,
+      "mounted": 28,
+      "slow": 605
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 1,
+      "version": "head",
+      "shell": 26,
+      "mounted": 31,
+      "slow": 606
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 1,
+      "version": "base",
+      "shell": 27,
+      "mounted": 609,
+      "slow": 607
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 2,
+      "version": "base",
+      "shell": 28,
+      "mounted": 608,
+      "slow": 606
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 2,
+      "version": "head",
+      "shell": 27,
+      "mounted": 30,
+      "slow": 607
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 3,
+      "version": "head",
+      "shell": 27,
+      "mounted": 32,
+      "slow": 606
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 3,
+      "version": "base",
+      "shell": 24,
+      "mounted": 608,
+      "slow": 605
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 4,
+      "version": "base",
+      "shell": 27,
+      "mounted": 608,
+      "slow": 605
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 4,
+      "version": "head",
+      "shell": 24,
+      "mounted": 28,
+      "slow": 605
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 5,
+      "version": "head",
+      "shell": 26,
+      "mounted": 30,
+      "slow": 606
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 5,
+      "version": "base",
+      "shell": 25,
+      "mounted": 608,
+      "slow": 607
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 6,
+      "version": "base",
+      "shell": 25,
+      "mounted": 608,
+      "slow": 606
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 6,
+      "version": "head",
+      "shell": 26,
+      "mounted": 30,
+      "slow": 605
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 7,
+      "version": "head",
+      "shell": 26,
+      "mounted": 29,
+      "slow": 604
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 7,
+      "version": "base",
+      "shell": 26,
+      "mounted": 607,
+      "slow": 605
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 8,
+      "version": "base",
+      "shell": 25,
+      "mounted": 608,
+      "slow": 606
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 8,
+      "version": "head",
+      "shell": 25,
+      "mounted": 30,
+      "slow": 606
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 9,
+      "version": "head",
+      "shell": 25,
+      "mounted": 29,
+      "slow": 607
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 9,
+      "version": "base",
+      "shell": 26,
+      "mounted": 609,
+      "slow": 607
+    }
+  ],
+  "domMutations": [
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 0,
+      "version": "base",
+      "ms": 4.300000011920929,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 0,
+      "version": "head",
+      "ms": 3,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 1,
+      "version": "head",
+      "ms": 3,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 1,
+      "version": "base",
+      "ms": 3.5999999940395355,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 2,
+      "version": "base",
+      "ms": 4.300000011920929,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 2,
+      "version": "head",
+      "ms": 2.699999988079071,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 3,
+      "version": "head",
+      "ms": 3.399999976158142,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 3,
+      "version": "base",
+      "ms": 3.699999988079071,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 4,
+      "version": "base",
+      "ms": 3.699999988079071,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 4,
+      "version": "head",
+      "ms": 3,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 5,
+      "version": "head",
+      "ms": 2.7000000178813934,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 5,
+      "version": "base",
+      "ms": 4.4000000059604645,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 6,
+      "version": "base",
+      "ms": 3.5999999940395355,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 6,
+      "version": "head",
+      "ms": 3.0999999940395355,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 7,
+      "version": "head",
+      "ms": 2.699999988079071,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 7,
+      "version": "base",
+      "ms": 3.699999988079071,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 8,
+      "version": "base",
+      "ms": 4.699999988079071,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 8,
+      "version": "head",
+      "ms": 3,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 9,
+      "version": "head",
+      "ms": 3,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "chromium",
+      "browser": "158.0.8127.18",
+      "pair": 9,
+      "version": "base",
+      "ms": 3.5999999940395355,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 0,
+      "version": "base",
+      "ms": 13,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 0,
+      "version": "head",
+      "ms": 7,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 1,
+      "version": "head",
+      "ms": 6,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 1,
+      "version": "base",
+      "ms": 11,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 2,
+      "version": "base",
+      "ms": 11,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 2,
+      "version": "head",
+      "ms": 6,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 3,
+      "version": "head",
+      "ms": 6,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 3,
+      "version": "base",
+      "ms": 12,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 4,
+      "version": "base",
+      "ms": 11,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 4,
+      "version": "head",
+      "ms": 7,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 5,
+      "version": "head",
+      "ms": 9,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 5,
+      "version": "base",
+      "ms": 11,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 6,
+      "version": "base",
+      "ms": 11,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 6,
+      "version": "head",
+      "ms": 6,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 7,
+      "version": "head",
+      "ms": 6,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 7,
+      "version": "base",
+      "ms": 13,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 8,
+      "version": "base",
+      "ms": 13,
+      "templateScans": 800,
+      "controllerScans": 800
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 8,
+      "version": "head",
+      "ms": 6,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 9,
+      "version": "head",
+      "ms": 6,
+      "templateScans": 0,
+      "controllerScans": 0
+    },
+    {
+      "engine": "firefox",
+      "browser": "159.0",
+      "pair": 9,
+      "version": "base",
+      "ms": 12,
+      "templateScans": 800,
+      "controllerScans": 800
+    }
+  ]
+}

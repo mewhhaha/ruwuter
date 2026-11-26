@@ -87,7 +87,6 @@ const browserApp = router()
           </Deferred>
           <ul id="grid">
             {Array.from({ length: 400 }, (_, i) => (
-              // deno-lint-ignore jsx-key -- static benchmark DOM tree
               <li class="row">
                 <span>Item {i}</span>
                 <em>Details {i}</em>

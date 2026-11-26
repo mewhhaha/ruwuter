@@ -20,14 +20,17 @@ for the same `router(routes)` constructor. A document file and a Vite build are 
    `nonce` via `router(routes, { resolverSrc })` / `html(node, { resolverSrc, nonce })`). Panels
    preserve lexical server context, resolve in completion order, and honor `errorFallback` both
    inside and outside routed responses. Keep `<!--rw-end-->` comments intact through proxies.
-4. Make a partial update an ordinary HTML endpoint. `swap` accepts an HTML Response, supports an
+4. Make a partial update an ordinary HTML endpoint. `swap` accepts an HTML Response, supports
+   `allowStatus` (for 4xx validation fragments), custom `write` callbacks (for DOM morphing), an
    application-supplied sanitizer or Trusted Types policy, strips inert resolver scripts, and wraps
    DOM writes in View Transitions only when `viewTransition: true` is passed.
 5. Mount a same-origin browser module with `controller(moduleHref, jsonProps).root()` and
-   `defineController()`. Declare static ref tokens for named descendants (refs stay scoped to their
-   nearest enclosing controller). Load `client.js` once on those pages. Observe the supplied signal
-   or return cleanup. Typed `app/controllers.ts` and compiled runtime URL imports are available with
-   the Vite plugin.
+   `defineController()`. Declare `ref={mounted.refs.name}` tokens for named descendants (refs
+   resolve live within their nearest enclosing controller). Load `client.js` once with `async` on
+   streaming pages so above-the-fold controllers activate immediately. For declarative partial
+   updates, `fx-*` JSX attributes work with either `fixi.js` or a reusable `swap()`-backed
+   controller. Observe the supplied signal or return cleanup. Typed `app/controllers.ts` and
+   compiled runtime URL imports are available with the Vite plugin.
 6. Pass strings as text. Use `unsafeHTML()` only for trusted markup (including raw `<style>` or
    `<script>` bodies). JSX validates tag and attribute names and quotes attribute values. Validate
    application-controlled URL destinations.
@@ -38,5 +41,6 @@ when the first template spans two network reads. Verify reader cancellation, iso
 context, bodyless HEAD, and single native form submission.
 
 The [usage examples and migration guide](../README.md),
-[working product route](../examples/product.tsx), and
+[working product route](../examples/product.tsx),
+[fixi-style progressive reviews example](../examples/fixi-reviews.tsx), and
 [browser regression](../test-browser/streaming.test.tsx) exercise these contracts.
