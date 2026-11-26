@@ -90,4 +90,40 @@ describe("JSX attribute typing", () => {
     expect(html).toContain('<ol reversed="">');
     expect(html).toContain('<video autoplay="" controls="" loop="">');
   });
+
+  it("types fx-* hypermedia attributes and common SVG elements", async () => {
+    const html = await (
+      <div>
+        <button
+          type="button"
+          fx-action="/reviews/1"
+          fx-method="DELETE"
+          fx-target="closest li"
+          fx-swap="remove"
+          fx-trigger="click"
+          fx-debounce={150}
+        >
+          Delete
+        </button>
+        <svg viewBox="0 0 24 24" width={24} height={24}>
+          <defs>
+            <linearGradient id="g">
+              <stop offset="0%" stop-color="#007c69" />
+            </linearGradient>
+          </defs>
+          <g fill="none" stroke="currentColor" stroke-width={2}>
+            <rect x={2} y={2} width={20} height={20} rx={4} />
+            <circle cx={12} cy={12} r={5} />
+            <line x1={0} y1={0} x2={24} y2={24} />
+            <text x={12} y={12} text-anchor="middle">ok</text>
+          </g>
+        </svg>
+      </div>
+    ).toPromise();
+
+    expect(html).toContain('fx-action="/reviews/1"');
+    expect(html).toContain('fx-method="DELETE"');
+    expect(html).toContain('fx-debounce="150"');
+    expect(html).toContain('<circle cx="12" cy="12" r="5"></circle>');
+  });
 });

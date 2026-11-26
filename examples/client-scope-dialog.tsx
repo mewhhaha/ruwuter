@@ -23,7 +23,7 @@ export default function CommandPaletteExample({ clientRuntime }: { clientRuntime
             </form>
           </dialog>
         </section>
-        <script type="module" src={clientRuntime}></script>
+        <script type="module" async src={clientRuntime}></script>
       </body>
     </html>
   );

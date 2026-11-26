@@ -21,12 +21,18 @@ type TrustedTypePolicyValue = typeof globalThis extends {
 
 /** Element reference accepted by `swap` (`Element`, selector, or React-style ref object). */
 export type SwapTarget = Element | string | { current?: Element | null | undefined };
+/** Custom DOM write callback (for example, a DOM morpher such as `idiomorph`). */
+export type SwapWriteFn = (
+  target: Element,
+  html: string | TrustedHTMLValue,
+) => void | Promise<void>;
 /** Write mode used by `swap` when applying HTML to the target element. */
 export type SwapMode =
   | "innerHTML"
   | "outerHTML"
   | InsertPosition
-  | "remove";
+  | "remove"
+  | SwapWriteFn;
 
 /** Input sources accepted by `swap`. */
 export type SwapInput =
@@ -58,6 +64,8 @@ export type SwapOptions = {
   init?: RequestInit;
   expectedContentType?: string | RegExp | false;
   allowRedirects?: boolean;
+  /** Allow non-2xx HTML responses (such as `422` validation fragments). Defaults to `response.ok`. */
+  allowStatus?: (status: number, response: Response) => boolean;
   sanitizer?: SwapSanitizer;
   trustedTypesPolicy?: TrustedTypePolicyValue;
   /** Wrap the DOM write in `document.startViewTransition` when supported. Defaults to `false`. */
@@ -98,41 +106,39 @@ const RESOLVER_SCRIPT = "script[data-rw-resolver]";
 
 const assertResponseAllowed = (
   response: Response,
-  expected: SwapOptions["expectedContentType"],
-  allowRedirects: boolean | undefined,
+  options: Pick<SwapOptions, "allowRedirects" | "allowStatus" | "expectedContentType">,
 ): void => {
-  if (!response.ok) {
+  const ok = options.allowStatus ? options.allowStatus(response.status, response) : response.ok;
+  if (!ok) {
     throw new Error(`swap: response status ${response.status} is not ok.`);
   }
 
-  if (response.redirected && allowRedirects === false) {
-    throw new Error("swap: redirected responses are disabled for this swap.");
+  if (response.redirected && options.allowRedirects === false) {
+    throw new Error("swap: redirected responses are disabled.");
   }
 
-  const expectedContentType = expected ?? DEFAULT_CONTENT_TYPE;
-  if (expectedContentType === false) return;
+  const expected = options.expectedContentType ?? DEFAULT_CONTENT_TYPE;
+  if (expected === false) return;
 
   const contentType = response.headers.get("Content-Type") ?? "";
-  const matches = typeof expectedContentType === "string"
-    ? contentType.toLowerCase().includes(expectedContentType.toLowerCase())
-    : expectedContentType.test(contentType);
+  const matches = typeof expected === "string"
+    ? contentType.toLowerCase().includes(expected.toLowerCase())
+    : expected.test(contentType);
 
   if (!matches) {
     throw new Error(
-      contentType
-        ? `swap: expected HTML response content type, received "${contentType}".`
-        : "swap: expected HTML response content type, received none.",
+      `swap: expected HTML content type, received ${contentType ? `"${contentType}"` : "none"}.`,
     );
   }
 };
 
 const readResponse = async (
   response: Response,
-  options: Pick<SwapOptions, "allowRedirects" | "expectedContentType" | "init">,
+  options: Pick<SwapOptions, "allowRedirects" | "allowStatus" | "expectedContentType" | "init">,
 ): Promise<string> => {
   const signal = options.init?.signal;
   signal?.throwIfAborted();
-  assertResponseAllowed(response, options.expectedContentType, options.allowRedirects);
+  assertResponseAllowed(response, options);
   const text = await response.text();
   signal?.throwIfAborted();
   return text;
@@ -192,11 +198,15 @@ const INSERT_POSITIONS: readonly string[] = [
   "afterend",
 ];
 
-const applySwap = (
+const applySwap = async (
   target: Element,
   mode: SwapMode,
   domValue: string | TrustedHTMLValue,
-): void => {
+): Promise<void> => {
+  if (typeof mode === "function") {
+    await mode(target, domValue);
+    return;
+  }
   if (mode === "remove") {
     target.remove();
     return;
@@ -221,11 +231,11 @@ const applySwap = (
 };
 
 const runWithTransition = async (
-  update: () => void,
+  update: () => void | Promise<void>,
   enabled?: boolean,
 ): Promise<void> => {
   if (!enabled || !document.startViewTransition) {
-    update();
+    await update();
     return;
   }
   const transition = document.startViewTransition(update);
@@ -250,9 +260,9 @@ export const swap = async (
   const domValue = await prepareDomValue(html, options, response);
   const resolvedText = String(domValue);
 
-  await runWithTransition(() => {
+  await runWithTransition(async () => {
     if (writeMode === "remove" || !resolvedText.includes("<!--rw-end-->")) {
-      applySwap(target, writeMode, domValue);
+      await applySwap(target, writeMode, domValue);
       return;
     }
     let scope: Document | DocumentFragment | Element = target;
@@ -264,7 +274,7 @@ export const swap = async (
         scope.querySelectorAll(`[id],template[data-rw-target],${RESOLVER_SCRIPT}`),
       );
     }
-    applySwap(target, writeMode, domValue);
+    await applySwap(target, writeMode, domValue);
     resolvePanels(scope, existing);
     for (const script of scope.querySelectorAll(RESOLVER_SCRIPT)) {
       if (!existing?.has(script)) script.remove();

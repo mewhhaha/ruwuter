@@ -399,3 +399,52 @@ Deno.test("generated fs-routes tables mount directly on router() with specificit
     await Deno.remove(generatedTypesRoot(appDir), { recursive: true }).catch(() => {});
   }
 });
+
+Deno.test("static and simple-segment fast paths preserve registration order, ignoreCase, and encoding", async () => {
+  const staticFirst = router()
+    .get("/about", () => html(<p>static-about</p>))
+    .get("/hello/:name", ({ params }) => html(<p>hi {params.name}</p>))
+    .get("/items/:id", ({ params }) => new Response(`item:${params.id}`))
+    .get("/items/special", () => new Response("after-dynamic"));
+
+  assertEquals(
+    await (await staticFirst.fetch(request("/about?ref=nav"))).text(),
+    "<p>static-about</p>",
+  );
+  assertEquals(await (await staticFirst.fetch(request("/about/"))).status, 404);
+  assertEquals(await (await staticFirst.fetch(request("/hello/a%20b"))).text(), "<p>hi a%20b</p>");
+  assertEquals(await (await staticFirst.fetch(request("/hello/"))).status, 404);
+  assertEquals(await (await staticFirst.fetch(request("/hello/a/b"))).status, 404);
+  // Dynamic route registered before /items/special still wins.
+  assertEquals(await (await staticFirst.fetch(request("/items/special"))).text(), "item:special");
+
+  const ignoreCaseApp = router([
+    [
+      new URLPattern({ pathname: "/About" }, { ignoreCase: true }),
+      { GET: () => new Response("case-insensitive") },
+    ],
+  ]);
+  assertEquals(await (await ignoreCaseApp.fetch(request("/about"))).text(), "case-insensitive");
+
+  const doc = await router()
+    .get("/", () =>
+      html(
+        <html>
+          <body>
+            <p>Static fast path</p>
+          </body>
+        </html>,
+        { status: 201, headers: { "X-Fast": "1" } },
+      ))
+    .fetch(request("/"));
+  assertEquals(doc.status, 201);
+  assertEquals(doc.headers.get("content-type"), "text/html; charset=utf-8");
+  assertEquals(doc.headers.get("x-fast"), "1");
+  assertEquals(
+    await doc.text(),
+    "<!doctype html><html><body><p>Static fast path</p></body></html>",
+  );
+
+  const asset = await staticFirst.fetch(request("/_ruwuter/resolve-v1.js"));
+  assert(asset.headers.get("cache-control")?.includes("immutable"));
+});

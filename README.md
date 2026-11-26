@@ -6,7 +6,9 @@ JavaScript.
 
 - [Design notes](https://github.com/mewhhaha/ruwuter/blob/main/docs/router-design.md)
 - [0.6 → 0.7 benchmarks](https://github.com/mewhhaha/ruwuter/blob/main/docs/benchmarks/README.md)
+- [Performance & interactivity benchmarks](https://github.com/mewhhaha/ruwuter/blob/main/docs/benchmarks/perf-fixes.md)
 - [Full product example](https://github.com/mewhhaha/ruwuter/blob/main/examples/product.tsx)
+- [Fixi-style progressive reviews example](https://github.com/mewhhaha/ruwuter/blob/main/examples/fixi-reviews.tsx)
 
 ## Install & Quick Start
 
@@ -179,21 +181,23 @@ app.get("/counter", () => {
         <button type="button" {...mounted.root()}>
           Count: <span ref={mounted.refs.count}>0</span>
         </button>
-        <script type="module" src={clientRuntime}></script>
+        <script type="module" async src={clientRuntime}></script>
       </body>
     </html>,
   );
 });
 ```
 
-- Load the activation script (`client.js`) once on pages with controllers.
-- Static `ref={mounted.refs.name}` tokens stay scoped to their nearest enclosing controller, so
-  nested widgets do not collide.
+- Load the activation script (`client.js`) once on pages with controllers. Adding `async` lets
+  above-the-fold controllers activate immediately in Chromium and Firefox while slower streamed
+  sections or `Deferred` panels finish (WebKit defers async module scripts until stream close).
+- `ref={mounted.refs.name}` tokens resolve live within their nearest enclosing controller, so nested
+  widgets do not collide and refs stay fresh after `outerHTML` swaps or settled `Deferred` panels.
 - With the Vite plugin, `app/controllers.ts` exports typed controller URLs and compiles the runtime.
   Without Vite, serve compiled browser modules yourself and pass their same-origin URLs directly to
   `controller("/assets/counter.js", props)`.
 
-### Targeted swaps (`swap`)
+### Targeted swaps (`swap`) & fixi-style HTML updates
 
 For a partial page refresh, fetch an ordinary HTML route and apply it with `swap`:
 
@@ -201,13 +205,25 @@ For a partial page refresh, fetch an ordinary HTML route and apply it with `swap
 import { swap } from "@mewhhaha/ruwuter/browser";
 
 const response = await fetch("/products/1/reviews");
-await swap(response, { target: "#reviews" });
+await swap(response, {
+  target: "#reviews",
+  allowStatus: (status) => status < 500, // optional: swap 4xx validation HTML fragments
+});
 ```
 
 `swap` validates HTML responses, applies completed `Deferred` panels even when the host page started
 without a resolver, strips inert resolver `<script>` tags from swapped fragments, supports custom
-`sanitizer` and `trustedTypesPolicy` hooks, and opts into View Transitions only when
-`viewTransition: true` is passed.
+`sanitizer`, `trustedTypesPolicy`, `allowStatus`, and custom `write` callbacks (such as a DOM
+morpher like `idiomorph`), and opts into View Transitions only when `viewTransition: true` is
+passed.
+
+For declarative HTML-over-the-wire interactions without per-widget controller boilerplate, Ruwuter's
+JSX types accept `fx-*` attributes out of the box—so you can either drop in `fixi.js` directly or
+mount a tiny reusable fixi-style controller built on `swap()` (see
+[examples/fx.client.ts](https://github.com/mewhhaha/ruwuter/blob/main/examples/fx.client.ts) and
+[examples/fixi-reviews.tsx](https://github.com/mewhhaha/ruwuter/blob/main/examples/fixi-reviews.tsx)
+for progressive `POST` + `422` errors, `DELETE` buttons, debounced live search, and `<Deferred>`
+swaps).
 
 ## Optional File Routes & Vite
 

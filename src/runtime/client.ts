@@ -29,6 +29,16 @@ function isAbortError(error: unknown): boolean {
 
 function initializeActivationRuntime(): void {
   const mounted = new WeakMap<Element, MountedActivation>();
+  let mountedCount = 0;
+
+  const trackMounted = (root: Element, activation: MountedActivation): void => {
+    if (!mounted.has(root)) mountedCount += 1;
+    mounted.set(root, activation);
+  };
+
+  const untrackMounted = (root: Element): void => {
+    if (mounted.delete(root)) mountedCount -= 1;
+  };
 
   const resolveModuleUrl = (spec: string): URL => {
     const base = (typeof document.baseURI === "string" && document.baseURI &&
@@ -82,32 +92,25 @@ function initializeActivationRuntime(): void {
     return true;
   };
 
-  const collectRefs = (root: Element): Record<string, Element> => {
-    const refs: Record<string, Element> = Object.create(null);
-    const add = (element: Element) => {
-      const name = element.getAttribute(REF_ATTR);
-      if (!name) return;
-      if (Object.hasOwn(refs, name)) {
-        throw new TypeError(`Duplicate controller ref "${name}".`);
-      }
-      refs[name] = element;
-    };
+  const findRef = (root: Element, name: string): Element => {
+    let found: Element | undefined;
+    if (root.getAttribute(REF_ATTR) === name) found = root;
+    for (const element of root.querySelectorAll(`[${REF_ATTR}]`)) {
+      if (element.getAttribute(REF_ATTR) !== name || !ownsRef(root, element)) continue;
+      if (found) throw new TypeError(`Duplicate controller ref "${name}".`);
+      found = element;
+    }
+    if (!found) throw new TypeError(`Controller ref "${name}" was not found.`);
+    return found;
+  };
 
-    add(root);
-    root.querySelectorAll(`[${REF_ATTR}]`).forEach((element) => {
-      if (ownsRef(root, element)) add(element);
-    });
-
-    return new Proxy(refs, {
-      get(target, prop: PropertyKey) {
-        if (typeof prop !== "string") return Reflect.get(target, prop);
-        if (!Object.hasOwn(target, prop)) {
-          throw new TypeError(`Controller ref "${prop}" was not found.`);
-        }
-        return target[prop];
+  const createRefs = (root: Element): Record<string, Element> =>
+    new Proxy(Object.create(null) as Record<string, Element>, {
+      get(_target, prop: PropertyKey) {
+        if (typeof prop !== "string") return undefined;
+        return findRef(root, prop);
       },
     });
-  };
 
   const mount = async (root: Element): Promise<void> => {
     if (mounted.has(root)) return;
@@ -116,20 +119,20 @@ function initializeActivationRuntime(): void {
     if (!controllerSpec) return;
 
     const abortController = new AbortController();
-    mounted.set(root, { abortController, cleanup: undefined });
+    trackMounted(root, { abortController, cleanup: undefined });
 
     try {
       const activate = await loadModule<Controller>(controllerSpec);
       if (abortController.signal.aborted || !isConnected(root)) {
         abortController.abort();
-        if (mounted.get(root)?.abortController === abortController) mounted.delete(root);
+        if (mounted.get(root)?.abortController === abortController) untrackMounted(root);
         return;
       }
 
       const controllerCleanup = await activate({
         root,
         props: parseProps(root),
-        refs: collectRefs(root),
+        refs: createRefs(root),
         signal: abortController.signal,
       });
 
@@ -141,7 +144,7 @@ function initializeActivationRuntime(): void {
       current.cleanup = controllerCleanup;
     } catch (error) {
       const wasAborted = abortController.signal.aborted;
-      if (mounted.get(root)?.abortController === abortController) mounted.delete(root);
+      if (mounted.get(root)?.abortController === abortController) untrackMounted(root);
       abortController.abort();
       if (!wasAborted && !isAbortError(error)) {
         console.error(error);
@@ -153,7 +156,7 @@ function initializeActivationRuntime(): void {
     const current = mounted.get(root);
     if (!current) return;
 
-    mounted.delete(root);
+    untrackMounted(root);
     current.abortController.abort();
 
     try {
@@ -172,21 +175,40 @@ function initializeActivationRuntime(): void {
     if (node.matches(ACTIVATION_SELECTOR)) {
       void mount(node);
     }
-    node.querySelectorAll(ACTIVATION_SELECTOR).forEach((root) => {
-      void mount(root);
-    });
+    if (node.firstElementChild) {
+      node.querySelectorAll(ACTIVATION_SELECTOR).forEach((root) => {
+        void mount(root);
+      });
+    }
+  };
+
+  const pendingDispose = new Set<Element>();
+  let disposeScheduled = false;
+
+  const flushDispose = (): void => {
+    disposeScheduled = false;
+    const roots = [...pendingDispose];
+    pendingDispose.clear();
+    for (const root of roots) {
+      if (mountedCount === 0) break;
+      if (isConnected(root)) continue;
+      if (mounted.has(root)) void dispose(root);
+      if (mountedCount > 0 && root.firstElementChild) {
+        root.querySelectorAll(ACTIVATION_SELECTOR).forEach((child) => {
+          if (mounted.has(child) && !isConnected(child)) {
+            void dispose(child);
+          }
+        });
+      }
+    }
   };
 
   const scheduleDispose = (root: Element): void => {
-    queueMicrotask(() => {
-      if (isConnected(root)) return;
-      void dispose(root);
-      root.querySelectorAll(ACTIVATION_SELECTOR).forEach((child) => {
-        if (child instanceof Element && !isConnected(child)) {
-          void dispose(child);
-        }
-      });
-    });
+    if (mountedCount === 0) return;
+    pendingDispose.add(root);
+    if (disposeScheduled) return;
+    disposeScheduled = true;
+    queueMicrotask(flushDispose);
   };
 
   document.querySelectorAll(ACTIVATION_SELECTOR).forEach((root) => {

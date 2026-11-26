@@ -186,6 +186,7 @@ export namespace JSX {
     writingsuggestions?: WritingSuggestions | undefined;
     children?: HtmlNode;
     [dataAttr: `data-${string}`]: string | number | boolean | undefined;
+    [fxAttr: `fx-${string}`]: string | number | boolean | undefined;
   }
   export interface HtmlAnchorTag extends HtmlTag {
     href?: string | undefined;
@@ -551,15 +552,97 @@ export namespace JSX {
     width?: string | undefined;
     height?: string | undefined;
   }
-  export interface HtmlSvgTag extends HtmlTag {
-    xmlns?: string | undefined;
+  export interface HtmlSvgElementTag extends HtmlTag {
     fill?: string | undefined;
-    viewBox?: string | undefined;
-    "stroke-width"?: string | undefined;
+    "fill-opacity"?: string | number | undefined;
+    "fill-rule"?: "nonzero" | "evenodd" | undefined;
+    opacity?: string | number | undefined;
     stroke?: string | undefined;
-    class?: string | undefined;
-    width?: number | undefined;
-    height?: number | undefined;
+    "stroke-dasharray"?: string | undefined;
+    "stroke-linecap"?: "butt" | "round" | "square" | undefined;
+    "stroke-linejoin"?: "arcs" | "bevel" | "miter" | "miter-clip" | "round" | undefined;
+    "stroke-opacity"?: string | number | undefined;
+    "stroke-width"?: string | number | undefined;
+    transform?: string | undefined;
+    "clip-path"?: string | undefined;
+  }
+
+  export interface HtmlSvgTag extends HtmlSvgElementTag {
+    xmlns?: string | undefined;
+    viewBox?: string | undefined;
+    preserveAspectRatio?: string | undefined;
+    width?: string | number | undefined;
+    height?: string | number | undefined;
+  }
+
+  export interface HtmlSvgCircleTag extends HtmlSvgElementTag {
+    cx?: string | number | undefined;
+    cy?: string | number | undefined;
+    r?: string | number | undefined;
+  }
+
+  export interface HtmlSvgEllipseTag extends HtmlSvgElementTag {
+    cx?: string | number | undefined;
+    cy?: string | number | undefined;
+    rx?: string | number | undefined;
+    ry?: string | number | undefined;
+  }
+
+  export interface HtmlSvgLineTag extends HtmlSvgElementTag {
+    x1?: string | number | undefined;
+    y1?: string | number | undefined;
+    x2?: string | number | undefined;
+    y2?: string | number | undefined;
+  }
+
+  export interface HtmlSvgRectTag extends HtmlSvgElementTag {
+    x?: string | number | undefined;
+    y?: string | number | undefined;
+    width?: string | number | undefined;
+    height?: string | number | undefined;
+    rx?: string | number | undefined;
+    ry?: string | number | undefined;
+  }
+
+  export interface HtmlSvgPolyTag extends HtmlSvgElementTag {
+    points?: string | undefined;
+  }
+
+  export interface HtmlSvgTextTag extends HtmlSvgElementTag {
+    x?: string | number | undefined;
+    y?: string | number | undefined;
+    dx?: string | number | undefined;
+    dy?: string | number | undefined;
+    "text-anchor"?: "start" | "middle" | "end" | undefined;
+    "dominant-baseline"?: string | undefined;
+    "font-size"?: string | number | undefined;
+    "font-weight"?: string | number | undefined;
+  }
+
+  export interface HtmlSvgUseTag extends HtmlSvgElementTag {
+    href?: string | undefined;
+    x?: string | number | undefined;
+    y?: string | number | undefined;
+    width?: string | number | undefined;
+    height?: string | number | undefined;
+  }
+
+  export interface HtmlSvgGradientTag extends HtmlTag {
+    x1?: string | number | undefined;
+    y1?: string | number | undefined;
+    x2?: string | number | undefined;
+    y2?: string | number | undefined;
+    cx?: string | number | undefined;
+    cy?: string | number | undefined;
+    r?: string | number | undefined;
+    gradientUnits?: "userSpaceOnUse" | "objectBoundingBox" | undefined;
+    gradientTransform?: string | undefined;
+  }
+
+  export interface HtmlSvgStopTag extends HtmlTag {
+    offset?: string | number | undefined;
+    "stop-color"?: string | undefined;
+    "stop-opacity"?: string | number | undefined;
   }
 
   export interface HtmlFeTurbulenceTag extends HtmlTag {
@@ -573,9 +656,7 @@ export namespace JSX {
     scale?: string | undefined;
   }
 
-  export interface HtmlPathTag extends HtmlTag {
-    "stroke-linecap"?: string | undefined;
-    "stroke-linejoin"?: string | undefined;
+  export interface HtmlPathTag extends HtmlSvgElementTag {
     d?: string | undefined;
   }
 
@@ -715,6 +796,22 @@ export namespace JSX {
     video: WithRef<"video", HtmlVideoTag>;
     wbr: WithRef<"wbr", HtmlTag>;
     svg: WithRef<"svg", HtmlSvgTag>;
+    g: WithRef<"g", HtmlSvgElementTag>;
+    defs: WithRef<"defs", HtmlTag>;
+    symbol: WithRef<"symbol", HtmlSvgTag>;
+    use: WithRef<"use", HtmlSvgUseTag>;
+    clipPath: WithRef<"clipPath", HtmlTag>;
+    linearGradient: WithRef<"linearGradient", HtmlSvgGradientTag>;
+    radialGradient: WithRef<"radialGradient", HtmlSvgGradientTag>;
+    stop: WithRef<"stop", HtmlSvgStopTag>;
+    circle: WithRef<"circle", HtmlSvgCircleTag>;
+    ellipse: WithRef<"ellipse", HtmlSvgEllipseTag>;
+    line: WithRef<"line", HtmlSvgLineTag>;
+    rect: WithRef<"rect", HtmlSvgRectTag>;
+    polygon: WithRef<"polygon", HtmlSvgPolyTag>;
+    polyline: WithRef<"polyline", HtmlSvgPolyTag>;
+    text: WithRef<"text", HtmlSvgTextTag>;
+    tspan: WithRef<"tspan", HtmlSvgTextTag>;
     path: WithRef<"path", HtmlPathTag>;
     filter: WithRef<"filter", HtmlSvgTag>;
     feTurbulence: WithRef<"feTurbulence", HtmlFeTurbulenceTag>;

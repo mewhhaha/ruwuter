@@ -10,10 +10,24 @@ if (typeof document !== "undefined") {
   const installed = Symbol.for("ruwuter.resolve.v1");
   if (!Reflect.has(document, installed)) {
     Reflect.set(document, installed, true);
-    new MutationObserver(() => resolvePanels(document)).observe(document, {
-      childList: true,
-      subtree: true,
-    });
+    const state = document.readyState;
+    if (!state || state === "loading") {
+      const observer = new MutationObserver(() => resolvePanels(document));
+      observer.observe(document, {
+        childList: true,
+        subtree: true,
+      });
+      if (state === "loading") {
+        document.addEventListener(
+          "DOMContentLoaded",
+          () => {
+            resolvePanels(document);
+            observer.disconnect();
+          },
+          { once: true },
+        );
+      }
+    }
   }
   resolvePanels(document);
 }

@@ -348,6 +348,55 @@ export { default as direct } from "./open.client.ts?ruwuter-controller-url";`,
     }
   });
 
+  it("busts controller chunk hashes when a local imported helper changes", async () => {
+    const { build } = await import("vite");
+    const app = await Deno.makeTempDir();
+    const typesRoot = generatedTypesRoot(app);
+    try {
+      await Deno.mkdir(join(app, "routes"), { recursive: true });
+      await Deno.writeTextFile(join(app, "document.tsx"), "export default 1;");
+      await Deno.writeTextFile(join(app, "routes", "index.ts"), "export default 1;");
+      await Deno.writeTextFile(join(app, "helper.ts"), `export const label = "v1";`);
+      await Deno.writeTextFile(
+        join(app, "widget.client.ts"),
+        `import { defineController } from "@mewhhaha/ruwuter/browser";
+import { label } from "./helper.ts";
+export default defineController(({ root }) => { root.setAttribute("data-v", label); });`,
+      );
+      await Deno.writeTextFile(join(app, "entry.ts"), `export { widget } from "./controllers.ts";`);
+
+      const runBuild = async (outDir: string) => {
+        await build({
+          root: app,
+          base: "/",
+          configFile: false,
+          logLevel: "silent",
+          plugins: [ruwuter({ appFolder: app })],
+          resolve: {
+            alias: [{ find: "@mewhhaha/ruwuter/browser", replacement: resolve("src/browser.ts") }],
+          },
+          build: {
+            outDir,
+            ssr: join(app, "entry.ts"),
+            minify: false,
+            rolldownOptions: { output: { entryFileNames: "entry.js" } },
+          },
+        });
+        return await import(`${pathToFileURL(join(outDir, "entry.js")).href}?t=${outDir}`) as {
+          widget: string;
+        };
+      };
+
+      const first = await runBuild(join(app, "dist1"));
+      await Deno.writeTextFile(join(app, "helper.ts"), `export const label = "v2";`);
+      const second = await runBuild(join(app, "dist2"));
+      expect(second.widget === first.widget).toBe(false);
+    } finally {
+      await Deno.remove(app, { recursive: true }).catch(() => {});
+      await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
+    }
+  });
+
   it("emits documented browser runtime URLs as executable chunks", async () => {
     const { build } = await import("vite");
     const app = await Deno.makeTempDir();

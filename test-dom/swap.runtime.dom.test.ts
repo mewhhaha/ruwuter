@@ -241,4 +241,57 @@ describe("swap runtime DOM behaviour", () => {
       else (globalThis as any).CSS = saved.CSS;
     }
   });
+
+  it("allows 4xx HTML fragments when allowStatus accepts them and supports custom swap functions", async () => {
+    const { cleanup } = setupDom();
+    try {
+      const target = new FakeElement();
+      const validationResponse = new Response('<p role="alert">Required</p>', {
+        status: 422,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+      await swap(validationResponse, {
+        target: asElement(target),
+        allowStatus: (status) => status < 500,
+      });
+      expect(target.innerHTML).toBe('<p role="alert">Required</p>');
+
+      let serverError: unknown;
+      try {
+        await swap(
+          new Response("<p>fail</p>", {
+            status: 500,
+            headers: { "Content-Type": "text/html" },
+          }),
+          {
+            target: asElement(target),
+            allowStatus: (status) => status < 500,
+          },
+        );
+      } catch (error) {
+        serverError = error;
+      }
+      expect(serverError instanceof Error).toBe(true);
+
+      const morphed: Array<{ target: Element; html: string }> = [];
+      await swap(
+        new Response("<p>morphed</p>", {
+          headers: { "Content-Type": "text/html" },
+        }),
+        {
+          target: asElement(target),
+          write: async (el, markup) => {
+            await Promise.resolve();
+            morphed.push({ target: el, html: String(markup) });
+            el.innerHTML = String(markup);
+          },
+        },
+      );
+      expect(morphed.length).toBe(1);
+      expect(morphed[0].html).toBe("<p>morphed</p>");
+      expect(target.innerHTML).toBe("<p>morphed</p>");
+    } finally {
+      cleanup();
+    }
+  });
 });

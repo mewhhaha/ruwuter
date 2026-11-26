@@ -55,14 +55,22 @@ const reservedWords = new Set([
   "eval",
 ]);
 
-const controllerName = (file: string): string => {
-  const base = path.basename(file).replace(CLIENT_MODULE, "");
-  const parts = base.split(/[^A-Za-z0-9_$]+/).filter(Boolean);
+const toIdentifier = (raw: string): string => {
+  const parts = raw.split(/[^A-Za-z0-9_$]+/).filter(Boolean);
   const name = parts.map((part, index) => {
     if (index === 0) return part.slice(0, 1).toLowerCase() + part.slice(1);
     return part.slice(0, 1).toUpperCase() + part.slice(1);
   }).join("") || "controller";
   return /^[A-Za-z_$]/.test(name) && !reservedWords.has(name) ? name : `controller${name}`;
+};
+
+const controllerName = (file: string): string => {
+  return toIdentifier(path.basename(file).replace(CLIENT_MODULE, ""));
+};
+
+const qualifiedControllerName = (appFolder: string, file: string): string => {
+  const relative = path.relative(appFolder, file).split(path.sep).join("/");
+  return toIdentifier(relative.replace(CLIENT_MODULE, ""));
 };
 
 const findClientModules = async (folder: string): Promise<string[]> => {
@@ -90,9 +98,18 @@ export const generateControllers = async (appFolder: string): Promise<GeneratedF
   }
   modules.sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
 
+  const shortCounts = new Map<string, number>();
+  for (const file of modules) {
+    const short = controllerName(file);
+    shortCounts.set(short, (shortCounts.get(short) ?? 0) + 1);
+  }
+
   const names = new Map<string, string>();
   const entries = modules.map((file) => {
-    const name = controllerName(file);
+    const short = controllerName(file);
+    const name = (shortCounts.get(short) ?? 0) > 1
+      ? qualifiedControllerName(resolvedAppFolder, file)
+      : short;
     const previous = names.get(name);
     if (previous) {
       throw new Error(
