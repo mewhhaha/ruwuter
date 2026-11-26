@@ -1,4 +1,10 @@
-import { defineController, on, swap, type SwapMode } from "@mewhhaha/ruwuter/browser";
+import {
+  defineController,
+  on,
+  swap,
+  type SwapMode,
+  type ViewTransitionOption,
+} from "@mewhhaha/ruwuter/browser";
 
 export type FxRequestConfig = {
   action: string;
@@ -8,7 +14,7 @@ export type FxRequestConfig = {
   target: Element;
   errorTarget: Element | null;
   swap: SwapMode;
-  viewTransition: boolean;
+  viewTransition: ViewTransitionOption;
   allowStatus: (status: number, response: Response) => boolean;
   trigger: Event;
   element: Element;
@@ -98,6 +104,13 @@ const buildRequestBody = (
   return { action, body: data };
 };
 
+const parseTransition = (element: Element): ViewTransitionOption => {
+  const attr = element.getAttribute("fx-transition");
+  if (attr === null || attr === "false") return false;
+  const types = attr.trim().split(/\s+/).filter((t) => t && t !== "true");
+  return types.length ? { types } : true;
+};
+
 const emit = (
   element: Element,
   type: string,
@@ -136,7 +149,7 @@ export default defineController(({ root, signal }) => {
       target,
       errorTarget,
       swap: (element.getAttribute("fx-swap") as SwapMode | null) ?? "outerHTML",
-      viewTransition: element.hasAttribute("fx-transition"),
+      viewTransition: parseTransition(element),
       allowStatus: (status) => status < 500,
       trigger,
       element,

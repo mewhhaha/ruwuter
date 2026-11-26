@@ -6,6 +6,11 @@
  */
 
 import { resolvePanels } from "./panels.ts";
+import {
+  viewTransition as runViewTransition,
+  type ViewTransitionHandle,
+  type ViewTransitionOption,
+} from "./view-transition.ts";
 
 declare const trustedHTMLBrand: unique symbol;
 
@@ -68,8 +73,11 @@ export type SwapOptions = {
   allowStatus?: (status: number, response: Response) => boolean;
   sanitizer?: SwapSanitizer;
   trustedTypesPolicy?: TrustedTypePolicyValue;
-  /** Wrap the DOM write in `document.startViewTransition` when supported. Defaults to `false`. */
-  viewTransition?: boolean;
+  /**
+   * Wrap the DOM write in `document.startViewTransition` when supported. Pass `true` or
+   * `{ types?: string[], respectReducedMotion?: boolean }`. Defaults to `false`.
+   */
+  viewTransition?: ViewTransitionOption;
 };
 
 /** Result returned by `swap` after the DOM update finishes. */
@@ -78,6 +86,8 @@ export type SwapResult = {
   write: SwapMode;
   text: string;
   response: Response | null;
+  /** Active View Transition handle when `viewTransition` ran, or `null`. */
+  transition: ViewTransitionHandle | null;
 };
 
 const resolveElement = (ref: SwapTarget): Element => {
@@ -232,15 +242,13 @@ const applySwap = async (
 
 const runWithTransition = async (
   update: () => void | Promise<void>,
-  enabled?: boolean,
-): Promise<void> => {
-  if (!enabled || !document.startViewTransition) {
+  option?: ViewTransitionOption,
+): Promise<ViewTransitionHandle | null> => {
+  if (!option) {
     await update();
-    return;
+    return null;
   }
-  const transition = document.startViewTransition(update);
-  await transition.updateCallbackDone;
-  await transition.finished.catch(() => {});
+  return await runViewTransition(update, option === true ? undefined : option);
 };
 
 /**
@@ -260,7 +268,7 @@ export const swap = async (
   const domValue = await prepareDomValue(html, options, response);
   const resolvedText = String(domValue);
 
-  await runWithTransition(async () => {
+  const transition = await runWithTransition(async () => {
     if (writeMode === "remove" || !resolvedText.includes("<!--rw-end-->")) {
       await applySwap(target, writeMode, domValue);
       return;
@@ -286,5 +294,6 @@ export const swap = async (
     write: writeMode,
     text: resolvedText,
     response,
+    transition,
   };
 };

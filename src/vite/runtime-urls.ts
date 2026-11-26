@@ -13,6 +13,7 @@ const RUNTIME_SOURCES: ReadonlyMap<string, URL> = new Map([
   // Retained for legacy SuspenseProvider apps; the 0.7 router serves /_ruwuter/resolve-v1.js itself.
   ["@mewhhaha/ruwuter/resolve.js", new URL("../runtime/resolve.ts", import.meta.url)],
   ["@mewhhaha/ruwuter/swap.js", new URL("../runtime/swap.ts", import.meta.url)],
+  ["@mewhhaha/ruwuter/vt.js", new URL("../runtime/vt.ts", import.meta.url)],
 ]);
 
 const publicId = (id: string): string => `/@id/${id.replace("\0", "__x00__")}`;

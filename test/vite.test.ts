@@ -408,7 +408,8 @@ export default defineController(({ root }) => { root.setAttribute("data-v", labe
       await Deno.writeTextFile(
         join(app, "entry.ts"),
         `import clientRuntime from "@mewhhaha/ruwuter/client.js?url&no-inline";
-export { clientRuntime };`,
+import vtRuntime from "@mewhhaha/ruwuter/vt.js?url&no-inline";
+export { clientRuntime, vtRuntime };`,
       );
       const dist = join(app, "dist");
       await build({
@@ -418,10 +419,16 @@ export { clientRuntime };`,
         logLevel: "silent",
         plugins: [ruwuter({ appFolder: app })],
         resolve: {
-          alias: [{
-            find: /^@mewhhaha\/ruwuter\/client\.js$/,
-            replacement: resolve("src/runtime/client.ts"),
-          }],
+          alias: [
+            {
+              find: /^@mewhhaha\/ruwuter\/client\.js$/,
+              replacement: resolve("src/runtime/client.ts"),
+            },
+            {
+              find: /^@mewhhaha\/ruwuter\/vt\.js$/,
+              replacement: resolve("src/runtime/vt.ts"),
+            },
+          ],
         },
         build: {
           outDir: dist,
@@ -433,13 +440,19 @@ export { clientRuntime };`,
 
       const serverModule = await import(pathToFileURL(join(dist, "entry.js")).href) as {
         clientRuntime: string;
+        vtRuntime: string;
       };
       expect(serverModule.clientRuntime.startsWith("/docs/assets/ruwuter-client-")).toBe(true);
+      expect(serverModule.vtRuntime.startsWith("/docs/assets/ruwuter-vt-")).toBe(true);
       const runtimePath = join(dist, serverModule.clientRuntime.slice("/docs/".length));
       const runtimeCode = await Deno.readTextFile(runtimePath);
       expect(runtimeCode).toContain("data-rw-controller");
       expect(runtimeCode).not.toContain("type MountedActivation");
+      const vtPath = join(dist, serverModule.vtRuntime.slice("/docs/".length));
+      const vtCode = await Deno.readTextFile(vtPath);
+      expect(vtCode).toContain("pageswap");
       await import(pathToFileURL(runtimePath).href);
+      await import(pathToFileURL(vtPath).href);
     } finally {
       await Deno.remove(app, { recursive: true }).catch(() => {});
       await Deno.remove(typesRoot, { recursive: true }).catch(() => {});
