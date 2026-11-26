@@ -237,8 +237,10 @@ export default defineController(({ root, signal }) => {
   for (const type of ["submit", "click", "input", "change"] as const) {
     on(root)[type](handleEvent, { signal });
   }
+  root.setAttribute("data-fx-ready", "");
 
   return () => {
+    root.removeAttribute("data-fx-ready");
     for (const id of activeTimers) clearTimeout(id);
     activeTimers.clear();
   };

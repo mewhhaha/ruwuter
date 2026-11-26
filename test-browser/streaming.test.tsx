@@ -301,16 +301,27 @@ for (const engine of [chromium, firefox, webkit]) {
           document.getElementById("inner")?.dataset.mounted === "inner:inner-btn"
         );
 
-        // Async client runtime activates controllers while slower deferred panels are still streaming.
+        // Async client runtime activates controllers while slower deferred panels are still streaming
+        // in Chromium and Firefox (WebKit defers async module scripts until stream close).
         await page.goto(url + "/stream-controller", { waitUntil: "commit" });
-        await page.waitForFunction(() =>
-          document.getElementById("early-widget")?.dataset.readyState === "loading"
-        );
-        await page.locator("#early-btn").click();
-        assertEquals(await page.locator("#early-btn").textContent(), "Clicks: 1");
-        assertEquals(await page.evaluate(() => document.readyState), "loading");
+        await page.locator("#stream-wait").waitFor();
+        if (engine.name() !== "webkit") {
+          await page.waitForFunction(() =>
+            document.getElementById("early-widget")?.dataset.readyState === "loading"
+          );
+          await page.locator("#early-btn").click();
+          assertEquals(await page.locator("#early-btn").textContent(), "Clicks: 1");
+          assertEquals(await page.evaluate(() => document.readyState), "loading");
+        }
         streamGate.resolve();
         await page.locator("#stream-done").waitFor();
+        if (engine.name() === "webkit") {
+          await page.waitForFunction(() =>
+            !!document.getElementById("early-widget")?.dataset.readyState
+          );
+          await page.locator("#early-btn").click();
+          assertEquals(await page.locator("#early-btn").textContent(), "Clicks: 1");
+        }
 
         // Fixi-style progressive enhancement: 422 validation, 201 append, live filter, DELETE, Deferred swap.
         const fixiServer = Deno.serve(
@@ -330,7 +341,7 @@ for (const engine of [chromium, firefox, webkit]) {
           await native.getByText("No-JS review", { exact: true }).waitFor();
 
           await page.goto(fixiUrl + "/products/1");
-          await page.locator("#reviews li").first().waitFor();
+          await page.locator("main[data-fx-ready]").waitFor();
           await page.evaluate(() => {
             (globalThis as unknown as { __sameDoc: boolean }).__sameDoc = true;
           });

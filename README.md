@@ -189,8 +189,8 @@ app.get("/counter", () => {
 ```
 
 - Load the activation script (`client.js`) once on pages with controllers. Adding `async` lets
-  above-the-fold controllers activate immediately while slower streamed sections or `Deferred`
-  panels finish.
+  above-the-fold controllers activate immediately in Chromium and Firefox while slower streamed
+  sections or `Deferred` panels finish (WebKit defers async module scripts until stream close).
 - `ref={mounted.refs.name}` tokens resolve live within their nearest enclosing controller, so nested
   widgets do not collide and refs stay fresh after `outerHTML` swaps or settled `Deferred` panels.
 - With the Vite plugin, `app/controllers.ts` exports typed controller URLs and compiles the runtime.

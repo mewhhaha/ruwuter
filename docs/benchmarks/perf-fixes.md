@@ -39,8 +39,10 @@ pairs).
 | Firefox 157  | 25.5 → 26.0 |         608.0 (606.0–609.0) |           30.0 (28.0–32.0) |   -578.0 ms |
 
 Loading `client.js` as `<script type="module" async>` lets above-the-fold widgets become interactive
-immediately while slower streamed sections finish. Live scoped `refs` ensure swapped or
-later-settled descendants continue to resolve cleanly.
+immediately in Chromium and Firefox while slower streamed sections finish (WebKit continues to defer
+`<script type="module" async>` until HTML stream close, matching the behavior noted in
+[docs/router-design.md](../router-design.md)). Live scoped `refs` ensure swapped or later-settled
+descendants continue to resolve cleanly.
 
 ## 3. Post-load DOM mutation overhead
 
