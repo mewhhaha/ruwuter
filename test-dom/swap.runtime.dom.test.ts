@@ -2,6 +2,7 @@
 import { DOMParser } from "linkedom";
 import { describe, expect, it } from "../test-support/deno_vitest_shim.ts";
 import { swap, type SwapInput, type SwapMode } from "../src/runtime/swap.ts";
+import { viewTransition } from "../src/runtime/view-transition.ts";
 
 class FakeElement {
   innerHTML = "";
@@ -290,6 +291,75 @@ describe("swap runtime DOM behaviour", () => {
       expect(morphed.length).toBe(1);
       expect(morphed[0].html).toBe("<p>morphed</p>");
       expect(target.innerHTML).toBe("<p>morphed</p>");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("supports typed View Transitions, resolves on updateCallbackDone, and falls back cleanly", async () => {
+    const { cleanup } = setupDom();
+    const calls: unknown[] = [];
+    let finishResolve!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      finishResolve = resolve;
+    });
+    (globalThis as any).document.startViewTransition = (arg: unknown) => {
+      calls.push(arg);
+      const update = typeof arg === "function" ? arg : (arg as { update: () => void }).update;
+      update();
+      return {
+        updateCallbackDone: Promise.resolve(),
+        ready: Promise.resolve(),
+        finished,
+        skipTransition() {},
+      };
+    };
+    try {
+      const target = new FakeElement();
+      const result = await swap(null, {
+        target: asElement(target),
+        unsafeHTML: "<p>typed</p>",
+        viewTransition: { types: ["review-add"] },
+      });
+
+      // Resolved immediately after updateCallbackDone even though `finished` is still pending.
+      expect(target.innerHTML).toBe("<p>typed</p>");
+      expect(result.transition != null).toBe(true);
+      expect((calls[0] as { types: string[] }).types).toEqual(["review-add"]);
+      finishResolve();
+      await result.transition?.finished;
+
+      // Falls back to callback-only startViewTransition if dictionary syntax throws TypeError.
+      const fallbackCalls: string[] = [];
+      (globalThis as any).document.startViewTransition = (arg: unknown) => {
+        if (typeof arg !== "function") {
+          fallbackCalls.push("dict-rejected");
+          throw new TypeError("Function required");
+        }
+        fallbackCalls.push("callback");
+        arg();
+        return {
+          updateCallbackDone: Promise.resolve(),
+          ready: Promise.resolve(),
+          finished: Promise.resolve(),
+          skipTransition() {},
+        };
+      };
+      let ran = 0;
+      const vt = await viewTransition(() => {
+        ran += 1;
+      }, { types: ["slide"] });
+      expect(vt != null).toBe(true);
+      expect(ran).toBe(1);
+      expect(fallbackCalls).toEqual(["dict-rejected", "callback"]);
+
+      // Skips startViewTransition when document is hidden.
+      (globalThis as any).document.visibilityState = "hidden";
+      const hiddenVt = await viewTransition(() => {
+        ran += 1;
+      }, { types: ["slide"] });
+      expect(hiddenVt).toBe(null);
+      expect(ran).toBe(2);
     } finally {
       cleanup();
     }

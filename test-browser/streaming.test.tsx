@@ -2,6 +2,7 @@ import { assert, assertEquals } from "@std/assert";
 import { chromium, firefox, webkit } from "playwright-core";
 import { fixiReviewsApp, type Review } from "../examples/fixi-reviews.tsx";
 import { productApp } from "../examples/product.tsx";
+import { viewTransitionsApp } from "../examples/view-transitions.tsx";
 import { html, unsafeHTML } from "../src/router.ts";
 import { controller } from "../src/browser.ts";
 import { Deferred } from "../src/components/index.ts";
@@ -83,6 +84,11 @@ for (const engine of [chromium, firefox, webkit]) {
       stdout: "piped",
     }).output();
     assert(fxBundle.success);
+    const vtBundle = await new Deno.Command(Deno.execPath(), {
+      args: ["bundle", "--platform=browser", "--quiet", "src/runtime/vt.ts"],
+      stdout: "piped",
+    }).output();
+    assert(vtBundle.success);
 
     let nextReviewId = 2;
     const fixiReviews: Review[] = [{ id: "1", text: "Solid switches" }];
@@ -123,6 +129,10 @@ for (const engine of [chromium, firefox, webkit]) {
       .get(
         "/fx.client.js",
         () => new Response(fxBundle.stdout, { headers: { "content-type": "text/javascript" } }),
+      )
+      .get(
+        "/vt.js",
+        () => new Response(vtBundle.stdout, { headers: { "content-type": "text/javascript" } }),
       )
       .get(
         "/stream-counter.client.js",
@@ -382,6 +392,66 @@ for (const engine of [chromium, firefox, webkit]) {
           );
         } finally {
           await fixiServer.shutdown();
+        }
+
+        // MPA View Transitions showcase: list -> detail hero navigation, streaming Deferred panels,
+        // live typed View Transition filter, and review add/remove.
+        const vtApp = viewTransitionsApp({
+          assets: {
+            clientRuntime: "/client.js",
+            vtRuntime: "/vt.js",
+            fxController: "/fx.client.js",
+          },
+          simulateLatency: false,
+        });
+        const vtServer = Deno.serve(
+          { hostname: "127.0.0.1", port: 0, onListen() {} },
+          (req) => {
+            const p = new URL(req.url).pathname;
+            if (p === "/client.js" || p === "/vt.js" || p === "/fx.client.js") {
+              return app.fetch(req);
+            }
+            return vtApp.fetch(req);
+          },
+        );
+        try {
+          const vtUrl = "http://127.0.0.1:" + vtServer.addr.port;
+          await page.goto(vtUrl + "/");
+          await page.locator(".shell[data-fx-ready]").waitFor();
+          assertEquals(
+            await page.locator('[data-rw-vt="art-split-65"]').getAttribute("data-rw-vt-for"),
+            "/items/split-65",
+          );
+
+          // Live filter with typed View Transition (`fx-transition="filter"`).
+          await page.getByLabel("Filter gear").fill("split");
+          await page.waitForFunction(() =>
+            document.querySelectorAll("#catalog .card").length === 1
+          );
+
+          // Native MPA link navigation to detail page + Deferred panels.
+          await page.locator('#catalog a[href="/items/split-65"]').click();
+          await page.locator("#item-hero").waitFor();
+          await page.locator("#stock-ready").waitFor();
+          await page.locator("#reviews li").first().waitFor();
+          assertEquals(
+            await page.locator('[data-rw-vt="art-split-65"]').getAttribute("data-rw-vt-for"),
+            "*",
+          );
+
+          // Typed View Transition review append + remove on the detail page.
+          await page.locator('#review-form input[name="review"]').fill("Crisp tactiles");
+          await page.locator('#review-form button[type="submit"]').click();
+          await page.getByText("Crisp tactiles", { exact: false }).waitFor();
+          await page.locator("#reviews li", { hasText: "Crisp tactiles" })
+            .getByRole("button", { name: "Remove" }).click();
+          await page.waitForFunction(() => document.querySelectorAll("#reviews li").length === 1);
+
+          // Navigate back to list cleanly.
+          await page.locator("a.back-link").click();
+          await page.locator("#catalog .card").first().waitFor();
+        } finally {
+          await vtServer.shutdown();
         }
       } finally {
         await browser.close();

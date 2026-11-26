@@ -14,3 +14,9 @@ export function nextResolveRuntimeUrl(): string {
   url.searchParams.set("v", `${seq++}`);
   return url.href;
 }
+
+export function nextVtRuntimeUrl(): string {
+  const url = new URL("../src/runtime/vt.ts", import.meta.url);
+  url.searchParams.set("v", `${seq++}`);
+  return url.href;
+}

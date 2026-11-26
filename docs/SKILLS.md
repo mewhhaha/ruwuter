@@ -23,7 +23,11 @@ for the same `router(routes)` constructor. A document file and a Vite build are 
 4. Make a partial update an ordinary HTML endpoint. `swap` accepts an HTML Response, supports
    `allowStatus` (for 4xx validation fragments), custom `write` callbacks (for DOM morphing), an
    application-supplied sanitizer or Trusted Types policy, strips inert resolver scripts, and wraps
-   DOM writes in View Transitions only when `viewTransition: true` is passed.
+   DOM writes in View Transitions when `viewTransition` is `true` or `{ types }` (resolving on
+   `updateCallbackDone` and returning `result.transition`). Use `viewTransition()` from
+   `@mewhhaha/ruwuter/browser` for standalone typed transitions, and `<ViewTransitions>`,
+   `<ViewTransition>`, `vt()`, plus optional `@mewhhaha/ruwuter/vt.js` for MPA cross-document hero
+   transitions (`pageswap`/`pagereveal`).
 5. Mount a same-origin browser module with `controller(moduleHref, jsonProps).root()` and
    `defineController()`. Declare `ref={mounted.refs.name}` tokens for named descendants (refs
    resolve live within their nearest enclosing controller). Load `client.js` once with `async` on
@@ -42,5 +46,6 @@ context, bodyless HEAD, and single native form submission.
 
 The [usage examples and migration guide](../README.md),
 [working product route](../examples/product.tsx),
-[fixi-style progressive reviews example](../examples/fixi-reviews.tsx), and
+[fixi-style progressive reviews example](../examples/fixi-reviews.tsx),
+[MPA View Transitions showcase](../examples/view-transitions.tsx), and
 [browser regression](../test-browser/streaming.test.tsx) exercise these contracts.

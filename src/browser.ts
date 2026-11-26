@@ -46,3 +46,9 @@ export {
   type SwapTarget,
   type SwapWriteFn,
 } from "./runtime/swap.ts";
+export {
+  type BrowserViewTransitionOptions,
+  viewTransition,
+  type ViewTransitionHandle,
+  type ViewTransitionOption,
+} from "./runtime/view-transition.ts";

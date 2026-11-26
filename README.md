@@ -9,6 +9,7 @@ JavaScript.
 - [Performance & interactivity benchmarks](https://github.com/mewhhaha/ruwuter/blob/main/docs/benchmarks/perf-fixes.md)
 - [Full product example](https://github.com/mewhhaha/ruwuter/blob/main/examples/product.tsx)
 - [Fixi-style progressive reviews example](https://github.com/mewhhaha/ruwuter/blob/main/examples/fixi-reviews.tsx)
+- [MPA View Transitions + Cloudflare showcase](https://github.com/mewhhaha/ruwuter/blob/main/examples/view-transitions.tsx)
 
 ## Install & Quick Start
 
@@ -214,8 +215,9 @@ await swap(response, {
 `swap` validates HTML responses, applies completed `Deferred` panels even when the host page started
 without a resolver, strips inert resolver `<script>` tags from swapped fragments, supports custom
 `sanitizer`, `trustedTypesPolicy`, `allowStatus`, and custom `write` callbacks (such as a DOM
-morpher like `idiomorph`), and opts into View Transitions only when `viewTransition: true` is
-passed.
+morpher like `idiomorph`), and opts into View Transitions only when `viewTransition` is enabled
+(`true` or `{ types?: string[], respectReducedMotion?: boolean }`, returning `result.transition`
+once the DOM write completes).
 
 For declarative HTML-over-the-wire interactions without per-widget controller boilerplate, Ruwuter's
 JSX types accept `fx-*` attributes out of the box—so you can either drop in `fixi.js` directly or
@@ -224,6 +226,44 @@ mount a tiny reusable fixi-style controller built on `swap()` (see
 [examples/fixi-reviews.tsx](https://github.com/mewhhaha/ruwuter/blob/main/examples/fixi-reviews.tsx)
 for progressive `POST` + `422` errors, `DELETE` buttons, debounced live search, and `<Deferred>`
 swaps).
+
+### View Transitions (MPA + same-document)
+
+Ruwuter supports native cross-document MPA View Transitions inspired by React's `<ViewTransition>`,
+without adding a client SPA router:
+
+```tsx
+import { ViewTransition, ViewTransitions, vt } from "@mewhhaha/ruwuter/components";
+
+// In <head> (zero-JS cross-document opt-in + optional render-blocking expect target)
+<ViewTransitions expect="#item-hero" />;
+
+// Zero-JS mode (omit `for` to emit inline `view-transition-name` + `view-transition-class`)
+<ViewTransition as="article" id="item-hero" name="product-42" share="hero">
+  <img src="/keyboard.png" alt="Split 65" {...vt("art-42", { share: "hero-art" })} />
+</ViewTransition>;
+
+// Just-in-time MPA mode for long lists (load `@mewhhaha/ruwuter/vt.js` in <head>)
+<ViewTransition as="div" name={`art-${item.slug}`} for={`/items/${item.slug}`} share="hero-art">
+  ...
+</ViewTransition>;
+```
+
+- **Zero-JS mode** emits validated `view-transition-name` and `view-transition-class` declarations
+  directly in HTML.
+- **Just-in-time MPA mode** (`for="/items/42"` or `for="*"`) paired with the optional
+  `@mewhhaha/ruwuter/vt.js` script (`<script type="module" blocking="render" src={vtRuntime}>`)
+  activates `view-transition-name` only on elements matching the navigation target on `pageswap` and
+  returning path on `pagereveal`, adds directional `forward`/`back`/`reload` transition types for
+  `:active-view-transition-type(...)`, and restores inline styles on `finished` for clean BFCache
+  restoration.
+- **Same-document updates** can pass `viewTransition: { types: ["review-add"] }` to `swap()` (or
+  `fx-transition="review-add"` in `examples/fx.client.ts`) or call
+  `viewTransition(update, { types })` from `@mewhhaha/ruwuter/browser`.
+- See
+  [examples/view-transitions.tsx](https://github.com/mewhhaha/ruwuter/blob/main/examples/view-transitions.tsx)
+  and `examples/cloudflare/` for a deployable Cloudflare Workers showcase combining MPA hero
+  morphing, streaming `<Deferred>` panels, and fixi-style updates.
 
 ## Optional File Routes & Vite
 
@@ -273,17 +313,18 @@ A hand-written router needs neither code generation nor Vite.
 
 ## Package Entry Points
 
-| Entry point                       | Exports / Purpose                                                  |
-| --------------------------------- | ------------------------------------------------------------------ |
-| `@mewhhaha/ruwuter`               | `router`, `html`, `renderToString`, `renderToStream`, `unsafeHTML` |
-| `@mewhhaha/ruwuter/components`    | `Deferred`, `createContext`, `use`                                 |
-| `@mewhhaha/ruwuter/browser`       | `defineController`, `controller`, `on`, `swap`                     |
-| `@mewhhaha/ruwuter/client.js`     | Self-starting browser controller runtime                           |
-| `@mewhhaha/ruwuter/swap.js`       | Standalone browser `swap` module                                   |
-| `@mewhhaha/ruwuter/fs-routes`     | Programmatic `generate()` for file routes                          |
-| `@mewhhaha/ruwuter/fs-routes/cli` | CLI generator for `routes.ts` and `.router/types`                  |
-| `@mewhhaha/ruwuter/vite`          | `ruwuter()` Vite plugin for routes and compiled browser modules    |
-| `@mewhhaha/ruwuter/legacy`        | 0.6 `Router`, `fragment`, and loader/action compatibility layer    |
+| Entry point                       | Exports / Purpose                                                             |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `@mewhhaha/ruwuter`               | `router`, `html`, `renderToString`, `renderToStream`, `unsafeHTML`            |
+| `@mewhhaha/ruwuter/components`    | `Deferred`, `createContext`, `use`, `ViewTransition`, `ViewTransitions`, `vt` |
+| `@mewhhaha/ruwuter/browser`       | `defineController`, `controller`, `on`, `swap`, `viewTransition`              |
+| `@mewhhaha/ruwuter/client.js`     | Self-starting browser controller runtime                                      |
+| `@mewhhaha/ruwuter/swap.js`       | Standalone browser `swap` module                                              |
+| `@mewhhaha/ruwuter/vt.js`         | Optional MPA View Transitions runtime (`pageswap` / `pagereveal`)             |
+| `@mewhhaha/ruwuter/fs-routes`     | Programmatic `generate()` for file routes                                     |
+| `@mewhhaha/ruwuter/fs-routes/cli` | CLI generator for `routes.ts` and `.router/types`                             |
+| `@mewhhaha/ruwuter/vite`          | `ruwuter()` Vite plugin for routes and compiled browser modules               |
+| `@mewhhaha/ruwuter/legacy`        | 0.6 `Router`, `fragment`, and loader/action compatibility layer               |
 
 ## Moving from 0.6
 
